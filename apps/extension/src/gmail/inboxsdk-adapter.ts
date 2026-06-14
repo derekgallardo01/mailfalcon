@@ -1,8 +1,6 @@
 import * as InboxSDK from '@inboxsdk/core'
+import { config } from '../config'
 import type { ComposeEvent, GmailAdapter } from './adapter'
-
-// TODO: register a real APP_ID at inboxsdk.com before Chrome Web Store submission.
-const DEV_APP_ID = 'sdk_mailfalcon_dev_local'
 
 type AnySdk = unknown
 
@@ -12,7 +10,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
 
   async load(): Promise<void> {
     const load = (InboxSDK as unknown as { load: (v: number, id: string, opts?: unknown) => Promise<unknown> }).load
-    this.sdk = await load(2, DEV_APP_ID, { suppressAddonTitle: 'mailfalcon' })
+    this.sdk = await load(2, config.inboxSdkAppId, { suppressAddonTitle: 'mailfalcon' })
 
     const sdk = this.sdk as {
       Compose: {

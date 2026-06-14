@@ -198,10 +198,10 @@ export default function DashboardPage() {
                   <tr
                     key={e.id}
                     className="cursor-pointer hover:bg-falcon-50"
-                    onClick={() => router.push(`/dashboard/${e.id}`)}
+                    onClick={() => router.push(`/dashboard/email?id=${e.id}`)}
                   >
                     <td className="px-4 py-3 text-falcon-700">
-                      <Link href={`/dashboard/${e.id}`} className="block">
+                      <Link href={`/dashboard/email?id=${e.id}`} className="block">
                         {formatRelative(e.sentAt)}
                       </Link>
                     </td>

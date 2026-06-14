@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { type EmailDetail, getEmailDetail } from '../../../lib/api'
 import { clearSession, getSession } from '../../../lib/auth-store'
 import { config } from '../../../lib/config'
@@ -19,9 +19,10 @@ function formatDate(ts: number): string {
   return new Date(ts).toISOString().replace('T', ' ').slice(0, 19) + 'Z'
 }
 
-export default function EmailDetailPage() {
+function EmailDetailInner() {
   const router = useRouter()
-  const params = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
+  const id = searchParams.get('id')
   const [data, setData] = useState<EmailDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -34,12 +35,15 @@ export default function EmailDetailPage() {
       router.replace('/sign-in')
       return
     }
-    if (!params?.id) return
+    if (!id) {
+      router.replace('/dashboard')
+      return
+    }
 
-    const id = params.id
+    const emailId = id
 
     function refresh() {
-      return getEmailDetail(id)
+      return getEmailDetail(emailId)
         .then(setData)
         .catch((err) => {
           if (err instanceof Error) {
@@ -62,7 +66,7 @@ export default function EmailDetailPage() {
     es.addEventListener('event', (e) => {
       try {
         const payload = JSON.parse((e as MessageEvent).data) as { emailId: string }
-        if (payload.emailId === id) {
+        if (payload.emailId === emailId) {
           setLiveCount((c) => c + 1)
           void refresh()
         }
@@ -75,7 +79,7 @@ export default function EmailDetailPage() {
       es.close()
       esRef.current = null
     }
-  }, [params?.id, router])
+  }, [id, router])
 
   if (loading) {
     return (
@@ -190,6 +194,20 @@ export default function EmailDetailPage() {
         )}
       </section>
     </div>
+  )
+}
+
+export default function EmailDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-4xl px-6 py-8">
+          <p className="text-sm text-falcon-500">Loading…</p>
+        </main>
+      }
+    >
+      <EmailDetailInner />
+    </Suspense>
   )
 }
 
