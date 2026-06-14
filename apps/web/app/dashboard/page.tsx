@@ -1,13 +1,14 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   type EmailListItem,
   listEmails,
   logout as apiLogout,
 } from '../../lib/api'
 import { clearSession, getSession, type Session } from '../../lib/auth-store'
+import { config } from '../../lib/config'
 
 function formatRelative(ts: number): string {
   const diff = Date.now() - ts
@@ -23,6 +24,8 @@ export default function DashboardPage() {
   const [emails, setEmails] = useState<EmailListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [liveCount, setLiveCount] = useState(0)
+  const esRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
     const s = getSession()
@@ -31,17 +34,38 @@ export default function DashboardPage() {
       return
     }
     setSessionState(s)
-    listEmails()
-      .then((res) => setEmails(res.emails))
-      .catch((err) => {
-        if (err instanceof Error && err.message === 'unauthorized') {
-          clearSession()
-          router.replace('/sign-in')
-          return
-        }
-        setError(err instanceof Error ? err.message : 'Failed to load')
-      })
-      .finally(() => setLoading(false))
+
+    function refresh() {
+      return listEmails()
+        .then((res) => setEmails(res.emails))
+        .catch((err) => {
+          if (err instanceof Error && err.message === 'unauthorized') {
+            clearSession()
+            router.replace('/sign-in')
+            return
+          }
+          setError(err instanceof Error ? err.message : 'Failed to load')
+        })
+    }
+
+    refresh().finally(() => setLoading(false))
+
+    const url = new URL(`${config.apiHost}/stream`)
+    url.searchParams.set('token', s.token)
+    const es = new EventSource(url.toString())
+    esRef.current = es
+    es.addEventListener('event', () => {
+      setLiveCount((c) => c + 1)
+      void refresh()
+    })
+    es.addEventListener('error', () => {
+      // EventSource auto-reconnects, no action required
+    })
+
+    return () => {
+      es.close()
+      esRef.current = null
+    }
   }, [router])
 
   async function handleLogout() {
@@ -59,13 +83,20 @@ export default function DashboardPage() {
           <h1 className="text-xl font-semibold text-falcon-700">mailfalcon</h1>
           <p className="text-xs text-falcon-500">{session.email}</p>
         </div>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="text-sm text-falcon-500 hover:text-falcon-700"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-4">
+          {liveCount > 0 && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+              live · {liveCount} new
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="text-sm text-falcon-500 hover:text-falcon-700"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="mt-8">

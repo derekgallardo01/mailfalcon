@@ -5,6 +5,7 @@ import { authRouter } from './routes/auth'
 import { clickRouter } from './routes/click'
 import { emailsRouter } from './routes/emails'
 import { pixelRouter } from './routes/pixel'
+import { streamRouter } from './routes/stream'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -18,17 +19,19 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 
+function originPolicy(origin: string | undefined): string {
+  if (!origin) return ''
+  if (origin === 'https://mail.google.com') return origin
+  if (origin === 'https://app.mailfalcon.app') return origin
+  if (origin.startsWith('chrome-extension://')) return origin
+  if (origin.startsWith('http://localhost')) return origin
+  return ''
+}
+
 app.use(
   '/v1/*',
   cors({
-    origin: (origin) => {
-      if (!origin) return ''
-      if (origin === 'https://mail.google.com') return origin
-      if (origin === 'https://app.mailfalcon.app') return origin
-      if (origin.startsWith('chrome-extension://')) return origin
-      if (origin.startsWith('http://localhost')) return origin
-      return ''
-    },
+    origin: originPolicy,
     credentials: false,
     allowHeaders: ['Content-Type', 'Authorization'],
   }),
@@ -37,14 +40,7 @@ app.use(
 app.use(
   '/auth/*',
   cors({
-    origin: (origin) => {
-      if (!origin) return ''
-      if (origin === 'https://mail.google.com') return origin
-      if (origin === 'https://app.mailfalcon.app') return origin
-      if (origin.startsWith('chrome-extension://')) return origin
-      if (origin.startsWith('http://localhost')) return origin
-      return ''
-    },
+    origin: originPolicy,
     credentials: false,
     allowHeaders: ['Content-Type', 'Authorization'],
   }),
@@ -58,6 +54,18 @@ app.route('/auth', authRouter)
 
 app.use('/v1/*', authMiddleware)
 app.route('/v1/emails', emailsRouter)
+
+// /stream is outside the /v1/* auth-middleware namespace because
+// EventSource can't send Authorization headers; the stream router does
+// its own JWT-via-query-string auth.
+app.use(
+  '/stream',
+  cors({
+    origin: originPolicy,
+    credentials: false,
+  }),
+)
+app.route('/stream', streamRouter)
 
 app.route('/p', pixelRouter)
 app.route('/c', clickRouter)

@@ -35,6 +35,11 @@ async function showSignedIn(email: string): Promise<void> {
   document.getElementById('logout-btn')?.addEventListener('click', async () => {
     await logout()
     await clearSession()
+    try {
+      await chrome.runtime.sendMessage({ type: 'signed-out' })
+    } catch {
+      /* SW may be cold */
+    }
     await showRequest()
   })
 }
@@ -68,6 +73,11 @@ async function showVerify(email: string): Promise<void> {
     try {
       const result = await verifyCode(email, code)
       await setSession({ token: result.token, email: result.email, userId: result.userId })
+      try {
+        await chrome.runtime.sendMessage({ type: 'signed-in' })
+      } catch {
+        // background SW may be cold; it picks up on next start
+      }
       await showSignedIn(result.email)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Verify failed'
