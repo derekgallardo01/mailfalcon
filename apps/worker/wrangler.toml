@@ -3,39 +3,44 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Routes wired in CF dashboard after DNS is provisioned:
-#   t.mailfalcon.app/*   -> /p, /c
-#   api.mailfalcon.app/* -> /v1/*, /auth/*, /stream, /push/*, /stripe/webhook
+# Custom Domains auto-provision the DNS A records + edge TLS certs.
+# api. handles /v1/*, /auth/*, /stream, /stripe/webhook.
+# t.   handles /p (pixel) and /c (click redirect).
+routes = [
+  { pattern = "api.mailfalcon.app", custom_domain = true },
+  { pattern = "t.mailfalcon.app", custom_domain = true },
+]
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
+PUBLIC_WEB_URL = "https://app.mailfalcon.app"
 
-# database_id is a placeholder; --local mode ignores it and uses a local SQLite.
-# Run `wrangler d1 create mailfalcon` later and replace with the real id.
 [[d1_databases]]
 binding = "DB"
 database_name = "mailfalcon"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "3382c6a7-6b3c-4c61-a752-697f26f85b0e"
 migrations_dir = "../../packages/db/migrations"
 
-# id placeholder; --local uses a file-backed mock.
 [[kv_namespaces]]
 binding = "KV"
-id = "0000000000000000000000000000000000000000"
+id = "183f2dd83ebb4e7794865c6b513b055c"
 
-# Bucket auto-created in --local mode under .wrangler/.
 [[r2_buckets]]
 binding = "ASSETS"
 bucket_name = "mailfalcon-assets"
 
-# [triggers]
-# crons = ["*/5 * * * *"]  # follow-up scanner — enable once endpoints exist
+# Local-dev overrides: --local mode reads .dev.vars + a file-backed
+# SQLite/KV/R2 inside .wrangler/. The IDs above are ignored locally.
+[env.dev]
+vars = { ENVIRONMENT = "development", PUBLIC_WEB_URL = "http://localhost:3000" }
 
-# Secrets (set via `wrangler secret put` for remote, or .dev.vars for local):
+# Secrets — set with `wrangler secret put <NAME>`:
 #   HMAC_SECRET
 #   JWT_SECRET
-#   VAPID_PUBLIC_KEY
-#   VAPID_PRIVATE_KEY
 #   RESEND_API_KEY
 #   STRIPE_SECRET_KEY
 #   STRIPE_WEBHOOK_SECRET
+#   STRIPE_PRICE_ID_PRO (or set as plain var once price is created)
+
+# [triggers]
+# crons = ["*/5 * * * *"]  # follow-up scanner (enable after follow-ups land)
