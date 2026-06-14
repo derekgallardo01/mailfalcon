@@ -2,8 +2,8 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { links, trackedEmails } from '@mailfalcon/db/schema'
 import { newSalt, newTrackingId, sign } from '@mailfalcon/shared'
+import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
-import { resolveUserId } from '../lib/dev-user'
 import { getHmacSecret } from '../lib/secrets'
 
 const requestSchema = z.object({
@@ -17,7 +17,7 @@ type Bindings = {
   DB: D1Database
 }
 
-export const emailsRouter = new Hono<{ Bindings: Bindings }>()
+export const emailsRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 
 emailsRouter.post('/', async (c) => {
   const body = await c.req.json().catch(() => null)
@@ -26,9 +26,9 @@ emailsRouter.post('/', async (c) => {
     return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
   }
 
-  const db = getDb(c.env.DB)
-  const userId = await resolveUserId(db, c.env)
+  const userId = c.get('userId')
   const secret = getHmacSecret(c.env)
+  const db = getDb(c.env.DB)
 
   const id = newTrackingId()
   const hmacSalt = newSalt()

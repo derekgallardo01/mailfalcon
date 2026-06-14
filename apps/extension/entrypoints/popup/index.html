@@ -4,30 +4,47 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <title>mailfalcon</title>
-    <style>
-      :root {
-        color-scheme: light dark;
-        font-family: ui-sans-serif, system-ui, sans-serif;
-      }
-      body {
-        margin: 0;
-        padding: 16px;
-        width: 280px;
-      }
-      h1 {
-        font-size: 14px;
-        margin: 0 0 8px;
-        color: #3b6cb7;
-      }
-      p {
-        font-size: 12px;
-        color: #666;
-        margin: 0;
-      }
-    </style>
+    <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <h1>mailfalcon</h1>
-    <p>Not signed in. Popup wiring lands in a follow-up commit.</p>
+    <header>
+      <h1>mailfalcon</h1>
+    </header>
+
+    <main id="root">
+      <div id="loading">Loading…</div>
+    </main>
+
+    <template id="tpl-signed-in">
+      <div class="card">
+        <p class="muted">Signed in as</p>
+        <p class="email" data-bind="email"></p>
+        <button id="logout-btn" type="button" class="link">Sign out</button>
+      </div>
+    </template>
+
+    <template id="tpl-request">
+      <form id="request-form" class="card">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required placeholder="you@example.com" autocomplete="email" />
+        <button type="submit">Send code</button>
+        <p id="request-msg" class="msg"></p>
+      </form>
+    </template>
+
+    <template id="tpl-verify">
+      <form id="verify-form" class="card">
+        <p class="muted">We sent a 6-digit code to <strong data-bind="email"></strong></p>
+        <label for="code">Code</label>
+        <input id="code" name="code" type="text" inputmode="numeric" pattern="\d{6}" maxlength="6" required placeholder="123456" autocomplete="one-time-code" />
+        <div class="row">
+          <button type="button" id="verify-back" class="link">Back</button>
+          <button type="submit">Verify</button>
+        </div>
+        <p id="verify-msg" class="msg"></p>
+      </form>
+    </template>
+
+    <script type="module" src="./main.ts"></script>
   </body>
 </html>

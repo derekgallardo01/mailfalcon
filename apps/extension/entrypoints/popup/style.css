@@ -1,0 +1,143 @@
+:root {
+  color-scheme: light dark;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  --bg: #ffffff;
+  --fg: #0f1a2e;
+  --muted: #6b7280;
+  --accent: #3b6cb7;
+  --accent-hover: #2f558f;
+  --border: #e5e7eb;
+  --err: #b91c1c;
+  --ok: #047857;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1a2e;
+    --fg: #f5f7fa;
+    --muted: #9aaecd;
+    --border: #1f2937;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 320px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+header {
+  padding: 12px 16px 0;
+}
+
+h1 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  margin: 0;
+}
+
+main {
+  padding: 12px 16px 16px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.muted {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.email {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+input {
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+button {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+}
+
+button:hover {
+  background: var(--accent-hover);
+}
+
+button.link {
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 0;
+  font-weight: 400;
+}
+
+button.link:hover {
+  color: var(--fg);
+  background: transparent;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.row button[type="submit"] {
+  flex: 1;
+}
+
+.msg {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 1em;
+}
+
+.msg.err {
+  color: var(--err);
+}
+
+.msg.ok {
+  color: var(--ok);
+}
+
+#loading {
+  font-size: 12px;
+  color: var(--muted);
+}
