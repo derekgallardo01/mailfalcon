@@ -1,4 +1,11 @@
-import { clearSession, getSession, setSession } from '../../src/auth-store'
+import {
+  clearPendingVerify,
+  clearSession,
+  getPendingVerify,
+  getSession,
+  setPendingVerify,
+  setSession,
+} from '../../src/auth-store'
 import { logout, requestCode, verifyCode } from '../../src/api'
 
 const root = document.getElementById('root')!
@@ -35,6 +42,7 @@ async function showSignedIn(email: string): Promise<void> {
   document.getElementById('logout-btn')?.addEventListener('click', async () => {
     await logout()
     await clearSession()
+    await clearPendingVerify()
     try {
       await chrome.runtime.sendMessage({ type: 'signed-out' })
     } catch {
@@ -44,16 +52,19 @@ async function showSignedIn(email: string): Promise<void> {
   })
 }
 
-async function showRequest(): Promise<void> {
+async function showRequest(prefill = ''): Promise<void> {
   const frag = cloneTemplate('tpl-request')
   render(frag)
   const form = document.getElementById('request-form') as HTMLFormElement
+  const emailInput = form.elements.namedItem('email') as HTMLInputElement
+  if (prefill) emailInput.value = prefill
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
-    const email = (form.elements.namedItem('email') as HTMLInputElement).value.trim().toLowerCase()
+    const email = emailInput.value.trim().toLowerCase()
     setMsg('request-msg', 'Sending…')
     try {
       await requestCode(email)
+      await setPendingVerify(email)
       await showVerify(email)
     } catch (err) {
       setMsg('request-msg', err instanceof Error ? err.message : 'Send failed', 'err')
@@ -66,13 +77,16 @@ async function showVerify(email: string): Promise<void> {
   bind(frag, { email })
   render(frag)
   const form = document.getElementById('verify-form') as HTMLFormElement
+  const codeInput = form.elements.namedItem('code') as HTMLInputElement
+  setTimeout(() => codeInput.focus(), 0)
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
-    const code = (form.elements.namedItem('code') as HTMLInputElement).value.trim()
+    const code = codeInput.value.trim()
     setMsg('verify-msg', 'Verifying…')
     try {
       const result = await verifyCode(email, code)
       await setSession({ token: result.token, email: result.email, userId: result.userId })
+      await clearPendingVerify()
       try {
         await chrome.runtime.sendMessage({ type: 'signed-in' })
       } catch {
@@ -84,8 +98,9 @@ async function showVerify(email: string): Promise<void> {
       setMsg('verify-msg', humanizeError(msg), 'err')
     }
   })
-  document.getElementById('verify-back')?.addEventListener('click', () => {
-    void showRequest()
+  document.getElementById('verify-back')?.addEventListener('click', async () => {
+    await clearPendingVerify()
+    await showRequest(email)
   })
 }
 
@@ -106,9 +121,16 @@ async function init(): Promise<void> {
   const session = await getSession()
   if (session) {
     await showSignedIn(session.email)
-  } else {
-    await showRequest()
+    return
   }
+  // Closing the popup tab to copy a code from inbox shouldn't reset
+  // progress — restore the verify stage if a fresh request is in flight.
+  const pending = await getPendingVerify()
+  if (pending) {
+    await showVerify(pending.email)
+    return
+  }
+  await showRequest()
 }
 
 void init()
