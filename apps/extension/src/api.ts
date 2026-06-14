@@ -1,3 +1,4 @@
+import type { Session } from './auth-store'
 import { getSession } from './auth-store'
 import { config } from './config'
 
@@ -11,8 +12,34 @@ export interface MintEmailResponse {
   sig: string
 }
 
+// Try direct chrome.storage first (popup + SW context), then fall back
+// to messaging the SW. Content scripts called from inside InboxSDK
+// callbacks sometimes can't see chrome.storage even though chrome.runtime
+// works — the SW is always able to read storage and reply.
+async function loadSession(): Promise<Session | null> {
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    try {
+      const direct = await getSession()
+      if (direct) return direct
+    } catch {
+      /* fall through to messaging */
+    }
+  }
+  if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    try {
+      const resp = (await chrome.runtime.sendMessage({ type: 'get-session' })) as {
+        session?: Session | null
+      } | undefined
+      return resp?.session ?? null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 async function authHeader(): Promise<Record<string, string>> {
-  const session = await getSession()
+  const session = await loadSession()
   return session ? { Authorization: `Bearer ${session.token}` } : {}
 }
 

@@ -109,6 +109,18 @@ export default defineBackground(() => {
       return false
     }
 
+    // Content scripts ask the SW for the active session — chrome.storage
+    // isn't reliably reachable from InboxSDK's presending callbacks
+    // (they often resolve in a context where the chrome.storage global
+    // is missing). The SW always has access, so it's the source of
+    // truth.
+    if (msg.type === 'get-session') {
+      void getSession()
+        .then((session) => sendResponse({ session }))
+        .catch(() => sendResponse({ session: null }))
+      return true // keep the channel open for the async reply
+    }
+
     // InboxSDK MV3 bootstrap: content script asks us to inject pageWorld.js
     // into the page's main world. We can't do this from the content script
     // directly under MV3, so InboxSDK hands it off to the SW.
