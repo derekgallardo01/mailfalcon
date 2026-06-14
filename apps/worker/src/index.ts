@@ -1,15 +1,31 @@
 import { Hono } from 'hono'
-import { verify } from '@mailfalcon/shared'
+import { cors } from 'hono/cors'
+import { emailsRouter } from './routes/emails'
 
 type Bindings = {
   ENVIRONMENT: string
-  HMAC_SECRET: string
+  HMAC_SECRET?: string
   // DB: D1Database
   // KV: KVNamespace
   // ASSETS: R2Bucket
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
+
+app.use(
+  '/v1/*',
+  cors({
+    origin: (origin) => {
+      if (!origin) return ''
+      if (origin === 'https://mail.google.com') return origin
+      if (origin === 'https://app.mailfalcon.app') return origin
+      if (origin.startsWith('chrome-extension://')) return origin
+      if (origin.startsWith('http://localhost')) return origin
+      return ''
+    },
+    credentials: false,
+  }),
+)
 
 const TRANSPARENT_GIF = new Uint8Array([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0,
@@ -21,16 +37,10 @@ app.get('/health', (c) =>
   c.json({ ok: true, env: c.env.ENVIRONMENT, ts: Date.now() }),
 )
 
+app.route('/v1/emails', emailsRouter)
+
 app.get('/p/:idWithExt', async (c) => {
-  const sig = c.req.query('s') ?? ''
-  const idWithExt = c.req.param('idWithExt')
-  const id = idWithExt.replace(/\.gif$/, '')
-
-  // Stub: signature verification. D1 write + push fanout lands in next commit.
-  if (c.env.HMAC_SECRET) {
-    await verify(id, sig, c.env.HMAC_SECRET, 12).catch(() => false)
-  }
-
+  // TODO: HMAC verify, KV nonce dedupe, D1 events insert, Web Push fanout
   return new Response(TRANSPARENT_GIF, {
     headers: {
       'Content-Type': 'image/gif',
@@ -41,17 +51,8 @@ app.get('/p/:idWithExt', async (c) => {
 })
 
 app.get('/c/:id/:linkIdx', async (c) => {
-  const sig = c.req.query('s') ?? ''
-  const id = c.req.param('id')
-  const linkIdx = Number(c.req.param('linkIdx'))
-
-  // Stub: real impl resolves links.original_url from D1.
-  const fallback = 'https://mailfalcon.app'
-  void sig
-  void linkIdx
-
-  // Avoid open-redirect: only redirect to a hardcoded fallback until DB is wired.
-  return c.redirect(fallback, 302)
+  // TODO: HMAC verify, D1 events insert, lookup links.original_url, redirect
+  return c.redirect('https://mailfalcon.app', 302)
 })
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404))

@@ -15,6 +15,7 @@
     "clean": "rm -rf .output .wxt .turbo"
   },
   "dependencies": {
+    "@inboxsdk/core": "^2.1.5",
     "@mailfalcon/shared": "workspace:*"
   },
   "devDependencies": {
