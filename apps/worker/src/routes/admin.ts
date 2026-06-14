@@ -157,6 +157,98 @@ adminRouter.get('/emails', async (c) => {
   })
 })
 
+adminRouter.get('/users/:id', async (c) => {
+  const id = c.req.param('id')
+  const db = getDb(c.env.DB)
+
+  const user = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      tier: users.tier,
+      createdAt: users.createdAt,
+      stripeCustId: users.stripeCustId,
+    })
+    .from(users)
+    .where(eq(users.id, id))
+    .get()
+  if (!user) return c.json({ error: 'not_found' }, 404)
+
+  const [emailsList, eventsList, totals] = await Promise.all([
+    db
+      .select({
+        id: trackedEmails.id,
+        sentAt: trackedEmails.sentAt,
+        recipientCount: trackedEmails.recipientCount,
+        privacyMode: trackedEmails.privacyMode,
+        opens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`,
+        clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
+        lastEventAt: sql<number | null>`MAX(${events.ts})`,
+      })
+      .from(trackedEmails)
+      .leftJoin(events, eq(events.emailId, trackedEmails.id))
+      .where(eq(trackedEmails.userId, id))
+      .groupBy(trackedEmails.id)
+      .orderBy(desc(trackedEmails.sentAt))
+      .limit(100)
+      .all(),
+    db
+      .select({
+        id: events.id,
+        emailId: events.emailId,
+        type: events.type,
+        linkId: events.linkId,
+        ts: events.ts,
+        uaClass: events.uaClass,
+        ipPrefix: events.ipPrefix,
+        country: events.country,
+        isFirstOpen: events.isFirstOpen,
+      })
+      .from(events)
+      .innerJoin(trackedEmails, eq(trackedEmails.id, events.emailId))
+      .where(eq(trackedEmails.userId, id))
+      .orderBy(desc(events.ts))
+      .limit(200)
+      .all(),
+    db
+      .select({
+        emails: sql<number>`(SELECT COUNT(*) FROM ${trackedEmails} WHERE ${trackedEmails.userId} = ${id})`,
+        opens: sql<number>`(SELECT COUNT(*) FROM ${events} e INNER JOIN ${trackedEmails} te ON te.id = e.email_id WHERE te.user_id = ${id} AND e.type = 'open')`,
+        humanOpens: sql<number>`(SELECT COUNT(*) FROM ${events} e INNER JOIN ${trackedEmails} te ON te.id = e.email_id WHERE te.user_id = ${id} AND e.type = 'open' AND e.ua_class != 'bot')`,
+        clicks: sql<number>`(SELECT COUNT(*) FROM ${events} e INNER JOIN ${trackedEmails} te ON te.id = e.email_id WHERE te.user_id = ${id} AND e.type = 'click')`,
+      })
+      .from(users)
+      .where(eq(users.id, id))
+      .get(),
+  ])
+
+  return c.json({
+    user: {
+      ...user,
+      hasStripeCustomer: !!user.stripeCustId,
+    },
+    totals: {
+      emails: Number(totals?.emails ?? 0),
+      opens: Number(totals?.opens ?? 0),
+      humanOpens: Number(totals?.humanOpens ?? 0),
+      clicks: Number(totals?.clicks ?? 0),
+    },
+    emails: emailsList.map((r) => ({
+      id: r.id,
+      sentAt: r.sentAt,
+      recipientCount: r.recipientCount,
+      privacyMode: r.privacyMode === 1,
+      opens: Number(r.opens),
+      clicks: Number(r.clicks),
+      lastEventAt: r.lastEventAt,
+    })),
+    events: eventsList.map((e) => ({
+      ...e,
+      isFirstOpen: e.isFirstOpen === 1,
+    })),
+  })
+})
+
 adminRouter.get('/events', async (c) => {
   const limit = Math.min(Number(c.req.query('limit') ?? '200'), 500)
   const db = getDb(c.env.DB)
@@ -169,6 +261,7 @@ adminRouter.get('/events', async (c) => {
       linkId: events.linkId,
       ts: events.ts,
       uaClass: events.uaClass,
+      ipPrefix: events.ipPrefix,
       country: events.country,
       isFirstOpen: events.isFirstOpen,
       userId: trackedEmails.userId,
@@ -189,6 +282,7 @@ adminRouter.get('/events', async (c) => {
       linkId: r.linkId,
       ts: r.ts,
       uaClass: r.uaClass,
+      ipPrefix: r.ipPrefix,
       country: r.country,
       isFirstOpen: r.isFirstOpen === 1,
       userId: r.userId,

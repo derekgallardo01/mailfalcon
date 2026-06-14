@@ -12,7 +12,7 @@ function renderHtml(code: string): string {
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
         <tr><td style="padding:32px 32px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">mailfalcon</p>
+          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">MailFalcon</p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
           <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">Your sign-in code is:</p>
@@ -24,7 +24,7 @@ function renderHtml(code: string): string {
           <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">This code expires in 15 minutes. If you didn't request it, you can safely ignore this email.</p>
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">mailfalcon &middot; email tracking for Gmail</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">MailFalcon &middot; email tracking for Gmail</p>
     </td></tr>
   </table>
 </body>
@@ -44,10 +44,10 @@ export async function sendCode({ email, code, env }: SendCodeArgs): Promise<void
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'mailfalcon <hello@mailfalcon.app>',
+      from: 'MailFalcon <hello@mailfalcon.app>',
       to: email,
-      subject: 'Your mailfalcon sign-in code',
-      text: `Your sign-in code is ${code}.\n\nThis code expires in 15 minutes. If you didn't request it, you can safely ignore this email.\n\nmailfalcon`,
+      subject: 'Your MailFalcon sign-in code',
+      text: `Your sign-in code is ${code}.\n\nThis code expires in 15 minutes. If you didn't request it, you can safely ignore this email.\n\nMailFalcon`,
       html: renderHtml(code),
     }),
   })

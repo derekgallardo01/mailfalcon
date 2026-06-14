@@ -158,10 +158,22 @@ emailsRouter.get('/:id', async (c) => {
   const userId = c.get('userId')
   const db = getDb(c.env.DB)
 
+  const currentUser = await db
+    .select({ tier: users.tier })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get()
+  const isAdmin = currentUser?.tier === 'admin'
+
+  // Admins can view any email; regular users only their own.
   const email = await db
     .select()
     .from(trackedEmails)
-    .where(and(eq(trackedEmails.id, id), eq(trackedEmails.userId, userId)))
+    .where(
+      isAdmin
+        ? eq(trackedEmails.id, id)
+        : and(eq(trackedEmails.id, id), eq(trackedEmails.userId, userId)),
+    )
     .get()
   if (!email) return c.json({ error: 'not_found' }, 404)
 

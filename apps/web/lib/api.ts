@@ -189,15 +189,54 @@ export interface AdminEvent {
   linkId: string | null
   ts: number
   uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
+  ipPrefix: string | null
   country: string | null
   isFirstOpen: boolean
   userId: string
   userEmail: string
 }
 
+export interface AdminUserDetail {
+  user: {
+    id: string
+    email: string
+    tier: 'free' | 'pro' | 'team' | 'admin'
+    createdAt: number
+    stripeCustId: string | null
+    hasStripeCustomer: boolean
+  }
+  totals: {
+    emails: number
+    opens: number
+    humanOpens: number
+    clicks: number
+  }
+  emails: Array<{
+    id: string
+    sentAt: number
+    recipientCount: number
+    privacyMode: boolean
+    opens: number
+    clicks: number
+    lastEventAt: number | null
+  }>
+  events: Array<{
+    id: number
+    emailId: string
+    type: 'open' | 'click'
+    linkId: string | null
+    ts: number
+    uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
+    ipPrefix: string | null
+    country: string | null
+    isFirstOpen: boolean
+  }>
+}
+
 export const admin = {
   stats: () => adminGet<AdminStats>('/stats'),
   users: () => adminGet<{ users: AdminUser[]; nextCursor: number | null }>('/users'),
+  userDetail: (id: string) => adminGet<AdminUserDetail>(`/users/${encodeURIComponent(id)}`),
   emails: () => adminGet<{ emails: AdminEmail[] }>('/emails'),
   events: () => adminGet<{ events: AdminEvent[] }>('/events'),
 }

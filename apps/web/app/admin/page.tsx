@@ -109,7 +109,7 @@ export default function AdminPage() {
     <div className="mx-auto max-w-6xl px-6 py-8">
       <header className="flex items-center justify-between border-b border-falcon-200 pb-4">
         <div>
-          <h1 className="text-xl font-semibold text-falcon-700">mailfalcon · admin</h1>
+          <h1 className="text-xl font-semibold text-falcon-700">MailFalcon · admin</h1>
           <p className="text-xs text-falcon-500">All users, all activity</p>
         </div>
         <Link
@@ -178,7 +178,11 @@ export default function AdminPage() {
               </thead>
               <tbody className="divide-y divide-falcon-100">
                 {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-falcon-50">
+                  <tr
+                    key={u.id}
+                    className="cursor-pointer hover:bg-falcon-50"
+                    onClick={() => router.push(`/admin/user?id=${encodeURIComponent(u.id)}`)}
+                  >
                     <td className="px-4 py-3 text-falcon-700">{u.email}</td>
                     <td className="px-4 py-3">
                       <TierBadge tier={u.tier} />
@@ -213,7 +217,11 @@ export default function AdminPage() {
               </thead>
               <tbody className="divide-y divide-falcon-100">
                 {emails.map((e) => (
-                  <tr key={e.id} className="hover:bg-falcon-50">
+                  <tr
+                    key={e.id}
+                    className="cursor-pointer hover:bg-falcon-50"
+                    onClick={() => router.push(`/dashboard/email?id=${encodeURIComponent(e.id)}`)}
+                  >
                     <td className="px-4 py-3 text-falcon-700">{e.userEmail}</td>
                     <td className="px-4 py-3 text-right text-falcon-700">
                       {e.recipientCount}
@@ -251,12 +259,18 @@ export default function AdminPage() {
                   <th className="px-4 py-2 text-left font-medium">User</th>
                   <th className="px-4 py-2 text-left font-medium">Type</th>
                   <th className="px-4 py-2 text-left font-medium">UA</th>
+                  <th className="px-4 py-2 text-left font-medium">IP /24</th>
                   <th className="px-4 py-2 text-left font-medium">Country</th>
+                  <th className="px-4 py-2 text-left font-medium">Email</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-falcon-100">
                 {events.map((e) => (
-                  <tr key={e.id} className="hover:bg-falcon-50">
+                  <tr
+                    key={e.id}
+                    className="cursor-pointer hover:bg-falcon-50"
+                    onClick={() => router.push(`/dashboard/email?id=${encodeURIComponent(e.emailId)}`)}
+                  >
                     <td className="px-4 py-3 text-falcon-500" title={formatDate(e.ts)}>
                       {formatRelative(e.ts)}
                     </td>
@@ -271,10 +285,19 @@ export default function AdminPage() {
                       >
                         {e.type}
                         {e.type === 'open' && e.isFirstOpen ? ' · first' : ''}
+                        {e.type === 'click' && e.linkId
+                          ? ` · #${e.linkId.split(':')[1]}`
+                          : ''}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-falcon-500">{e.uaClass}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-falcon-500">
+                      {e.ipPrefix ?? '—'}
+                    </td>
                     <td className="px-4 py-3 text-falcon-500">{e.country ?? '—'}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-falcon-400">
+                      {e.emailId.slice(0, 8)}…
+                    </td>
                   </tr>
                 ))}
               </tbody>

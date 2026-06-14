@@ -3,7 +3,7 @@ import Link from 'next/link'
 import './globals.css'
 
 export const metadata = {
-  title: 'mailfalcon',
+  title: 'MailFalcon',
   description: 'Email tracking for Gmail.',
 }
 
@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <div className="flex-1">{children}</div>
           <footer className="border-t border-falcon-200 bg-white py-4 text-center text-xs text-falcon-500">
             <Link href="/" className="hover:text-falcon-700">
-              mailfalcon
+              MailFalcon
             </Link>
             <span className="mx-2">·</span>
             <Link href="/privacy" className="hover:text-falcon-700">

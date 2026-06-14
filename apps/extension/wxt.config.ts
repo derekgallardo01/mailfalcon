@@ -2,7 +2,7 @@ import { defineConfig } from 'wxt'
 
 export default defineConfig({
   manifest: {
-    name: 'mailfalcon',
+    name: 'MailFalcon',
     description:
       'Email tracking for Gmail — opens, clicks, real-time notifications.',
     permissions: ['storage', 'notifications', 'alarms', 'scripting'],
@@ -17,7 +17,7 @@ export default defineConfig({
       128: 'icon/128.png',
     },
     action: {
-      default_title: 'mailfalcon',
+      default_title: 'MailFalcon',
       default_icon: {
         16: 'icon/16.png',
         32: 'icon/32.png',

@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Privacy policy — mailfalcon',
+  title: 'Privacy policy — MailFalcon',
 }
 
 export default function PrivacyPage() {
@@ -7,17 +7,17 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <a href="/" className="text-xs text-falcon-500 hover:text-falcon-700">
-        ← mailfalcon
+        ← MailFalcon
       </a>
       <h1 className="mt-2 text-2xl font-semibold text-falcon-700">Privacy policy</h1>
       <p className="mt-1 text-xs text-falcon-500">Last updated {lastUpdated}</p>
 
       <section className="prose mt-8 text-sm text-falcon-700">
         <h2 className="mt-6 text-base font-semibold text-falcon-700">
-          What mailfalcon does
+          What MailFalcon does
         </h2>
         <p className="mt-2 leading-relaxed">
-          mailfalcon is a Chrome extension and web dashboard that lets a sender
+          MailFalcon is a Chrome extension and web dashboard that lets a sender
           (you) see when emails you've sent through Gmail are opened, and
           whether recipients click links inside them. It works by injecting a
           1×1 transparent image and rewriting outbound links to pass through
@@ -86,7 +86,7 @@ export default function PrivacyPage() {
         </h2>
         <p className="mt-2 leading-relaxed">
           Every Gmail compose window has a "Privacy mode" checkbox added by the
-          mailfalcon extension. When checked, no pixel is injected, no links
+          MailFalcon extension. When checked, no pixel is injected, no links
           are rewritten, and no record of the send is created on our servers.
           That email is, from our perspective, completely untracked.
         </p>
@@ -141,7 +141,7 @@ export default function PrivacyPage() {
           The modified body is then handed back to Gmail to send. The
           extension does not transmit your compose text, subject, recipient
           addresses, or any other Gmail content to our servers or to any
-          third party. mailfalcon's use of information received from Google
+          third party. MailFalcon's use of information received from Google
           APIs adheres to Google's{' '}
           <a
             href="https://developers.google.com/terms/api-services-user-data-policy"

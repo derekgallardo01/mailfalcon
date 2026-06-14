@@ -1,4 +1,4 @@
 export const brand = {
-  name: 'mailfalcon',
+  name: 'MailFalcon',
   tagline: 'Email tracking for Gmail.',
 } as const

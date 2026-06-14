@@ -110,7 +110,7 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-5xl px-6 py-8">
       <header className="flex items-center justify-between border-b border-falcon-200 pb-4">
         <div>
-          <h1 className="text-xl font-semibold text-falcon-700">mailfalcon</h1>
+          <h1 className="text-xl font-semibold text-falcon-700">MailFalcon</h1>
           <p className="text-xs text-falcon-500">{session.email}</p>
         </div>
         <div className="flex items-center gap-4">

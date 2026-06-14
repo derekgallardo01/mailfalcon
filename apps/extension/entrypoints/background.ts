@@ -12,12 +12,12 @@ type Notif = { title: string; body: string }
 function notifFor(ev: StreamEvent): Notif {
   if (ev.type === 'open') {
     return {
-      title: 'mailfalcon — email opened',
+      title: 'MailFalcon — email opened',
       body: ev.isFirstOpen ? 'First open detected' : 'Opened again',
     }
   }
   return {
-    title: 'mailfalcon — link clicked',
+    title: 'MailFalcon — link clicked',
     body: 'A tracked link was clicked',
   }
 }
@@ -70,7 +70,7 @@ export default defineBackground(() => {
     const sw = self as unknown as ServiceWorkerGlobalScope
     const session = await getSession()
     if (!session) {
-      await sw.registration.showNotification('mailfalcon', {
+      await sw.registration.showNotification('MailFalcon', {
         body: 'Sign in to see new activity.',
         icon: NOTIF_ICON_PATH,
         tag: 'mf-signed-out',
@@ -106,7 +106,7 @@ export default defineBackground(() => {
 
     if (surfaced.length === 0) {
       // Still must show one notification to satisfy Web Push spec.
-      await sw.registration.showNotification('mailfalcon — new activity', {
+      await sw.registration.showNotification('MailFalcon — new activity', {
         body: 'Open the dashboard to see what changed.',
         icon: NOTIF_ICON_PATH,
         tag: 'mf-push-generic',
