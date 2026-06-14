@@ -5,7 +5,7 @@ import { verify } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
 import { fanoutPush } from '../lib/push-fanout'
 import { getHmacSecret } from '../lib/secrets'
-import { classifyUa, truncateIpV4 } from '../lib/ua'
+import { extractCfGeo, parseUa, truncateIpV4 } from '../lib/ua'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -49,9 +49,11 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
   if (!link || !email) return c.notFound()
 
   const ua = c.req.header('User-Agent') ?? ''
-  const uaClass = classifyUa(ua)
-  const ipPrefix = truncateIpV4(c.req.header('CF-Connecting-IP'))
-  const country = c.req.header('CF-IPCountry') ?? null
+  const uaDetails = parseUa(ua)
+  const ipFull = c.req.header('CF-Connecting-IP') ?? null
+  const ipPrefix = truncateIpV4(ipFull)
+  const geo = extractCfGeo(c.req.raw)
+  const country = geo.country ?? c.req.header('CF-IPCountry') ?? null
 
   c.executionCtx.waitUntil(
     (async () => {
@@ -63,13 +65,28 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
           type: 'click',
           linkId,
           ts: Date.now(),
-          uaClass,
+          uaClass: uaDetails.uaClass,
           ipPrefix,
+          ipFull,
           country,
+          region: geo.region,
+          regionCode: geo.regionCode,
+          city: geo.city,
+          postalCode: geo.postalCode,
+          latitude: geo.latitude,
+          longitude: geo.longitude,
+          timezone: geo.timezone,
+          browserName: uaDetails.browserName,
+          browserVersion: uaDetails.browserVersion,
+          osName: uaDetails.osName,
+          osVersion: uaDetails.osVersion,
+          deviceType: uaDetails.deviceType,
+          deviceVendor: uaDetails.deviceVendor,
+          deviceModel: uaDetails.deviceModel,
           isFirstOpen: 0,
         })
         .run()
-      if (uaClass !== 'bot') {
+      if (uaDetails.uaClass !== 'bot') {
         await fanoutPush(db, c.env, email.userId).catch((err) =>
           console.warn('[mailfalcon] click fanout failed:', err),
         )

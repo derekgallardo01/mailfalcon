@@ -63,22 +63,33 @@ export default function PrivacyPage() {
             image proxy from your stats.
           </li>
           <li>
-            The recipient's country, derived from their IP address by
-            Cloudflare.
+            Browser name and major version (e.g. "Chrome 130"), operating
+            system name and version (e.g. "Windows 11"), and a coarse device
+            descriptor where the user-agent string includes it (e.g.
+            "iPhone").
           </li>
           <li>
-            The first three octets of the recipient's IPv4 address (e.g.
+            Coarse geolocation derived by Cloudflare from the recipient's IP
+            address: country, region/state, city, postal code, and IANA
+            timezone (e.g. "America/New_York"). When available, approximate
+            latitude/longitude at IP-block resolution (city-level, not GPS).
+          </li>
+          <li>
+            The recipient's IP address. We retain both a /24-truncated form
+            (e.g.{' '}
             <code className="mx-1 rounded bg-falcon-50 px-1 py-0.5 font-mono text-xs">
               192.168.1.0
             </code>
-            ). We truncate the last octet before storing so the address is no
-            longer personally identifying under GDPR.
+            ) for aggregate statistics and the full IP for abuse
+            investigation. The full IP is only accessible to MailFalcon
+            administrators and is deleted on the standard retention schedule.
           </li>
         </ul>
         <p className="mt-3 leading-relaxed">
           We do <strong>not</strong> drop cookies on the recipient, do not
-          fingerprint their device or browser, and do not share anything we
-          collect with third-party advertising or analytics networks.
+          fingerprint their device beyond the publicly-broadcast user-agent
+          string, and do not share anything we collect with third-party
+          advertising or analytics networks.
         </p>
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">

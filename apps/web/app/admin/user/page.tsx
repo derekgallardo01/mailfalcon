@@ -5,18 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
 import { admin, type AdminUserDetail, getMe } from '../../../lib/api'
 import { clearSession, getSession } from '../../../lib/auth-store'
-
-function formatRelative(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  return `${Math.floor(diff / 86_400_000)}d ago`
-}
-
-function formatDate(ts: number): string {
-  return new Date(ts).toISOString().replace('T', ' ').slice(0, 19) + 'Z'
-}
+import {
+  formatBrowser,
+  formatDevice,
+  formatET,
+  formatETShort,
+  formatLocation,
+  formatOs,
+  formatRelative,
+} from '../../../lib/format'
 
 function tierColor(tier: AdminUserDetail['user']['tier']): string {
   switch (tier) {
@@ -102,7 +99,7 @@ function AdminUserInner() {
             {user.tier}
           </span>
         </div>
-        <p className="mt-1 text-xs text-falcon-500" title={formatDate(user.createdAt)}>
+        <p className="mt-1 text-xs text-falcon-500" title={formatET(user.createdAt)}>
           Joined {formatRelative(user.createdAt)}
           {user.hasStripeCustomer && ' · Stripe customer'}
         </p>
@@ -178,16 +175,20 @@ function AdminUserInner() {
         {events.length === 0 ? (
           <p className="mt-2 text-sm text-falcon-400">No events yet.</p>
         ) : (
-          <div className="mt-3 overflow-hidden rounded border border-falcon-200">
+          <div className="mt-3 overflow-x-auto rounded border border-falcon-200">
             <table className="w-full text-sm">
               <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
                 <tr>
-                  <th className="px-4 py-2 text-left font-medium">Time</th>
-                  <th className="px-4 py-2 text-left font-medium">Type</th>
-                  <th className="px-4 py-2 text-left font-medium">UA</th>
-                  <th className="px-4 py-2 text-left font-medium">IP /24</th>
-                  <th className="px-4 py-2 text-left font-medium">Country</th>
-                  <th className="px-4 py-2 text-left font-medium">Email</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">When (ET)</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Type</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Browser</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">OS</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Device</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Location</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">IP /24</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Full IP</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">TZ</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Email</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-falcon-100">
@@ -197,10 +198,11 @@ function AdminUserInner() {
                     className="cursor-pointer hover:bg-falcon-50"
                     onClick={() => router.push(`/dashboard/email?id=${encodeURIComponent(e.emailId)}`)}
                   >
-                    <td className="px-4 py-3 text-falcon-500" title={formatDate(e.ts)}>
-                      {formatRelative(e.ts)}
+                    <td className="whitespace-nowrap px-3 py-3 text-falcon-700" title={formatET(e.ts)}>
+                      <div>{formatETShort(e.ts)}</div>
+                      <div className="text-xs text-falcon-400">{formatRelative(e.ts)}</div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-3 py-3">
                       <span
                         className={
                           e.type === 'open'
@@ -215,12 +217,28 @@ function AdminUserInner() {
                           : ''}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-falcon-500">{e.uaClass}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-falcon-500">
+                    <td className="whitespace-nowrap px-3 py-3 text-falcon-500">
+                      {formatBrowser(e)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-falcon-500">
+                      {formatOs(e)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-falcon-500">
+                      {formatDevice(e)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-falcon-500">
+                      {formatLocation(e)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-falcon-500">
                       {e.ipPrefix ?? '—'}
                     </td>
-                    <td className="px-4 py-3 text-falcon-500">{e.country ?? '—'}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-falcon-400">
+                    <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-falcon-500">
+                      {e.ipFull ?? '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-xs text-falcon-400">
+                      {e.timezone ?? '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-falcon-400">
                       {e.emailId.slice(0, 8)}…
                     </td>
                   </tr>

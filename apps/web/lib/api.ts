@@ -87,7 +87,23 @@ export interface EmailDetail {
     ts: number
     linkId: string | null
     uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
+    ipPrefix: string | null
+    ipFull: string | null
     country: string | null
+    region: string | null
+    regionCode: string | null
+    city: string | null
+    postalCode: string | null
+    latitude: string | null
+    longitude: string | null
+    timezone: string | null
+    browserName: string | null
+    browserVersion: string | null
+    osName: string | null
+    osVersion: string | null
+    deviceType: string | null
+    deviceVendor: string | null
+    deviceModel: string | null
     isFirstOpen: boolean
   }[]
 }
@@ -190,7 +206,22 @@ export interface AdminEvent {
   ts: number
   uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
   ipPrefix: string | null
+  ipFull: string | null
   country: string | null
+  region: string | null
+  regionCode: string | null
+  city: string | null
+  postalCode: string | null
+  latitude: string | null
+  longitude: string | null
+  timezone: string | null
+  browserName: string | null
+  browserVersion: string | null
+  osName: string | null
+  osVersion: string | null
+  deviceType: string | null
+  deviceVendor: string | null
+  deviceModel: string | null
   isFirstOpen: boolean
   userId: string
   userEmail: string
@@ -228,7 +259,22 @@ export interface AdminUserDetail {
     ts: number
     uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
     ipPrefix: string | null
+    ipFull: string | null
     country: string | null
+    region: string | null
+    regionCode: string | null
+    city: string | null
+    postalCode: string | null
+    latitude: string | null
+    longitude: string | null
+    timezone: string | null
+    browserName: string | null
+    browserVersion: string | null
+    osName: string | null
+    osVersion: string | null
+    deviceType: string | null
+    deviceVendor: string | null
+    deviceModel: string | null
     isFirstOpen: boolean
   }>
 }

@@ -5,7 +5,7 @@ import { verify } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
 import { fanoutPush } from '../lib/push-fanout'
 import { getHmacSecret } from '../lib/secrets'
-import { classifyUa, hashUa, truncateIpV4 } from '../lib/ua'
+import { extractCfGeo, hashUa, parseUa, truncateIpV4 } from '../lib/ua'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -53,9 +53,12 @@ pixelRouter.get('/:idWithExt', async (c) => {
   if (!row) return gif()
 
   const ua = c.req.header('User-Agent') ?? ''
-  const uaClass = classifyUa(ua)
-  const ipPrefix = truncateIpV4(c.req.header('CF-Connecting-IP'))
-  const country = c.req.header('CF-IPCountry') ?? null
+  const uaDetails = parseUa(ua)
+  const ipFull = c.req.header('CF-Connecting-IP') ?? null
+  const ipPrefix = truncateIpV4(ipFull)
+  const geo = extractCfGeo(c.req.raw)
+  // Fall back to the CF-IPCountry header if cf object isn't populated.
+  const country = geo.country ?? c.req.header('CF-IPCountry') ?? null
 
   const uaHash = await hashUa(ua)
   const nonceKey = `nonce:${id}:${uaHash}`
@@ -75,14 +78,28 @@ pixelRouter.get('/:idWithExt', async (c) => {
           type: 'open',
           linkId: null,
           ts: Date.now(),
-          uaClass,
+          uaClass: uaDetails.uaClass,
           ipPrefix,
+          ipFull,
           country,
+          region: geo.region,
+          regionCode: geo.regionCode,
+          city: geo.city,
+          postalCode: geo.postalCode,
+          latitude: geo.latitude,
+          longitude: geo.longitude,
+          timezone: geo.timezone,
+          browserName: uaDetails.browserName,
+          browserVersion: uaDetails.browserVersion,
+          osName: uaDetails.osName,
+          osVersion: uaDetails.osVersion,
+          deviceType: uaDetails.deviceType,
+          deviceVendor: uaDetails.deviceVendor,
+          deviceModel: uaDetails.deviceModel,
           isFirstOpen,
         })
         .run()
-      // Skip push fanout for bot / proxy hits — would create notification spam.
-      if (uaClass !== 'bot') {
+      if (uaDetails.uaClass !== 'bot') {
         await fanoutPush(db, c.env, row.userId).catch((err) =>
           console.warn('[mailfalcon] pixel fanout failed:', err),
         )

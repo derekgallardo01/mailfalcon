@@ -6,18 +6,15 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { type EmailDetail, getEmailDetail } from '../../../lib/api'
 import { clearSession, getSession } from '../../../lib/auth-store'
 import { config } from '../../../lib/config'
-
-function formatRelative(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  return `${Math.floor(diff / 86_400_000)}d ago`
-}
-
-function formatDate(ts: number): string {
-  return new Date(ts).toISOString().replace('T', ' ').slice(0, 19) + 'Z'
-}
+import {
+  formatBrowser,
+  formatDevice,
+  formatET,
+  formatETShort,
+  formatLocation,
+  formatOs,
+  formatRelative,
+} from '../../../lib/format'
 
 function EmailDetailInner() {
   const router = useRouter()
@@ -116,7 +113,7 @@ function EmailDetailInner() {
           <h1 className="mt-1 text-xl font-semibold text-falcon-700">
             Email {data.email.id.slice(0, 8)}…
           </h1>
-          <p className="text-xs text-falcon-500" title={formatDate(data.email.sentAt)}>
+          <p className="text-xs text-falcon-500" title={formatET(data.email.sentAt)}>
             Sent {formatRelative(data.email.sentAt)} · {data.email.recipientCount} recipient{data.email.recipientCount === 1 ? '' : 's'}
             {data.email.privacyMode && ' · privacy mode'}
           </p>
@@ -167,27 +164,41 @@ function EmailDetailInner() {
         ) : (
           <ol className="mt-3 space-y-2">
             {data.events.map((ev) => (
-              <li key={ev.id} className="flex items-center gap-3 rounded border border-falcon-100 px-3 py-2">
-                <span
-                  className={
-                    ev.type === 'open'
-                      ? 'rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
-                      : 'rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800'
-                  }
-                >
-                  {ev.type}
-                  {ev.type === 'open' && ev.isFirstOpen ? ' · first' : ''}
-                </span>
-                <span className="text-sm text-falcon-700" title={formatDate(ev.ts)}>
-                  {formatRelative(ev.ts)}
-                </span>
-                <span className="text-xs text-falcon-500">{ev.uaClass}</span>
-                {ev.country && <span className="text-xs text-falcon-500">{ev.country}</span>}
-                {ev.linkId && (
-                  <span className="ml-auto truncate text-xs text-falcon-400" title={ev.linkId}>
-                    link #{ev.linkId.split(':')[1]}
+              <li
+                key={ev.id}
+                className="rounded border border-falcon-100 px-3 py-2 text-sm"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={
+                      ev.type === 'open'
+                        ? 'rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+                        : 'rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800'
+                    }
+                  >
+                    {ev.type}
+                    {ev.type === 'open' && ev.isFirstOpen ? ' · first' : ''}
+                    {ev.type === 'click' && ev.linkId
+                      ? ` · #${ev.linkId.split(':')[1]}`
+                      : ''}
                   </span>
-                )}
+                  <span className="text-falcon-700" title={formatET(ev.ts)}>
+                    {formatETShort(ev.ts)}
+                  </span>
+                  <span className="text-xs text-falcon-400">
+                    ({formatRelative(ev.ts)})
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-falcon-500">
+                  <span>{formatBrowser(ev)}</span>
+                  <span>{formatOs(ev)}</span>
+                  <span>{formatDevice(ev)}</span>
+                  <span>{formatLocation(ev)}</span>
+                  {ev.ipPrefix && (
+                    <span className="font-mono">{ev.ipPrefix}</span>
+                  )}
+                  {ev.timezone && <span>{ev.timezone}</span>}
+                </div>
               </li>
             ))}
           </ol>

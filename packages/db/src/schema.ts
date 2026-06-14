@@ -69,8 +69,26 @@ export const events = sqliteTable(
     uaClass: text('ua_class', {
       enum: ['desktop', 'mobile', 'bot', 'unknown'],
     }).notNull(),
+    // /24-truncated IPv4 (or /48-truncated IPv6) for aggregate stats
     ipPrefix: text('ip_prefix'),
+    // Full IP — admin-only access via dashboard; raw value for abuse
+    // investigation. Privacy policy discloses retention.
+    ipFull: text('ip_full'),
     country: text('country'),
+    region: text('region'),
+    regionCode: text('region_code'),
+    city: text('city'),
+    postalCode: text('postal_code'),
+    latitude: text('latitude'),
+    longitude: text('longitude'),
+    timezone: text('timezone'),
+    browserName: text('browser_name'),
+    browserVersion: text('browser_version'),
+    osName: text('os_name'),
+    osVersion: text('os_version'),
+    deviceType: text('device_type'),
+    deviceVendor: text('device_vendor'),
+    deviceModel: text('device_model'),
     isFirstOpen: integer('is_first_open').notNull().default(0),
   },
   (table) => ({
