@@ -1,14 +1,25 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { links, trackedEmails } from '@mailfalcon/db/schema'
+import { and, count, desc, eq, sql } from 'drizzle-orm'
+import {
+  events,
+  links,
+  recipients,
+  trackedEmails,
+} from '@mailfalcon/db/schema'
 import { newSalt, newTrackingId, sign } from '@mailfalcon/shared'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
 import { getHmacSecret } from '../lib/secrets'
 
-const requestSchema = z.object({
+const mintSchema = z.object({
   recipientCount: z.number().int().min(0).max(500),
   links: z.array(z.string().url()).max(500).default([]),
+})
+
+const listQuerySchema = z.object({
+  cursor: z.coerce.number().int().nonnegative().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
 })
 
 type Bindings = {
@@ -17,11 +28,14 @@ type Bindings = {
   DB: D1Database
 }
 
-export const emailsRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>()
+export const emailsRouter = new Hono<{
+  Bindings: Bindings
+  Variables: Variables
+}>()
 
 emailsRouter.post('/', async (c) => {
   const body = await c.req.json().catch(() => null)
-  const parsed = requestSchema.safeParse(body)
+  const parsed = mintSchema.safeParse(body)
   if (!parsed.success) {
     return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
   }
@@ -59,3 +73,134 @@ emailsRouter.post('/', async (c) => {
   // TODO(freemium): increment usage_counters, 429 if over cap
   return c.json({ id, sig })
 })
+
+emailsRouter.get('/', async (c) => {
+  const q = listQuerySchema.safeParse({
+    cursor: c.req.query('cursor'),
+    limit: c.req.query('limit'),
+  })
+  if (!q.success) return c.json({ error: 'invalid_query' }, 400)
+
+  const userId = c.get('userId')
+  const db = getDb(c.env.DB)
+
+  const rows = await db
+    .select({
+      id: trackedEmails.id,
+      sentAt: trackedEmails.sentAt,
+      recipientCount: trackedEmails.recipientCount,
+      privacyMode: trackedEmails.privacyMode,
+      openCount: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`,
+      clickCount: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
+      lastEventAt: sql<number | null>`MAX(${events.ts})`,
+    })
+    .from(trackedEmails)
+    .leftJoin(events, eq(events.emailId, trackedEmails.id))
+    .where(
+      q.data.cursor
+        ? and(
+            eq(trackedEmails.userId, userId),
+            sql`${trackedEmails.sentAt} < ${q.data.cursor}`,
+          )
+        : eq(trackedEmails.userId, userId),
+    )
+    .groupBy(trackedEmails.id)
+    .orderBy(desc(trackedEmails.sentAt))
+    .limit(q.data.limit + 1)
+    .all()
+
+  const hasMore = rows.length > q.data.limit
+  const page = hasMore ? rows.slice(0, q.data.limit) : rows
+  const nextCursor = hasMore ? page[page.length - 1]!.sentAt : null
+
+  return c.json({
+    emails: page.map((r) => ({
+      id: r.id,
+      sentAt: r.sentAt,
+      recipientCount: r.recipientCount,
+      privacyMode: r.privacyMode === 1,
+      openCount: Number(r.openCount),
+      clickCount: Number(r.clickCount),
+      lastEventAt: r.lastEventAt,
+    })),
+    nextCursor,
+  })
+})
+
+emailsRouter.get('/:id', async (c) => {
+  const id = c.req.param('id')
+  const userId = c.get('userId')
+  const db = getDb(c.env.DB)
+
+  const email = await db
+    .select()
+    .from(trackedEmails)
+    .where(and(eq(trackedEmails.id, id), eq(trackedEmails.userId, userId)))
+    .get()
+  if (!email) return c.json({ error: 'not_found' }, 404)
+
+  const [eventRows, linkRows, recipientRows, counters] = await Promise.all([
+    db
+      .select()
+      .from(events)
+      .where(eq(events.emailId, id))
+      .orderBy(desc(events.ts))
+      .limit(500)
+      .all(),
+    db
+      .select()
+      .from(links)
+      .where(eq(links.emailId, id))
+      .orderBy(links.idx)
+      .all(),
+    db
+      .select()
+      .from(recipients)
+      .where(eq(recipients.emailId, id))
+      .all(),
+    db
+      .select({
+        opens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`,
+        clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
+        humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`,
+      })
+      .from(events)
+      .where(eq(events.emailId, id))
+      .get(),
+  ])
+
+  return c.json({
+    email: {
+      id: email.id,
+      sentAt: email.sentAt,
+      recipientCount: email.recipientCount,
+      privacyMode: email.privacyMode === 1,
+      threadId: email.threadId,
+    },
+    counts: {
+      opens: Number(counters?.opens ?? 0),
+      clicks: Number(counters?.clicks ?? 0),
+      humanOpens: Number(counters?.humanOpens ?? 0),
+    },
+    links: linkRows.map((l) => ({
+      idx: l.idx,
+      originalUrl: l.originalUrl,
+    })),
+    recipients: recipientRows.map((r) => ({
+      id: r.id,
+      displayLabel: r.displayLabel,
+    })),
+    events: eventRows.map((e) => ({
+      id: e.id,
+      type: e.type,
+      ts: e.ts,
+      linkId: e.linkId,
+      uaClass: e.uaClass,
+      country: e.country,
+      isFirstOpen: e.isFirstOpen === 1,
+    })),
+  })
+})
+
+// avoid unused import warning if count not used elsewhere
+void count
