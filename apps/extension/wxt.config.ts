@@ -5,7 +5,7 @@ export default defineConfig({
     name: 'mailfalcon',
     description:
       'Email tracking for Gmail — opens, clicks, real-time notifications.',
-    permissions: ['storage', 'notifications', 'alarms'],
+    permissions: ['storage', 'notifications', 'alarms', 'scripting'],
     host_permissions: [
       'https://mail.google.com/*',
       'https://*.mailfalcon.app/*',
@@ -27,6 +27,11 @@ export default defineConfig({
       {
         resources: ['icon/*.png'],
         matches: ['<all_urls>'],
+      },
+      {
+        // InboxSDK page-world bootstrap. Must live at extension root.
+        resources: ['pageWorld.js'],
+        matches: ['https://mail.google.com/*'],
       },
     ],
   },

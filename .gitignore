@@ -43,3 +43,6 @@ coverage/
 
 # misc
 *.tsbuildinfo
+
+# Generated assets (copy script runs on dev/build/postinstall)
+apps/extension/public/pageWorld.js

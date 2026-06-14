@@ -10,9 +10,11 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "compile": "tsc --noEmit",
-    "postinstall": "wxt prepare",
+    "postinstall": "wxt prepare && node scripts/copy-inboxsdk-pageworld.mjs",
+    "predev": "node scripts/copy-inboxsdk-pageworld.mjs",
+    "prebuild": "node scripts/copy-inboxsdk-pageworld.mjs",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf .output .wxt .turbo"
+    "clean": "rm -rf .output .wxt .turbo public/pageWorld.js"
   },
   "dependencies": {
     "@inboxsdk/core": "^2.1.5",

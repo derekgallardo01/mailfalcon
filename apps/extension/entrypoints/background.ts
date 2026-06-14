@@ -95,16 +95,41 @@ export default defineBackground(() => {
     void start()
   })
 
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg && typeof msg === 'object' && 'type' in msg) {
-      if (msg.type === 'signed-in') {
-        void start()
-        sendResponse({ ok: true })
-      } else if (msg.type === 'signed-out') {
-        stop()
-        sendResponse({ ok: true })
-      }
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (!msg || typeof msg !== 'object' || !('type' in msg)) return false
+
+    if (msg.type === 'signed-in') {
+      void start()
+      sendResponse({ ok: true })
+      return false
     }
+    if (msg.type === 'signed-out') {
+      stop()
+      sendResponse({ ok: true })
+      return false
+    }
+
+    // InboxSDK MV3 bootstrap: content script asks us to inject pageWorld.js
+    // into the page's main world. We can't do this from the content script
+    // directly under MV3, so InboxSDK hands it off to the SW.
+    if (msg.type === 'inboxsdk__injectPageWorld' && sender.tab?.id != null) {
+      const target: chrome.scripting.InjectionTarget = { tabId: sender.tab.id }
+      if (sender.documentId) {
+        target.documentIds = [sender.documentId]
+      } else if (sender.frameId != null) {
+        target.frameIds = [sender.frameId]
+      }
+      chrome.scripting
+        .executeScript({
+          target,
+          world: 'MAIN',
+          files: ['pageWorld.js'],
+        })
+        .catch((err) => console.warn('[mailfalcon] pageWorld inject failed:', err))
+      sendResponse(true)
+      return false
+    }
+
     return false
   })
 
