@@ -21,11 +21,37 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
     sdk.Compose.registerComposeViewHandler((rawView) => {
       const view = rawView as {
         on: (event: string, cb: (e: unknown) => Promise<void> | void) => void
+        addStatusBar?: (opts?: { height?: number; orderHint?: number }) => {
+          el: HTMLElement
+          destroy: () => void
+        } | null
         getHTMLContent?: () => string
         setBodyHTML?: (html: string) => void
         getToRecipients?: () => unknown[]
         getCcRecipients?: () => unknown[]
         getBccRecipients?: () => unknown[]
+      }
+
+      let privacyMode = false
+
+      try {
+        const bar = view.addStatusBar?.({ height: 28, orderHint: 0 })
+        if (bar?.el) {
+          bar.el.style.cssText =
+            'background:#f5f7fa;border-top:1px solid #e3e9f2;display:flex;align-items:center;padding:0 12px;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;'
+          bar.el.innerHTML = `
+            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
+              <input type="checkbox" class="mf-priv" style="margin:0;">
+              <span>Privacy mode &mdash; skip tracking for this email</span>
+            </label>
+          `
+          const cb = bar.el.querySelector('.mf-priv') as HTMLInputElement | null
+          cb?.addEventListener('change', () => {
+            privacyMode = !!cb.checked
+          })
+        }
+      } catch (err) {
+        console.warn('[mailfalcon] could not attach status bar:', err)
       }
 
       view.on('presending', async (rawEvent) => {
@@ -42,6 +68,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             const bcc = view.getBccRecipients?.() ?? []
             return to.length + cc.length + bcc.length
           },
+          isPrivacyMode: () => privacyMode,
           cancel: () => sdkEvent.cancel(),
         }
 

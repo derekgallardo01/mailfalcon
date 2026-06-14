@@ -7,8 +7,10 @@ import { authRouter } from './routes/auth'
 import { billingRouter } from './routes/billing'
 import { clickRouter } from './routes/click'
 import { emailsRouter } from './routes/emails'
+import { eventsRouter } from './routes/events'
 import { meRouter } from './routes/me'
 import { pixelRouter } from './routes/pixel'
+import { pushRouter } from './routes/push'
 import { streamRouter } from './routes/stream'
 import { stripeWebhookRouter } from './routes/stripe-webhook'
 
@@ -21,6 +23,9 @@ type Bindings = {
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE_ID_PRO?: string
   PUBLIC_WEB_URL?: string
+  VAPID_PUBLIC_KEY?: string
+  VAPID_PRIVATE_KEY_JWK?: string
+  VAPID_SUBJECT?: string
   DB: D1Database
   KV: KVNamespace
   ASSETS: R2Bucket
@@ -43,6 +48,7 @@ app.use(
     origin: originPolicy,
     credentials: false,
     allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   }),
 )
 
@@ -55,8 +61,18 @@ app.use(
   }),
 )
 
+// CORS for the unauthed VAPID public key endpoint.
+app.use(
+  '/vapid-public-key',
+  cors({ origin: originPolicy, credentials: false }),
+)
+
 app.get('/health', (c) =>
   c.json({ ok: true, env: c.env.ENVIRONMENT, ts: Date.now() }),
+)
+
+app.get('/vapid-public-key', (c) =>
+  c.text(c.env.VAPID_PUBLIC_KEY ?? '', 200, { 'Cache-Control': 'public, max-age=300' }),
 )
 
 app.route('/auth', authRouter)
@@ -66,6 +82,8 @@ app.use('/v1/admin/*', adminMiddleware)
 app.route('/v1/me', meRouter)
 app.route('/v1/admin', adminRouter)
 app.route('/v1/emails', emailsRouter)
+app.route('/v1/events', eventsRouter)
+app.route('/v1/push', pushRouter)
 app.route('/v1/billing', billingRouter)
 
 app.use(
@@ -77,8 +95,6 @@ app.use(
 )
 app.route('/stream', streamRouter)
 
-// Stripe webhook is not under /v1, runs no CORS (server-to-server), and
-// does its own signature verification.
 app.route('/stripe/webhook', stripeWebhookRouter)
 
 app.route('/p', pixelRouter)

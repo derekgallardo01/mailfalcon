@@ -28,7 +28,24 @@ Pre-alpha. v1 targeting Gmail-only.
 
 ```bash
 pnpm install
-pnpm dev
+# In separate terminals:
+pnpm -F @mailfalcon/worker dev    # wrangler dev --local on :8787
+pnpm -F @mailfalcon/web dev       # next dev on :3000
+pnpm -F @mailfalcon/extension dev # WXT dev build with HMR
 ```
 
-(More to come once apps are scaffolded.)
+## Sideloading the extension against production
+
+See [docs/SIDELOAD.md](docs/SIDELOAD.md).
+
+## Setup / ops
+
+See [docs/SETUP.md](docs/SETUP.md) for what's wired in Cloudflare,
+Resend, Stripe, and InboxSDK.
+
+## Live
+
+- API: https://api.mailfalcon.app
+- Tracker: https://t.mailfalcon.app
+- Dashboard: https://app.mailfalcon.app
+- Privacy policy: https://app.mailfalcon.app/privacy/

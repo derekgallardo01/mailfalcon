@@ -18,6 +18,11 @@ export default defineContentScript({
     }
 
     adapter.onPresending(async (event) => {
+      if (event.isPrivacyMode()) {
+        console.log('[mailfalcon] privacy mode: send going out untracked')
+        return
+      }
+
       const recipientCount = event.getRecipientCount()
       const originalHtml = event.getHtmlBody()
 

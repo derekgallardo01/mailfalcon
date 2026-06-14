@@ -1,8 +1,9 @@
 import { Hono } from 'hono'
+import { eq } from 'drizzle-orm'
 import { events, trackedEmails } from '@mailfalcon/db/schema'
 import { verify } from '@mailfalcon/shared'
-import { eq } from 'drizzle-orm'
 import { getDb } from '../lib/db'
+import { fanoutPush } from '../lib/push-fanout'
 import { getHmacSecret } from '../lib/secrets'
 import { classifyUa, hashUa, truncateIpV4 } from '../lib/ua'
 
@@ -11,6 +12,9 @@ type Bindings = {
   HMAC_SECRET?: string
   DB: D1Database
   KV: KVNamespace
+  VAPID_PUBLIC_KEY?: string
+  VAPID_PRIVATE_KEY_JWK?: string
+  VAPID_SUBJECT?: string
 }
 
 const TRANSPARENT_GIF = new Uint8Array([
@@ -38,12 +42,11 @@ pixelRouter.get('/:idWithExt', async (c) => {
 
   const secret = getHmacSecret(c.env)
   const valid = await verify(id, sig, secret, 12).catch(() => false)
-  // Silent fail: always return the GIF so probes can't infer validity.
   if (!valid) return gif()
 
   const db = getDb(c.env.DB)
   const row = await db
-    .select({ id: trackedEmails.id })
+    .select({ id: trackedEmails.id, userId: trackedEmails.userId })
     .from(trackedEmails)
     .where(eq(trackedEmails.id, id))
     .get()
@@ -54,7 +57,6 @@ pixelRouter.get('/:idWithExt', async (c) => {
   const ipPrefix = truncateIpV4(c.req.header('CF-Connecting-IP'))
   const country = c.req.header('CF-IPCountry') ?? null
 
-  // First-open dedupe: KV nonce keyed by id + ua hash, 24h TTL.
   const uaHash = await hashUa(ua)
   const nonceKey = `nonce:${id}:${uaHash}`
   const seen = await c.env.KV.get(nonceKey)
@@ -64,21 +66,28 @@ pixelRouter.get('/:idWithExt', async (c) => {
   }
 
   c.executionCtx.waitUntil(
-    db
-      .insert(events)
-      .values({
-        emailId: id,
-        recipientId: null,
-        type: 'open',
-        linkId: null,
-        ts: Date.now(),
-        uaClass,
-        ipPrefix,
-        country,
-        isFirstOpen,
-      })
-      .run()
-      .then(() => undefined),
+    (async () => {
+      await db
+        .insert(events)
+        .values({
+          emailId: id,
+          recipientId: null,
+          type: 'open',
+          linkId: null,
+          ts: Date.now(),
+          uaClass,
+          ipPrefix,
+          country,
+          isFirstOpen,
+        })
+        .run()
+      // Skip push fanout for bot / proxy hits — would create notification spam.
+      if (uaClass !== 'bot') {
+        await fanoutPush(db, c.env, row.userId).catch((err) =>
+          console.warn('[mailfalcon] pixel fanout failed:', err),
+        )
+      }
+    })(),
   )
 
   return gif()
