@@ -1,11 +1,8 @@
 import { getSession } from '../src/auth-store'
 import { StreamClient, type StreamEvent } from '../src/stream-client'
 
-// 1x1 transparent PNG data URL — temporary icon until we ship real assets.
-const PLACEHOLDER_ICON =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
-
 const NOTIF_PREFIX = 'mf-event-'
+const NOTIF_ICON_PATH = 'icon/128.png'
 
 export default defineBackground(() => {
   console.log('[mailfalcon] background service worker started')
@@ -43,7 +40,7 @@ export default defineBackground(() => {
 
     chrome.notifications.create(`${NOTIF_PREFIX}${ev.id}`, {
       type: 'basic',
-      iconUrl: PLACEHOLDER_ICON,
+      iconUrl: chrome.runtime.getURL(NOTIF_ICON_PATH),
       title,
       message,
       priority: 1,
