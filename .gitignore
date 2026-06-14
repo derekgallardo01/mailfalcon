@@ -5,10 +5,12 @@ node_modules/
 # builds
 dist/
 build/
+out/
 .output/
 .next/
 .turbo/
 .wxt/
+.vercel/
 
 # environment
 .env
