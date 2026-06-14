@@ -1,0 +1,43 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+.output/
+.next/
+.turbo/
+.wxt/
+
+# environment
+.env
+.env.local
+.env.*.local
+.dev.vars
+
+# wrangler / cloudflare
+.wrangler/
+.mf/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# coverage
+coverage/
+*.lcov
+
+# misc
+*.tsbuildinfo
