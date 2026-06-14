@@ -10,25 +10,28 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 ENVIRONMENT = "development"
 
-# Provisioned later via `wrangler d1 create mailfalcon` etc.
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "mailfalcon"
-# database_id = "TBD"
-# migrations_dir = "../../packages/db/migrations"
+# database_id is a placeholder; --local mode ignores it and uses a local SQLite.
+# Run `wrangler d1 create mailfalcon` later and replace with the real id.
+[[d1_databases]]
+binding = "DB"
+database_name = "mailfalcon"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "../../packages/db/migrations"
 
-# [[kv_namespaces]]
-# binding = "KV"
-# id = "TBD"
+# id placeholder; --local uses a file-backed mock.
+[[kv_namespaces]]
+binding = "KV"
+id = "0000000000000000000000000000000000000000"
 
-# [[r2_buckets]]
-# binding = "ASSETS"
-# bucket_name = "mailfalcon-assets"
+# Bucket auto-created in --local mode under .wrangler/.
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "mailfalcon-assets"
 
 # [triggers]
-# crons = ["*/5 * * * *"]  # follow-up scanner
+# crons = ["*/5 * * * *"]  # follow-up scanner — enable once endpoints exist
 
-# Secrets (set via `wrangler secret put`):
+# Secrets (set via `wrangler secret put` for remote, or .dev.vars for local):
 #   HMAC_SECRET
 #   JWT_SECRET
 #   VAPID_PUBLIC_KEY

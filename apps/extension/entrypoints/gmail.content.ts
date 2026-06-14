@@ -1,7 +1,7 @@
 import { mintEmail } from '../src/api'
 import { config } from '../src/config'
 import { InboxSdkGmailAdapter } from '../src/gmail/inboxsdk-adapter'
-import { injectTrackingArtifacts } from '../src/inject'
+import { prepareTrackedBody } from '../src/inject'
 
 export default defineContentScript({
   matches: ['https://mail.google.com/*'],
@@ -20,16 +20,14 @@ export default defineContentScript({
     adapter.onPresending(async (event) => {
       const recipientCount = event.getRecipientCount()
       const originalHtml = event.getHtmlBody()
-      const linkProbe = (originalHtml.match(/<a\s[^>]*href=/gi) ?? []).length
 
       try {
-        const { id, sig } = await mintEmail({ recipientCount, linkCount: linkProbe })
-        const { html, linkCount } = injectTrackingArtifacts(
-          originalHtml,
-          id,
-          sig,
-          config.trackerHost,
-        )
+        const { html, id, linkCount } = await prepareTrackedBody({
+          html: originalHtml,
+          recipientCount,
+          trackerHost: config.trackerHost,
+          mint: mintEmail,
+        })
         event.setHtmlBody(html)
         console.log('[mailfalcon] tracked send', { id, recipientCount, linkCount })
       } catch (err) {

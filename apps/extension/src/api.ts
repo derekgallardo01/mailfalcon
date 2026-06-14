@@ -2,7 +2,7 @@ import { config } from './config'
 
 export interface MintEmailRequest {
   recipientCount: number
-  linkCount: number
+  links: string[]
 }
 
 export interface MintEmailResponse {

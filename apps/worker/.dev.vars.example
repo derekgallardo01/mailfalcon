@@ -1,0 +1,7 @@
+HMAC_SECRET=mailfalcon-dev-hmac-secret-replace-me
+JWT_SECRET=mailfalcon-dev-jwt-secret-replace-me
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+RESEND_API_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
