@@ -1,4 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <rect width="128" height="128" rx="22" fill="#3b6cb7"/>
-  <path d="M30 32 L42 32 L64 70 L86 32 L98 32 L98 96 L86 96 L86 56 L66 88 L62 88 L42 56 L42 96 L30 96 Z" fill="#ffffff"/>
+  <g fill="#ffffff">
+    <!-- Falcon head profile, facing right with prominent hooked beak -->
+    <path d="M 22 64 Q 22 32 56 26 Q 84 22 96 38 L 114 32 Q 122 38 116 50 L 102 54 L 96 56 L 92 62 Q 90 84 80 96 Q 70 106 56 106 Q 42 106 36 100 L 26 104 L 34 92 Q 22 84 22 64 Z"/>
+    <!-- Eye -->
+    <circle cx="62" cy="50" r="4.5" fill="#3b6cb7"/>
+  </g>
 </svg>
