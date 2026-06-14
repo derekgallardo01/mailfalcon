@@ -1,9 +1,12 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { adminMiddleware } from './lib/admin-middleware'
 import { authMiddleware, type Variables } from './lib/auth-middleware'
+import { adminRouter } from './routes/admin'
 import { authRouter } from './routes/auth'
 import { clickRouter } from './routes/click'
 import { emailsRouter } from './routes/emails'
+import { meRouter } from './routes/me'
 import { pixelRouter } from './routes/pixel'
 import { streamRouter } from './routes/stream'
 
@@ -53,6 +56,9 @@ app.get('/health', (c) =>
 app.route('/auth', authRouter)
 
 app.use('/v1/*', authMiddleware)
+app.use('/v1/admin/*', adminMiddleware)
+app.route('/v1/me', meRouter)
+app.route('/v1/admin', adminRouter)
 app.route('/v1/emails', emailsRouter)
 
 // /stream is outside the /v1/* auth-middleware namespace because

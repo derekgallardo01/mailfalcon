@@ -1,0 +1,198 @@
+import { Hono } from 'hono'
+import { desc, eq, gt, sql } from 'drizzle-orm'
+import {
+  events,
+  trackedEmails,
+  users,
+} from '@mailfalcon/db/schema'
+import type { Variables } from '../lib/auth-middleware'
+import { getDb } from '../lib/db'
+
+type Bindings = {
+  ENVIRONMENT: string
+  DB: D1Database
+}
+
+export const adminRouter = new Hono<{
+  Bindings: Bindings
+  Variables: Variables
+}>()
+
+function todayStart(): number {
+  const d = new Date()
+  d.setUTCHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+adminRouter.get('/stats', async (c) => {
+  const db = getDb(c.env.DB)
+  const start = todayStart()
+
+  const [totals, byTier, today] = await Promise.all([
+    db
+      .select({
+        users: sql<number>`COUNT(DISTINCT ${users.id})`,
+        emails: sql<number>`(SELECT COUNT(*) FROM ${trackedEmails})`,
+        events: sql<number>`(SELECT COUNT(*) FROM ${events})`,
+      })
+      .from(users)
+      .get(),
+    db
+      .select({
+        tier: users.tier,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(users)
+      .groupBy(users.tier)
+      .all(),
+    db
+      .select({
+        newUsers: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.createdAt} >= ${start})`,
+        emailsSent: sql<number>`(SELECT COUNT(*) FROM ${trackedEmails} WHERE ${trackedEmails.sentAt} >= ${start})`,
+        eventsLogged: sql<number>`(SELECT COUNT(*) FROM ${events} WHERE ${events.ts} >= ${start})`,
+      })
+      .from(users)
+      .limit(1)
+      .get(),
+  ])
+
+  const tierMap: Record<string, number> = {
+    free: 0,
+    pro: 0,
+    team: 0,
+    admin: 0,
+  }
+  for (const row of byTier) tierMap[row.tier] = Number(row.count)
+
+  return c.json({
+    totals: {
+      users: Number(totals?.users ?? 0),
+      emails: Number(totals?.emails ?? 0),
+      events: Number(totals?.events ?? 0),
+    },
+    usersByTier: tierMap,
+    today: {
+      newUsers: Number(today?.newUsers ?? 0),
+      emailsSent: Number(today?.emailsSent ?? 0),
+      eventsLogged: Number(today?.eventsLogged ?? 0),
+    },
+  })
+})
+
+adminRouter.get('/users', async (c) => {
+  const cursor = Number(c.req.query('cursor') ?? '')
+  const limit = Math.min(Number(c.req.query('limit') ?? '50'), 200)
+  const db = getDb(c.env.DB)
+
+  const rows = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      tier: users.tier,
+      createdAt: users.createdAt,
+      emailCount: sql<number>`COALESCE(COUNT(DISTINCT ${trackedEmails.id}), 0)`,
+      lastEmailAt: sql<number | null>`MAX(${trackedEmails.sentAt})`,
+    })
+    .from(users)
+    .leftJoin(trackedEmails, eq(trackedEmails.userId, users.id))
+    .where(Number.isFinite(cursor) && cursor > 0 ? gt(users.createdAt, 0) : undefined)
+    .groupBy(users.id)
+    .orderBy(desc(users.createdAt))
+    .limit(limit + 1)
+    .all()
+
+  const hasMore = rows.length > limit
+  const page = hasMore ? rows.slice(0, limit) : rows
+  const nextCursor = hasMore ? page[page.length - 1]!.createdAt : null
+
+  return c.json({
+    users: page.map((r) => ({
+      id: r.id,
+      email: r.email,
+      tier: r.tier,
+      createdAt: r.createdAt,
+      emailCount: Number(r.emailCount),
+      lastEmailAt: r.lastEmailAt,
+    })),
+    nextCursor,
+  })
+})
+
+adminRouter.get('/emails', async (c) => {
+  const userFilter = c.req.query('userId')
+  const limit = Math.min(Number(c.req.query('limit') ?? '100'), 200)
+  const db = getDb(c.env.DB)
+
+  const rows = await db
+    .select({
+      id: trackedEmails.id,
+      userId: trackedEmails.userId,
+      userEmail: users.email,
+      sentAt: trackedEmails.sentAt,
+      recipientCount: trackedEmails.recipientCount,
+      privacyMode: trackedEmails.privacyMode,
+      opens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`,
+      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
+    })
+    .from(trackedEmails)
+    .innerJoin(users, eq(users.id, trackedEmails.userId))
+    .leftJoin(events, eq(events.emailId, trackedEmails.id))
+    .where(userFilter ? eq(trackedEmails.userId, userFilter) : undefined)
+    .groupBy(trackedEmails.id)
+    .orderBy(desc(trackedEmails.sentAt))
+    .limit(limit)
+    .all()
+
+  return c.json({
+    emails: rows.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      userEmail: r.userEmail,
+      sentAt: r.sentAt,
+      recipientCount: r.recipientCount,
+      privacyMode: r.privacyMode === 1,
+      opens: Number(r.opens),
+      clicks: Number(r.clicks),
+    })),
+  })
+})
+
+adminRouter.get('/events', async (c) => {
+  const limit = Math.min(Number(c.req.query('limit') ?? '200'), 500)
+  const db = getDb(c.env.DB)
+
+  const rows = await db
+    .select({
+      id: events.id,
+      emailId: events.emailId,
+      type: events.type,
+      linkId: events.linkId,
+      ts: events.ts,
+      uaClass: events.uaClass,
+      country: events.country,
+      isFirstOpen: events.isFirstOpen,
+      userId: trackedEmails.userId,
+      userEmail: users.email,
+    })
+    .from(events)
+    .innerJoin(trackedEmails, eq(trackedEmails.id, events.emailId))
+    .innerJoin(users, eq(users.id, trackedEmails.userId))
+    .orderBy(desc(events.ts))
+    .limit(limit)
+    .all()
+
+  return c.json({
+    events: rows.map((r) => ({
+      id: r.id,
+      emailId: r.emailId,
+      type: r.type,
+      linkId: r.linkId,
+      ts: r.ts,
+      uaClass: r.uaClass,
+      country: r.country,
+      isFirstOpen: r.isFirstOpen === 1,
+      userId: r.userId,
+      userEmail: r.userEmail,
+    })),
+  })
+})

@@ -1,9 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import {
   type EmailListItem,
+  getMe,
   listEmails,
   logout as apiLogout,
 } from '../../lib/api'
@@ -25,6 +27,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [liveCount, setLiveCount] = useState(0)
+  const [isAdmin, setIsAdmin] = useState(false)
   const esRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
@@ -49,6 +52,10 @@ export default function DashboardPage() {
     }
 
     refresh().finally(() => setLoading(false))
+
+    getMe()
+      .then((me) => setIsAdmin(me.tier === 'admin'))
+      .catch(() => undefined)
 
     const url = new URL(`${config.apiHost}/stream`)
     url.searchParams.set('token', s.token)
@@ -88,6 +95,14 @@ export default function DashboardPage() {
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
               live · {liveCount} new
             </span>
+          )}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200"
+            >
+              admin
+            </Link>
           )}
           <button
             type="button"

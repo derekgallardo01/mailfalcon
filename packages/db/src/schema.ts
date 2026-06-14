@@ -4,7 +4,9 @@ export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   createdAt: integer('created_at').notNull(),
-  tier: text('tier', { enum: ['free', 'pro', 'team'] }).notNull().default('free'),
+  tier: text('tier', { enum: ['free', 'pro', 'team', 'admin'] })
+    .notNull()
+    .default('free'),
   stripeCustId: text('stripe_cust_id'),
 })
 

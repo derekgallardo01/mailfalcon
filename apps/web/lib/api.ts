@@ -69,3 +69,75 @@ export async function listEmails(cursor?: number): Promise<EmailListResponse> {
   if (!res.ok) throw new Error(`list_failed:${res.status}`)
   return (await res.json()) as EmailListResponse
 }
+
+export interface MeResponse {
+  id: string
+  email: string
+  tier: 'free' | 'pro' | 'team' | 'admin'
+  createdAt: number
+}
+
+export async function getMe(): Promise<MeResponse> {
+  const res = await fetch(`${config.apiHost}/v1/me`, {
+    headers: { ...authHeader() },
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`me_failed:${res.status}`)
+  return (await res.json()) as MeResponse
+}
+
+async function adminGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${config.apiHost}/v1/admin${path}`, {
+    headers: { ...authHeader() },
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (res.status === 403) throw new Error('forbidden')
+  if (!res.ok) throw new Error(`admin_failed:${res.status}`)
+  return (await res.json()) as T
+}
+
+export interface AdminStats {
+  totals: { users: number; emails: number; events: number }
+  usersByTier: Record<string, number>
+  today: { newUsers: number; emailsSent: number; eventsLogged: number }
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  tier: 'free' | 'pro' | 'team' | 'admin'
+  createdAt: number
+  emailCount: number
+  lastEmailAt: number | null
+}
+
+export interface AdminEmail {
+  id: string
+  userId: string
+  userEmail: string
+  sentAt: number
+  recipientCount: number
+  privacyMode: boolean
+  opens: number
+  clicks: number
+}
+
+export interface AdminEvent {
+  id: number
+  emailId: string
+  type: 'open' | 'click'
+  linkId: string | null
+  ts: number
+  uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
+  country: string | null
+  isFirstOpen: boolean
+  userId: string
+  userEmail: string
+}
+
+export const admin = {
+  stats: () => adminGet<AdminStats>('/stats'),
+  users: () => adminGet<{ users: AdminUser[]; nextCursor: number | null }>('/users'),
+  emails: () => adminGet<{ emails: AdminEmail[] }>('/emails'),
+  events: () => adminGet<{ events: AdminEvent[] }>('/events'),
+}

@@ -6,7 +6,7 @@ export type EventType = z.infer<typeof eventTypeSchema>
 export const uaClassSchema = z.enum(['desktop', 'mobile', 'bot', 'unknown'])
 export type UaClass = z.infer<typeof uaClassSchema>
 
-export const tierSchema = z.enum(['free', 'pro', 'team'])
+export const tierSchema = z.enum(['free', 'pro', 'team', 'admin'])
 export type Tier = z.infer<typeof tierSchema>
 
 export const trackedEmailSchema = z.object({
