@@ -5,9 +5,12 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import {
   type EmailListItem,
+  type MeResponse,
   getMe,
   listEmails,
   logout as apiLogout,
+  openBillingPortal,
+  startCheckout,
 } from '../../lib/api'
 import { clearSession, getSession, type Session } from '../../lib/auth-store'
 import { config } from '../../lib/config'
@@ -27,8 +30,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [liveCount, setLiveCount] = useState(0)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [me, setMe] = useState<MeResponse | null>(null)
   const esRef = useRef<EventSource | null>(null)
+  const isAdmin = me?.tier === 'admin'
+  const isFree = me?.tier === 'free'
 
   useEffect(() => {
     const s = getSession()
@@ -54,7 +59,7 @@ export default function DashboardPage() {
     refresh().finally(() => setLoading(false))
 
     getMe()
-      .then((me) => setIsAdmin(me.tier === 'admin'))
+      .then(setMe)
       .catch(() => undefined)
 
     const url = new URL(`${config.apiHost}/stream`)
@@ -81,6 +86,24 @@ export default function DashboardPage() {
     router.replace('/sign-in')
   }
 
+  async function handleUpgrade() {
+    try {
+      const url = await startCheckout()
+      window.location.assign(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upgrade failed')
+    }
+  }
+
+  async function handleManageBilling() {
+    try {
+      const url = await openBillingPortal()
+      window.location.assign(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Portal failed')
+    }
+  }
+
   if (!session) return null
 
   return (
@@ -95,6 +118,24 @@ export default function DashboardPage() {
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
               live · {liveCount} new
             </span>
+          )}
+          {isFree && (
+            <button
+              type="button"
+              onClick={handleUpgrade}
+              className="rounded bg-falcon-500 px-3 py-1 text-xs font-medium text-white hover:bg-falcon-600"
+            >
+              Upgrade
+            </button>
+          )}
+          {me && !isFree && !isAdmin && me.hasStripeCustomer && (
+            <button
+              type="button"
+              onClick={handleManageBilling}
+              className="text-sm text-falcon-500 hover:text-falcon-700"
+            >
+              Manage billing
+            </button>
           )}
           {isAdmin && (
             <Link
@@ -113,6 +154,21 @@ export default function DashboardPage() {
           </button>
         </div>
       </header>
+
+      {isFree && me && (
+        <div className="mt-4 flex items-center justify-between rounded border border-falcon-200 bg-falcon-50 px-4 py-2 text-xs text-falcon-700">
+          <span>
+            Free plan · <strong>{me.usage.used}</strong> / {me.usage.limit} tracked emails today
+          </span>
+          <button
+            type="button"
+            onClick={handleUpgrade}
+            className="text-falcon-500 hover:text-falcon-700"
+          >
+            Upgrade to Pro →
+          </button>
+        </div>
+      )}
 
       <main className="mt-8">
         {loading && <p className="text-sm text-falcon-500">Loading…</p>}
@@ -139,9 +195,15 @@ export default function DashboardPage() {
               </thead>
               <tbody className="divide-y divide-falcon-100">
                 {emails.map((e) => (
-                  <tr key={e.id} className="hover:bg-falcon-50">
+                  <tr
+                    key={e.id}
+                    className="cursor-pointer hover:bg-falcon-50"
+                    onClick={() => router.push(`/dashboard/${e.id}`)}
+                  >
                     <td className="px-4 py-3 text-falcon-700">
-                      {formatRelative(e.sentAt)}
+                      <Link href={`/dashboard/${e.id}`} className="block">
+                        {formatRelative(e.sentAt)}
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-right text-falcon-700">
                       {e.recipientCount}

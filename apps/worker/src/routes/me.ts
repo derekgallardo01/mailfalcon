@@ -3,10 +3,12 @@ import { eq } from 'drizzle-orm'
 import { users } from '@mailfalcon/db/schema'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
+import { getUsage } from '../lib/usage'
 
 type Bindings = {
   ENVIRONMENT: string
   DB: D1Database
+  KV: KVNamespace
 }
 
 export const meRouter = new Hono<{
@@ -23,10 +25,17 @@ meRouter.get('/', async (c) => {
       email: users.email,
       tier: users.tier,
       createdAt: users.createdAt,
+      stripeCustId: users.stripeCustId,
     })
     .from(users)
     .where(eq(users.id, userId))
     .get()
   if (!row) return c.json({ error: 'not_found' }, 404)
-  return c.json(row)
+
+  const usage = await getUsage(c.env.KV, userId)
+  return c.json({
+    ...row,
+    hasStripeCustomer: !!row.stripeCustId,
+    usage,
+  })
 })

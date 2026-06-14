@@ -70,11 +70,45 @@ export async function listEmails(cursor?: number): Promise<EmailListResponse> {
   return (await res.json()) as EmailListResponse
 }
 
+export interface EmailDetail {
+  email: {
+    id: string
+    sentAt: number
+    recipientCount: number
+    privacyMode: boolean
+    threadId: string | null
+  }
+  counts: { opens: number; clicks: number; humanOpens: number }
+  links: { idx: number; originalUrl: string }[]
+  recipients: { id: string; displayLabel: string | null }[]
+  events: {
+    id: number
+    type: 'open' | 'click'
+    ts: number
+    linkId: string | null
+    uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
+    country: string | null
+    isFirstOpen: boolean
+  }[]
+}
+
+export async function getEmailDetail(id: string): Promise<EmailDetail> {
+  const res = await fetch(`${config.apiHost}/v1/emails/${encodeURIComponent(id)}`, {
+    headers: { ...authHeader() },
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (res.status === 404) throw new Error('not_found')
+  if (!res.ok) throw new Error(`detail_failed:${res.status}`)
+  return (await res.json()) as EmailDetail
+}
+
 export interface MeResponse {
   id: string
   email: string
   tier: 'free' | 'pro' | 'team' | 'admin'
   createdAt: number
+  hasStripeCustomer: boolean
+  usage: { used: number; limit: number }
 }
 
 export async function getMe(): Promise<MeResponse> {
@@ -84,6 +118,32 @@ export async function getMe(): Promise<MeResponse> {
   if (res.status === 401) throw new Error('unauthorized')
   if (!res.ok) throw new Error(`me_failed:${res.status}`)
   return (await res.json()) as MeResponse
+}
+
+export async function startCheckout(): Promise<string> {
+  const res = await fetch(`${config.apiHost}/v1/billing/checkout`, {
+    method: 'POST',
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `checkout_failed:${res.status}`)
+  }
+  const data = (await res.json()) as { url: string }
+  return data.url
+}
+
+export async function openBillingPortal(): Promise<string> {
+  const res = await fetch(`${config.apiHost}/v1/billing/portal`, {
+    method: 'POST',
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `portal_failed:${res.status}`)
+  }
+  const data = (await res.json()) as { url: string }
+  return data.url
 }
 
 async function adminGet<T>(path: string): Promise<T> {

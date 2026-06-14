@@ -1,16 +1,18 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { and, count, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import {
   events,
   links,
   recipients,
   trackedEmails,
+  users,
 } from '@mailfalcon/db/schema'
 import { newSalt, newTrackingId, sign } from '@mailfalcon/shared'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
 import { getHmacSecret } from '../lib/secrets'
+import { checkAndIncrementUsage } from '../lib/usage'
 
 const mintSchema = z.object({
   recipientCount: z.number().int().min(0).max(500),
@@ -26,6 +28,7 @@ type Bindings = {
   ENVIRONMENT: string
   HMAC_SECRET?: string
   DB: D1Database
+  KV: KVNamespace
 }
 
 export const emailsRouter = new Hono<{
@@ -41,9 +44,29 @@ emailsRouter.post('/', async (c) => {
   }
 
   const userId = c.get('userId')
-  const secret = getHmacSecret(c.env)
   const db = getDb(c.env.DB)
 
+  const user = await db
+    .select({ tier: users.tier })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get()
+  const tier = user?.tier ?? 'free'
+
+  const usage = await checkAndIncrementUsage(c.env.KV, userId, tier)
+  if (!usage.allowed) {
+    return c.json(
+      {
+        error: 'free_tier_cap_reached',
+        used: usage.used,
+        limit: usage.limit,
+        message: `Free plan allows ${usage.limit} tracked emails per day. Upgrade to Pro for unlimited.`,
+      },
+      429,
+    )
+  }
+
+  const secret = getHmacSecret(c.env)
   const id = newTrackingId()
   const hmacSalt = newSalt()
   const sig = await sign(id, secret, 12)
@@ -70,8 +93,11 @@ emailsRouter.post('/', async (c) => {
     ),
   ])
 
-  // TODO(freemium): increment usage_counters, 429 if over cap
-  return c.json({ id, sig })
+  return c.json({
+    id,
+    sig,
+    usage: { used: usage.used, limit: usage.limit, tier },
+  })
 })
 
 emailsRouter.get('/', async (c) => {
@@ -201,6 +227,3 @@ emailsRouter.get('/:id', async (c) => {
     })),
   })
 })
-
-// avoid unused import warning if count not used elsewhere
-void count

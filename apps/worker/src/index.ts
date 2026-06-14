@@ -4,17 +4,23 @@ import { adminMiddleware } from './lib/admin-middleware'
 import { authMiddleware, type Variables } from './lib/auth-middleware'
 import { adminRouter } from './routes/admin'
 import { authRouter } from './routes/auth'
+import { billingRouter } from './routes/billing'
 import { clickRouter } from './routes/click'
 import { emailsRouter } from './routes/emails'
 import { meRouter } from './routes/me'
 import { pixelRouter } from './routes/pixel'
 import { streamRouter } from './routes/stream'
+import { stripeWebhookRouter } from './routes/stripe-webhook'
 
 type Bindings = {
   ENVIRONMENT: string
   HMAC_SECRET?: string
   JWT_SECRET?: string
   RESEND_API_KEY?: string
+  STRIPE_SECRET_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
+  STRIPE_PRICE_ID_PRO?: string
+  PUBLIC_WEB_URL?: string
   DB: D1Database
   KV: KVNamespace
   ASSETS: R2Bucket
@@ -60,10 +66,8 @@ app.use('/v1/admin/*', adminMiddleware)
 app.route('/v1/me', meRouter)
 app.route('/v1/admin', adminRouter)
 app.route('/v1/emails', emailsRouter)
+app.route('/v1/billing', billingRouter)
 
-// /stream is outside the /v1/* auth-middleware namespace because
-// EventSource can't send Authorization headers; the stream router does
-// its own JWT-via-query-string auth.
 app.use(
   '/stream',
   cors({
@@ -72,6 +76,10 @@ app.use(
   }),
 )
 app.route('/stream', streamRouter)
+
+// Stripe webhook is not under /v1, runs no CORS (server-to-server), and
+// does its own signature verification.
+app.route('/stripe/webhook', stripeWebhookRouter)
 
 app.route('/p', pixelRouter)
 app.route('/c', clickRouter)
