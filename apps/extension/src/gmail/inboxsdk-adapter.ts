@@ -56,18 +56,18 @@ interface SentEventPayload {
 }
 
 function buildStatusBarHtml(): string {
-  // Four controls in one row. We use a horizontal-scroll fallback for
-  // very narrow composes — wrapping looked broken because InboxSDK's
-  // status bar has a fixed height and any extra rows get clipped.
+  // Four controls. Wrap onto a second row when the compose is narrow
+  // instead of horizontal-scrolling — scrolling can leave the leftmost
+  // control hidden when the bar re-renders after a width change.
   return `
-    <div style="display:flex;align-items:center;gap:14px;width:100%;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;">
+    <div style="display:flex;align-items:center;gap:12px;width:100%;flex-wrap:wrap;row-gap:4px;">
       <label class="mf-priv-wrap" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;flex-shrink:0;" title="Tracking is on by default. Check this to skip the pixel and link rewrite for this email only.">
         <input type="checkbox" class="mf-priv" style="margin:0;">
-        <span>Privacy mode</span>
+        <span>Privacy</span>
       </label>
-      <label class="mf-tpl-wrap" style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;" title="Insert one of your saved templates.">
+      <label class="mf-tpl-wrap" style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;min-width:0;" title="Insert one of your saved templates.">
         <span>Template:</span>
-        <select class="mf-tpl" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;max-width:160px;">
+        <select class="mf-tpl" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;max-width:140px;">
           <option value="">— pick one —</option>
         </select>
       </label>
@@ -165,10 +165,11 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       let templates: Template[] = []
 
       try {
-        const bar = view.addStatusBar?.({ height: 32, orderHint: 0 })
+        // Height accommodates up to 2 wrapped rows (28px × 2 + 4px gap).
+        const bar = view.addStatusBar?.({ height: 60, orderHint: 0 })
         if (bar?.el) {
           bar.el.style.cssText =
-            'background:#f5f7fa;border-top:1px solid #e3e9f2;display:flex;align-items:center;padding:0 12px;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;overflow:hidden;'
+            'background:#f5f7fa;border-top:1px solid #e3e9f2;display:flex;align-items:center;padding:6px 12px;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;box-sizing:border-box;'
           bar.el.innerHTML = buildStatusBarHtml()
 
           const privCb = bar.el.querySelector('.mf-priv') as HTMLInputElement | null
