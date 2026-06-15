@@ -9,6 +9,7 @@ import { getJwtSecret, signJwt, verifyJwt } from '../lib/jwt'
 import { createLogger, errorMeta } from '../lib/logger'
 import { sendCode } from '../lib/mailer'
 import { rateLimit } from '../lib/rate-limit'
+import { addSession, removeSession } from '../lib/sessions'
 
 const requestSchema = z.object({
   email: z.string().email().max(254).transform((s) => s.toLowerCase()),
@@ -140,6 +141,7 @@ authRouter.post('/verify', async (c) => {
     JSON.stringify({ userId: row.id, createdAt: Date.now() }),
     { expirationTtl: 30 * 24 * 3600 },
   )
+  await addSession(c.env.KV, row.id, jti)
   const token = await signJwt({ sub: row.id, jti }, secret)
 
   return c.json({ token, userId: row.id, email })
@@ -153,6 +155,7 @@ authRouter.post('/logout', async (c) => {
     const payload = await verifyJwt(token, secret)
     if (payload) {
       await c.env.KV.delete(`session:${payload.jti}`)
+      await removeSession(c.env.KV, payload.sub, payload.jti)
     }
   }
   return c.json({ ok: true })

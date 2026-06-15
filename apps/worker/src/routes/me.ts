@@ -17,6 +17,7 @@ import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
 import { createLogger, errorMeta } from '../lib/logger'
 import { sendDeleteCode } from '../lib/mailer'
+import { sweepUserSessions } from '../lib/sessions'
 import { getUsage } from '../lib/usage'
 
 type Bindings = {
@@ -222,9 +223,9 @@ meRouter.post('/delete-request', async (c) => {
  *     (no cascade FK defined)
  *   - users row last
  *
- * KV sessions are left to expire (30d TTL) — no per-user index exists
- * yet to invalidate them in bulk. Orphaned JWTs fail the user-lookup
- * inside route handlers so it's a UX paper cut, not a security hole.
+ * KV sessions are swept via the sessions-by-user index maintained on
+ * auth/verify and auth/logout — every session:{jti} the user has is
+ * deleted so a stolen JWT can't outlive the account.
  *
  * Stripe subscription cancellation is NOT performed here. If the user
  * has a stripeCustId, the response surfaces a warning so the operator
@@ -266,6 +267,7 @@ meRouter.delete('/', async (c) => {
     db.delete(users).where(eq(users.id, userId)),
   ])
 
+  const sweptSessions = await sweepUserSessions(c.env.KV, userId)
   await c.env.KV.delete(`delete-confirm:${userId}`)
 
   return c.json({
@@ -273,5 +275,6 @@ meRouter.delete('/', async (c) => {
     stripeWarning: user.stripeCustId
       ? 'Cancel the Stripe subscription manually in the dashboard.'
       : null,
+    sessionsSwept: sweptSessions,
   })
 })

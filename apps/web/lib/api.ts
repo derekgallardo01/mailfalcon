@@ -205,6 +205,7 @@ export async function requestAccountDeletion(): Promise<void> {
 export interface DeleteAccountResponse {
   ok: true
   stripeWarning: string | null
+  sessionsSwept?: number
 }
 
 export async function confirmAccountDeletion(
