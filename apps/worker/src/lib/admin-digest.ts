@@ -139,135 +139,196 @@ export async function computeAdminStats(db: DB): Promise<AdminStats> {
   }
 }
 
+function initials(email: string): string {
+  const local = email.split('@')[0] ?? email
+  const parts = local.split(/[._\- ]+/).filter(Boolean)
+  if (parts.length === 0) return email.slice(0, 2).toUpperCase()
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase()
+  return (parts[0]![0]! + parts[1]![0]!).toUpperCase()
+}
+
+function tierColor(tier: string): { bg: string; fg: string } {
+  if (tier === 'admin') return { bg: '#fef3c7', fg: '#92400e' }
+  if (tier === 'pro') return { bg: '#dcfce7', fg: '#166534' }
+  if (tier === 'team') return { bg: '#dbeafe', fg: '#1e40af' }
+  return { bg: '#e3e9f2', fg: '#264168' }
+}
+
 function renderAdminHtml(args: { stats: AdminStats; webUrl: string }): string {
   const { stats, webUrl } = args
+  const dateStr = new Date().toUTCString().slice(0, 16)
+  const botCount = stats.today.opens - stats.today.humanOpens
 
-  const tierRows = stats.byTier
-    .map(
-      (r) =>
-        `<tr><td style="padding:4px 0;font-size:13px;color:#264168;text-transform:capitalize;">${escape(r.tier)}</td><td style="padding:4px 0;font-size:13px;color:#0f1a2e;font-weight:600;text-align:right;">${r.count}</td></tr>`,
-    )
+  const tierPills = stats.byTier
+    .map((r) => {
+      const c = tierColor(r.tier)
+      return `<span style="display:inline-block;margin:0 6px 6px 0;padding:5px 12px;background:${c.bg};color:${c.fg};border-radius:999px;font-size:12px;font-weight:500;"><strong style="font-weight:700;">${r.count}</strong>&nbsp;${escape(r.tier)}</span>`
+    })
     .join('')
 
   const newUserRows =
     stats.newUsers.length === 0
-      ? `<tr><td style="padding:8px 0;font-size:13px;color:#9aaecd;">No new signups today.</td></tr>`
+      ? `<tr><td style="padding:14px 16px;background:#f5f7fa;border-radius:10px;font-size:13px;color:#9aaecd;text-align:center;">No new signups today.</td></tr>`
       : stats.newUsers
-          .map(
-            (u) =>
-              `<tr>
-                <td style="padding:6px 0;font-size:13px;color:#0f1a2e;">${escape(u.email)}</td>
-                <td style="padding:6px 0;font-size:11px;color:#9aaecd;text-align:right;text-transform:uppercase;">${escape(u.tier)}</td>
-              </tr>`,
-          )
+          .map((u) => {
+            const c = tierColor(u.tier)
+            return `<tr><td style="padding:0 0 8px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f7fa;border-radius:10px;">
+                <tr>
+                  <td style="padding:10px 14px;width:36px;vertical-align:middle;">
+                    <div style="width:32px;height:32px;background:#264168;color:#ffffff;border-radius:50%;text-align:center;line-height:32px;font-size:12px;font-weight:600;letter-spacing:0.02em;">${initials(u.email)}</div>
+                  </td>
+                  <td style="padding:10px 8px;vertical-align:middle;font-size:13px;color:#0f1a2e;font-weight:500;word-break:break-all;">${escape(u.email)}</td>
+                  <td style="padding:10px 14px;vertical-align:middle;text-align:right;white-space:nowrap;">
+                    <span style="display:inline-block;padding:3px 9px;background:${c.bg};color:${c.fg};border-radius:999px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">${escape(u.tier)}</span>
+                  </td>
+                </tr>
+              </table>
+            </td></tr>`
+          })
           .join('')
 
   const topSenderRows =
     stats.topSenders.length === 0
-      ? `<tr><td style="padding:8px 0;font-size:13px;color:#9aaecd;">No sends today.</td></tr>`
+      ? `<tr><td style="padding:14px 16px;background:#f5f7fa;border-radius:10px;font-size:13px;color:#9aaecd;text-align:center;">No sends today.</td></tr>`
       : stats.topSenders
           .map(
-            (s) =>
-              `<tr>
-                <td style="padding:6px 0;font-size:13px;color:#0f1a2e;">${escape(s.email)}</td>
-                <td style="padding:6px 0;font-size:12px;color:#264168;text-align:right;white-space:nowrap;">
-                  ${s.emails} sent · ${s.opens} opens · ${s.clicks} clicks
-                </td>
-              </tr>`,
+            (s, i) =>
+              `<tr><td style="padding:0 0 8px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f7fa;border-radius:10px;">
+                <tr>
+                  <td style="padding:10px 14px;width:36px;vertical-align:middle;">
+                    <div style="width:28px;height:28px;background:#ffffff;border:1px solid #c4d0e3;color:#264168;border-radius:50%;text-align:center;line-height:28px;font-size:11px;font-weight:700;">${i + 1}</div>
+                  </td>
+                  <td style="padding:10px 8px;vertical-align:middle;">
+                    <div style="font-size:13px;color:#0f1a2e;font-weight:500;word-break:break-all;">${escape(s.email)}</div>
+                    <div style="font-size:11px;color:#6886b1;margin-top:3px;">
+                      <strong style="color:#264168;">${s.emails}</strong> sent ·
+                      <strong style="color:#166534;">${s.opens}</strong> opens ·
+                      <strong style="color:#1e40af;">${s.clicks}</strong> clicks
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td></tr>`,
           )
           .join('')
 
   return `<!doctype html>
 <html lang="en">
-<body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f7fa;padding:32px 16px;">
+<body style="margin:0;padding:0;background:#eef2f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif;color:#0f1a2e;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#eef2f9;padding:32px 16px;">
     <tr><td align="center">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
-        <tr><td style="padding:28px 28px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#b45309;letter-spacing:0.02em;">MailFalcon · admin</p>
+
+      <!-- Brand pill -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 14px;">
+        <tr><td style="padding:6px 14px;background:#264168;border-radius:999px;font-size:11px;font-weight:700;color:#ffffff;letter-spacing:0.08em;text-transform:uppercase;">
+          MailFalcon · admin
         </td></tr>
-        <tr><td style="padding:0 28px;">
-          <h1 style="margin:8px 0 4px;font-size:20px;font-weight:600;color:#0f1a2e;">Platform daily report</h1>
-          <p style="margin:0 0 16px;font-size:13px;color:#6b7280;">${new Date().toUTCString().slice(0, 16)} · UTC</p>
+      </table>
+
+      <!-- Main card -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;background:#ffffff;border-radius:16px;border:1px solid #e3e9f2;overflow:hidden;">
+
+        <!-- Header -->
+        <tr><td style="padding:32px 32px 0;">
+          <h1 style="margin:0;font-size:24px;font-weight:700;color:#0f1a2e;letter-spacing:-0.01em;">Platform daily report</h1>
+          <p style="margin:6px 0 0;font-size:13px;color:#6886b1;">${dateStr} · UTC</p>
         </td></tr>
 
-        <tr><td style="padding:0 28px 8px;">
-          <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Today</p>
+        <!-- Hero metric -->
+        <tr><td style="padding:24px 32px 0;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#264168;border-radius:14px;">
+            <tr><td style="padding:24px 26px;">
+              <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#9aaecd;font-weight:600;">Emails tracked today</p>
+              <p style="margin:6px 0 0;font-size:46px;font-weight:700;letter-spacing:-0.025em;color:#ffffff;line-height:1;">${stats.today.emailsSent}</p>
+              <p style="margin:12px 0 0;font-size:13px;color:#c4d0e3;">
+                <strong style="color:#ffffff;">${stats.today.humanOpens}</strong> opens ·
+                <strong style="color:#ffffff;">${stats.today.clicks}</strong> clicks ·
+                ${botCount} bot${botCount === 1 ? '' : 's'} filtered
+              </p>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <!-- Today chips -->
+        <tr><td style="padding:24px 32px 0;">
+          <p style="margin:0 0 10px;font-size:11px;color:#9aaecd;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Today</p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             <tr>
-              <td style="padding:10px 6px;background:#f5f7fa;border-radius:8px;text-align:center;width:20%;">
-                <div style="font-size:20px;font-weight:700;color:#0f1a2e;">${stats.today.newUsers}</div>
-                <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">new users</div>
+              <td style="padding:14px 8px;background:#f5f7fa;border-radius:10px;text-align:center;width:33%;">
+                <div style="font-size:22px;font-weight:700;color:#0f1a2e;line-height:1.1;">${stats.today.newUsers}</div>
+                <div style="font-size:10px;color:#6886b1;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-top:4px;">New users</div>
               </td>
-              <td style="width:4px;"></td>
-              <td style="padding:10px 6px;background:#f5f7fa;border-radius:8px;text-align:center;width:20%;">
-                <div style="font-size:20px;font-weight:700;color:#0f1a2e;">${stats.today.emailsSent}</div>
-                <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">sent</div>
+              <td style="width:8px;"></td>
+              <td style="padding:14px 8px;background:#f5f7fa;border-radius:10px;text-align:center;width:33%;">
+                <div style="font-size:22px;font-weight:700;color:#166534;line-height:1.1;">${stats.today.humanOpens}</div>
+                <div style="font-size:10px;color:#6886b1;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-top:4px;">Opens</div>
               </td>
-              <td style="width:4px;"></td>
-              <td style="padding:10px 6px;background:#f5f7fa;border-radius:8px;text-align:center;width:20%;">
-                <div style="font-size:20px;font-weight:700;color:#0f1a2e;">${stats.today.humanOpens}</div>
-                <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">opens</div>
-              </td>
-              <td style="width:4px;"></td>
-              <td style="padding:10px 6px;background:#f5f7fa;border-radius:8px;text-align:center;width:20%;">
-                <div style="font-size:20px;font-weight:700;color:#0f1a2e;">${stats.today.clicks}</div>
-                <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">clicks</div>
-              </td>
-              <td style="width:4px;"></td>
-              <td style="padding:10px 6px;background:#f5f7fa;border-radius:8px;text-align:center;width:20%;">
-                <div style="font-size:20px;font-weight:700;color:#9aaecd;">${stats.today.opens - stats.today.humanOpens}</div>
-                <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">bots</div>
+              <td style="width:8px;"></td>
+              <td style="padding:14px 8px;background:#f5f7fa;border-radius:10px;text-align:center;width:33%;">
+                <div style="font-size:22px;font-weight:700;color:#1e40af;line-height:1.1;">${stats.today.clicks}</div>
+                <div style="font-size:10px;color:#6886b1;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-top:4px;">Clicks</div>
               </td>
             </tr>
           </table>
         </td></tr>
 
-        <tr><td style="padding:24px 28px 4px;">
-          <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">All-time totals</p>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size:13px;">
-            <tr>
-              <td style="padding:4px 0;color:#264168;">Users</td>
-              <td style="padding:4px 0;text-align:right;color:#0f1a2e;font-weight:600;">${stats.totals.users}</td>
-            </tr>
-            <tr>
-              <td style="padding:4px 0;color:#264168;">Tracked emails</td>
-              <td style="padding:4px 0;text-align:right;color:#0f1a2e;font-weight:600;">${stats.totals.emails}</td>
-            </tr>
-            <tr>
-              <td style="padding:4px 0;color:#264168;">Events</td>
-              <td style="padding:4px 0;text-align:right;color:#0f1a2e;font-weight:600;">${stats.totals.events}</td>
-            </tr>
-          </table>
-        </td></tr>
-
-        <tr><td style="padding:20px 28px 4px;">
-          <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Users by tier</p>
+        <!-- All-time totals -->
+        <tr><td style="padding:24px 32px 0;">
+          <p style="margin:0 0 10px;font-size:11px;color:#9aaecd;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">All-time totals</p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            ${tierRows}
+            <tr>
+              <td style="padding:14px 16px;border:1px solid #e3e9f2;border-radius:10px;width:33%;">
+                <div style="font-size:11px;color:#6886b1;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Users</div>
+                <div style="font-size:20px;font-weight:700;color:#0f1a2e;margin-top:4px;">${stats.totals.users}</div>
+              </td>
+              <td style="width:8px;"></td>
+              <td style="padding:14px 16px;border:1px solid #e3e9f2;border-radius:10px;width:33%;">
+                <div style="font-size:11px;color:#6886b1;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Tracked</div>
+                <div style="font-size:20px;font-weight:700;color:#0f1a2e;margin-top:4px;">${stats.totals.emails}</div>
+              </td>
+              <td style="width:8px;"></td>
+              <td style="padding:14px 16px;border:1px solid #e3e9f2;border-radius:10px;width:33%;">
+                <div style="font-size:11px;color:#6886b1;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Events</div>
+                <div style="font-size:20px;font-weight:700;color:#0f1a2e;margin-top:4px;">${stats.totals.events}</div>
+              </td>
+            </tr>
           </table>
         </td></tr>
 
-        <tr><td style="padding:20px 28px 4px;">
-          <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">New signups today</p>
+        <!-- Tier pills -->
+        <tr><td style="padding:24px 32px 0;">
+          <p style="margin:0 0 10px;font-size:11px;color:#9aaecd;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Users by tier</p>
+          <div style="font-size:0;line-height:0;">${tierPills}</div>
+        </td></tr>
+
+        <!-- New signups -->
+        <tr><td style="padding:24px 32px 0;">
+          <p style="margin:0 0 10px;font-size:11px;color:#9aaecd;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">New signups today</p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             ${newUserRows}
           </table>
         </td></tr>
 
-        <tr><td style="padding:20px 28px 4px;">
-          <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Top senders today</p>
+        <!-- Top senders -->
+        <tr><td style="padding:24px 32px 0;">
+          <p style="margin:0 0 10px;font-size:11px;color:#9aaecd;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Top senders today</p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             ${topSenderRows}
           </table>
         </td></tr>
 
-        <tr><td style="padding:24px 28px 28px;">
-          <a href="${webUrl}/admin/" style="display:inline-block;background:#b45309;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:500;">Open admin dashboard →</a>
+        <!-- CTA -->
+        <tr><td style="padding:32px;text-align:center;">
+          <a href="${webUrl}/admin/" style="display:inline-block;background:#3b6cb7;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:8px;font-size:14px;font-weight:600;letter-spacing:0.01em;box-shadow:0 1px 2px rgba(15,26,46,0.1);">
+            Open admin dashboard →
+          </a>
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">
-        Admin reports are sent to every account with tier=admin. Promote via D1 if you need to add more.
+
+      <p style="margin:18px auto 0;max-width:600px;font-size:11px;color:#9aaecd;text-align:center;line-height:1.5;">
+        Admin reports go to every account with <code style="font-family:ui-monospace,'SF Mono',Menlo,monospace;background:#e3e9f2;padding:1px 5px;border-radius:3px;color:#264168;">tier=admin</code>. Promote via D1 if you need to add more.
       </p>
     </td></tr>
   </table>
