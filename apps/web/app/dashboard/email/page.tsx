@@ -132,10 +132,12 @@ function EmailDetailInner() {
   })
 
   const openedRecipients = new Set<string>()
+  let replyCount = 0
   for (const ev of data.events) {
     if (ev.type === 'open' && ev.recipientId && ev.uaClass !== 'bot') {
       openedRecipients.add(ev.recipientId)
     }
+    if (ev.type === 'reply') replyCount++
   }
   const totalRecipients = data.recipients.length
 
@@ -192,6 +194,7 @@ function EmailDetailInner() {
         <section className="mt-8">
           <h2 className="text-xs font-medium uppercase tracking-wide text-falcon-500">
             Recipients · {openedRecipients.size} of {totalRecipients} opened
+            {replyCount > 0 && ` · ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
           </h2>
           <ul className="mt-3 flex flex-wrap gap-2">
             {data.recipients.map((r, idx) => {
@@ -257,6 +260,8 @@ function EmailDetailInner() {
                     className={
                       ev.type === 'open'
                         ? 'rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+                        : ev.type === 'reply'
+                        ? 'rounded bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800'
                         : 'rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800'
                     }
                   >
@@ -278,6 +283,7 @@ function EmailDetailInner() {
                     ({formatRelative(ev.ts)})
                   </span>
                 </div>
+                {ev.type !== 'reply' && (
                 <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-falcon-500">
                   <span>{formatBrowser(ev)}</span>
                   <span>{formatOs(ev)}</span>
@@ -288,6 +294,7 @@ function EmailDetailInner() {
                   )}
                   {ev.timezone && <span>{ev.timezone}</span>}
                 </div>
+                )}
               </li>
             ))}
           </ol>

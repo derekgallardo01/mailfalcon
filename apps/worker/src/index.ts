@@ -13,6 +13,7 @@ import { followupsRouter } from './routes/followups'
 import { meRouter } from './routes/me'
 import { pixelRouter } from './routes/pixel'
 import { pushRouter } from './routes/push'
+import { repliesRouter } from './routes/replies'
 import { streamRouter } from './routes/stream'
 import { stripeWebhookRouter } from './routes/stripe-webhook'
 import { templatesRouter } from './routes/templates'
@@ -90,6 +91,7 @@ app.route('/v1/emails', emailsRouter)
 app.route('/v1/events', eventsRouter)
 app.route('/v1/templates', templatesRouter)
 app.route('/v1/followups', followupsRouter)
+app.route('/v1/replies', repliesRouter)
 app.route('/v1/push', pushRouter)
 app.route('/v1/billing', billingRouter)
 

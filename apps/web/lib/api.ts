@@ -107,7 +107,7 @@ export interface EmailDetail {
   recipients: { id: string; displayLabel: string | null }[]
   events: {
     id: number
-    type: 'open' | 'click'
+    type: 'open' | 'click' | 'reply'
     ts: number
     linkId: string | null
     recipientId: string | null
@@ -444,7 +444,7 @@ export interface AdminUserDetail {
   events: Array<{
     id: number
     emailId: string
-    type: 'open' | 'click'
+    type: 'open' | 'click' | 'reply'
     linkId: string | null
     ts: number
     uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'

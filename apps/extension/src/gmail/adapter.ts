@@ -20,7 +20,18 @@ export interface ComposeEvent {
   cancel(): void
 }
 
+export interface ReplyCandidate {
+  threadId: string
+  gmailMessageId: string
+  senderAddress: string | null
+  /** Short preview of body text for the auto-reply heuristic. */
+  bodyPreview: string
+}
+
 export interface GmailAdapter {
   load(): Promise<void>
   onPresending(handler: (event: ComposeEvent) => Promise<void> | void): void
+  /** Fires for every new message added to a thread view. The handler
+   *  must decide whether the candidate is a tracked reply. */
+  onIncomingMessage(handler: (candidate: ReplyCandidate) => void): void
 }

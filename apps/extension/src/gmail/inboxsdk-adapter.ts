@@ -1,7 +1,12 @@
 import * as InboxSDK from '@inboxsdk/core'
 import { listTemplates, type Template } from '../api'
 import { config } from '../config'
-import type { ComposeEvent, GmailAdapter, RecipientHandle } from './adapter'
+import type {
+  ComposeEvent,
+  GmailAdapter,
+  RecipientHandle,
+  ReplyCandidate,
+} from './adapter'
 
 interface SdkRecipient {
   emailAddress?: string
@@ -98,9 +103,21 @@ async function populateTemplateSelect(
 
 const reentered = new WeakSet<object>()
 
+interface MessageView {
+  getMessageID?: () => string
+  getSender?: () => { emailAddress?: string } | null
+  getBodyElement?: () => HTMLElement | null
+}
+
+interface ThreadView {
+  getThreadID?: () => string | null
+  on: (event: string, cb: (e: unknown) => void) => void
+}
+
 export class InboxSdkGmailAdapter implements GmailAdapter {
   private sdk: unknown = null
   private presendingHandlers: Array<(event: ComposeEvent) => Promise<void> | void> = []
+  private incomingMessageHandlers: Array<(candidate: ReplyCandidate) => void> = []
 
   async load(): Promise<void> {
     const load = (InboxSDK as unknown as {
@@ -114,7 +131,13 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       Compose: {
         registerComposeViewHandler: (cb: (view: unknown) => void) => void
       }
+      Conversations?: {
+        registerThreadViewHandler: (cb: (view: ThreadView) => void) => void
+        registerMessageViewHandler?: (cb: (view: MessageView) => void) => void
+      }
     }
+
+    this.attachReplyDetection(sdk.Conversations)
 
     sdk.Compose.registerComposeViewHandler((rawView) => {
       const view = rawView as ComposeView
@@ -242,5 +265,51 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
 
   onPresending(handler: (event: ComposeEvent) => Promise<void> | void): void {
     this.presendingHandlers.push(handler)
+  }
+
+  onIncomingMessage(handler: (candidate: ReplyCandidate) => void): void {
+    this.incomingMessageHandlers.push(handler)
+  }
+
+  private attachReplyDetection(
+    conversations: {
+      registerThreadViewHandler: (cb: (view: ThreadView) => void) => void
+    } | undefined,
+  ): void {
+    if (!conversations?.registerThreadViewHandler) return
+    // Already-seen message IDs within this tab session — InboxSDK's
+    // messageAdded can re-fire when the thread view re-renders. Dedup
+    // here so we don't spam /v1/replies.
+    const seen = new Set<string>()
+
+    conversations.registerThreadViewHandler((threadView) => {
+      const threadId = threadView.getThreadID?.()
+      if (!threadId) return
+
+      threadView.on('messageAdded', (raw) => {
+        const view = (raw as { messageView?: MessageView }).messageView
+        if (!view) return
+        const messageId = view.getMessageID?.()
+        if (!messageId || seen.has(messageId)) return
+        seen.add(messageId)
+
+        const sender = view.getSender?.() ?? null
+        const senderAddress = sender?.emailAddress ?? null
+        const bodyText = (view.getBodyElement?.()?.textContent ?? '').slice(0, 400)
+
+        for (const handler of this.incomingMessageHandlers) {
+          try {
+            handler({
+              threadId,
+              gmailMessageId: messageId,
+              senderAddress,
+              bodyPreview: bodyText,
+            })
+          } catch {
+            /* ignore */
+          }
+        }
+      })
+    })
   }
 }

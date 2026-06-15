@@ -94,6 +94,56 @@ export async function patchEmailIds(
   }
 }
 
+/**
+ * Fire-and-forget — the extension calls this when InboxSDK reports a
+ * new inbound message in a thread we've tracked. Server dedupes via
+ * gmailMessageId so multiple Gmail tabs don't double-record.
+ */
+export async function reportReply(
+  threadId: string,
+  gmailMessageId: string,
+): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/replies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify({ threadId, gmailMessageId }),
+  })
+  if (!res.ok) {
+    throw new Error(`reply report failed: ${res.status}`)
+  }
+}
+
+const TRACKED_THREADS_KEY = 'mf.trackedThreads'
+const MAX_TRACKED_THREADS = 500
+
+/**
+ * Append a Gmail thread ID to the local "tracked threads" set so the
+ * content script knows to fire reply events for inbound messages on it.
+ */
+export async function rememberTrackedThread(threadId: string): Promise<void> {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return
+  try {
+    const stored = await chrome.storage.local.get(TRACKED_THREADS_KEY)
+    const list = (stored[TRACKED_THREADS_KEY] as string[] | undefined) ?? []
+    if (list.includes(threadId)) return
+    const next = [...list, threadId].slice(-MAX_TRACKED_THREADS)
+    await chrome.storage.local.set({ [TRACKED_THREADS_KEY]: next })
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function isTrackedThread(threadId: string): Promise<boolean> {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return false
+  try {
+    const stored = await chrome.storage.local.get(TRACKED_THREADS_KEY)
+    const list = (stored[TRACKED_THREADS_KEY] as string[] | undefined) ?? []
+    return list.includes(threadId)
+  } catch {
+    return false
+  }
+}
+
 export async function requestCode(email: string): Promise<void> {
   const res = await fetch(`${config.apiHost}/auth/request`, {
     method: 'POST',

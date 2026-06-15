@@ -3,7 +3,7 @@ export const metadata = {
 }
 
 export default function PrivacyPage() {
-  const lastUpdated = '2026-06-14'
+  const lastUpdated = '2026-06-15'
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <a href="/" className="text-xs text-falcon-500 hover:text-falcon-700">
@@ -175,6 +175,25 @@ export default function PrivacyPage() {
             API Services User Data Policy
           </a>
           , including the Limited Use requirements.
+        </p>
+
+        <h2 className="mt-6 text-base font-semibold text-falcon-700">
+          Reply detection
+        </h2>
+        <p className="mt-2 leading-relaxed">
+          When a tracked email is opened in your Gmail and a new inbound
+          message appears in the same thread, the extension reads the
+          sender's email address and the first 400 characters of the
+          message body locally so it can distinguish your own sends from
+          replies and filter out auto-responders ("out of office",
+          "vacation responder"). If the message is a real reply, the
+          extension sends only the Gmail thread ID and message ID to
+          MailFalcon — never the body, never the sender address — so the
+          dashboard can show "Alice replied" alongside the open and
+          click events for that email. If reply detection is undesirable,
+          tick the privacy-mode checkbox at compose time; no threadId is
+          stored and the extension will not correlate any inbound
+          message back to that tracked email.
         </p>
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">

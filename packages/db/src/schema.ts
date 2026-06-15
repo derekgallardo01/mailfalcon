@@ -71,7 +71,7 @@ export const events = sqliteTable(
       .notNull()
       .references(() => trackedEmails.id, { onDelete: 'cascade' }),
     recipientId: text('recipient_id').references(() => recipients.id),
-    type: text('type', { enum: ['open', 'click'] }).notNull(),
+    type: text('type', { enum: ['open', 'click', 'reply'] }).notNull(),
     linkId: text('link_id'),
     ts: integer('ts').notNull(),
     uaClass: text('ua_class', {
