@@ -19,6 +19,7 @@ import {
   formatDevice,
   formatET,
   formatETShort,
+  formatLocalShort,
   formatLocation,
   formatOs,
   formatRelative,
@@ -241,11 +242,19 @@ export default function AdminPage() {
                     <td className="px-4 py-3 text-right text-falcon-700">
                       {u.emailCount}
                     </td>
-                    <td className="px-4 py-3 text-right text-falcon-500">
-                      {u.lastEmailAt ? formatRelative(u.lastEmailAt) : '—'}
+                    <td className="px-4 py-3 text-right text-falcon-500 tabular-nums">
+                      {u.lastEmailAt ? (
+                        <>
+                          <div className="text-falcon-700">{formatLocalShort(u.lastEmailAt)}</div>
+                          <div className="text-[11px] text-falcon-400">{formatRelative(u.lastEmailAt)}</div>
+                        </>
+                      ) : (
+                        <span className="text-falcon-300">—</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-right text-falcon-500">
-                      {formatRelative(u.createdAt)}
+                    <td className="px-4 py-3 text-right text-falcon-500 tabular-nums">
+                      <div className="text-falcon-700">{formatLocalShort(u.createdAt)}</div>
+                      <div className="text-[11px] text-falcon-400">{formatRelative(u.createdAt)}</div>
                     </td>
                   </tr>
                 ))}
@@ -354,8 +363,9 @@ export default function AdminPage() {
                             {e.clicks}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right text-falcon-500">
-                          {formatRelative(e.sentAt)}
+                        <td className="px-4 py-3 text-right text-falcon-500 tabular-nums">
+                          <div className="text-falcon-700">{formatLocalShort(e.sentAt)}</div>
+                          <div className="text-[11px] text-falcon-400">{formatRelative(e.sentAt)}</div>
                         </td>
                       </tr>
                     ))}

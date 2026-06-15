@@ -15,6 +15,7 @@ import {
 import { AppHeader } from '../../lib/AppHeader'
 import { clearSession, getSession, type Session } from '../../lib/auth-store'
 import { config } from '../../lib/config'
+import { formatLocalShort } from '../../lib/format'
 
 const WEEKDAY_FMT = new Intl.DateTimeFormat('en-US', { weekday: 'short' })
 const MONTHDAY_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
@@ -446,11 +447,22 @@ function DashboardInner() {
                           {e.clickCount}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-right text-falcon-500" title={new Date(e.sentAt).toLocaleString()}>
-                        {formatSent(e.sentAt)}
+                      <td
+                        className="px-3 py-2.5 text-right text-falcon-500 tabular-nums"
+                        title={new Date(e.sentAt).toLocaleString()}
+                      >
+                        <div className="text-falcon-700">{formatLocalShort(e.sentAt)}</div>
+                        <div className="text-[11px] text-falcon-400">{formatSent(e.sentAt)}</div>
                       </td>
-                      <td className="px-4 py-2.5 text-right text-falcon-500">
-                        {e.lastEventAt ? formatRelative(e.lastEventAt) : <span className="text-falcon-300">—</span>}
+                      <td className="px-4 py-2.5 text-right text-falcon-500 tabular-nums">
+                        {e.lastEventAt ? (
+                          <>
+                            <div className="text-falcon-700">{formatLocalShort(e.lastEventAt)}</div>
+                            <div className="text-[11px] text-falcon-400">{formatRelative(e.lastEventAt)}</div>
+                          </>
+                        ) : (
+                          <span className="text-falcon-300">—</span>
+                        )}
                       </td>
                     </tr>
                   )

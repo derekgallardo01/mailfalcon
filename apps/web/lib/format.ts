@@ -36,6 +36,38 @@ export function formatETShort(ts: number): string {
   return ET_SHORT_FMT.format(new Date(ts)).replace(' at ', ', ')
 }
 
+const LOCAL_SHORT_FMT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: '2-digit',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+})
+
+const LOCAL_TIME_FMT = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+})
+
+/**
+ * "Jun 15, 10:23 AM" in the viewer's local timezone. Today gets a
+ * shorter form — just the time — so the table doesn't repeat today's
+ * date on every row.
+ */
+export function formatLocalShort(ts: number): string {
+  const d = new Date(ts)
+  const today = new Date()
+  if (
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
+  ) {
+    return LOCAL_TIME_FMT.format(d)
+  }
+  return LOCAL_SHORT_FMT.format(d).replace(' at ', ', ')
+}
+
 export function formatISO(ts: number): string {
   return new Date(ts).toISOString().replace('T', ' ').slice(0, 19) + 'Z'
 }
