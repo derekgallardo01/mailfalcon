@@ -62,6 +62,7 @@ function buildStatusBarHtml(): string {
   return `
     <div class="mf-bar" style="position:relative;display:flex;align-items:center;gap:10px;width:100%;">
       <button class="mf-options" type="button" title="MailFalcon tracking options" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid #c4d0e3;background:#fff;border-radius:4px;cursor:pointer;font:inherit;color:#264168;line-height:1.2;">
+        <img class="mf-options-icon" alt="" width="14" height="14" style="display:block;border-radius:2px;">
         <span style="font-weight:600;">MailFalcon</span>
         <span style="opacity:0.55;font-size:10px;">▾</span>
       </button>
@@ -201,6 +202,10 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           bar.el.innerHTML = buildStatusBarHtml()
 
           const optionsBtn = bar.el.querySelector('.mf-options') as HTMLButtonElement | null
+          const optionsIcon = bar.el.querySelector('.mf-options-icon') as HTMLImageElement | null
+          if (optionsIcon && typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+            optionsIcon.src = chrome.runtime.getURL('icon/32.png')
+          }
           const popover = bar.el.querySelector('.mf-popover') as HTMLElement | null
           const summaryEl = bar.el.querySelector('.mf-summary') as HTMLElement | null
           const privCb = bar.el.querySelector('.mf-priv') as HTMLInputElement | null
