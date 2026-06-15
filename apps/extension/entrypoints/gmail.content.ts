@@ -1,4 +1,4 @@
-import { mintEmail } from '../src/api'
+import { mintEmail, patchEmailIds } from '../src/api'
 import { config } from '../src/config'
 import { InboxSdkGmailAdapter } from '../src/gmail/inboxsdk-adapter'
 import { prepareTrackedBody } from '../src/inject'
@@ -28,6 +28,7 @@ export default defineContentScript({
       const originalHtml = event.getHtmlBody()
       const subject = event.getSubject().trim() || undefined
       const remindAfterDays = event.getRemindAfterDays() ?? undefined
+      const presendThreadId = event.getThreadId() ?? undefined
 
       try {
         const { html, id, linkCount, originalLinks, pixelCount } =
@@ -37,6 +38,7 @@ export default defineContentScript({
             recipients,
             subject,
             ...(remindAfterDays !== undefined ? { remindAfterDays } : {}),
+            ...(presendThreadId ? { threadId: presendThreadId } : {}),
             trackerHost: config.trackerHost,
             mint: mintEmail,
           })
@@ -47,7 +49,16 @@ export default defineContentScript({
           pixelCount,
           linkCount,
           remindAfterDays,
+          threadId: presendThreadId,
           links: originalLinks,
+        })
+
+        // Gmail mints the real threadID + messageID on send confirmation.
+        // Patch the row so reply detection can correlate against it later.
+        event.onSent(({ messageId, threadId }) => {
+          void patchEmailIds(id, { messageId, threadId }).catch((err) => {
+            console.warn('[mailfalcon] patch ids failed:', err)
+          })
         })
       } catch (err) {
         console.error('[mailfalcon] tracking failed, letting send proceed clean:', err)

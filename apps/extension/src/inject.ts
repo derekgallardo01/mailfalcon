@@ -32,6 +32,7 @@ export interface MintFn {
     subject?: string
     recipients?: MintRecipientInput[]
     remindAfterDays?: number
+    threadId?: string
   }): Promise<{
     id: string
     sig: string
@@ -126,6 +127,7 @@ export async function prepareTrackedBody(args: {
   subject?: string
   recipients?: RecipientHandle[]
   remindAfterDays?: number
+  threadId?: string
   trackerHost: string
   mint: MintFn
 }): Promise<PrepareResult> {
@@ -135,6 +137,7 @@ export async function prepareTrackedBody(args: {
     subject,
     recipients,
     remindAfterDays,
+    threadId,
     trackerHost,
     mint,
   } = args
@@ -171,6 +174,7 @@ export async function prepareTrackedBody(args: {
     subject,
     ...(recipientInputs.length > 0 ? { recipients: recipientInputs } : {}),
     ...(remindAfterDays ? { remindAfterDays } : {}),
+    ...(threadId ? { threadId } : {}),
   })
 
   linkRefs.forEach(({ el, originalUrl }, idx) => {

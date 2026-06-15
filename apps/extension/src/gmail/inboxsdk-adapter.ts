@@ -35,7 +35,13 @@ interface ComposeView {
   getCcRecipients?: () => unknown[]
   getBccRecipients?: () => unknown[]
   getSubject?: () => string
+  getThreadID?: () => string | null
   send?: (opts?: { sendAndArchive?: boolean }) => void
+}
+
+interface SentEventPayload {
+  messageID?: string
+  threadID?: string
 }
 
 function buildStatusBarHtml(): string {
@@ -167,6 +173,25 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
         const sdkEvent = rawEvent as { cancel: () => void }
         sdkEvent.cancel()
 
+        const sentCallbacks: Array<
+          (info: { messageId: string; threadId: string }) => void
+        > = []
+
+        // Register the sent listener once per compose; it fires after
+        // Gmail confirms the actual send (which is after our reentered
+        // dispatch).
+        view.on('sent', (raw) => {
+          const payload = raw as SentEventPayload
+          if (!payload.messageID || !payload.threadID) return
+          for (const cb of sentCallbacks) {
+            try {
+              cb({ messageId: payload.messageID, threadId: payload.threadID })
+            } catch {
+              /* ignore */
+            }
+          }
+        })
+
         const wrapper: ComposeEvent = {
           getHtmlBody: () => view.getHTMLContent?.() ?? '',
           setHtmlBody: (html) => {
@@ -189,6 +214,11 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           // Privacy mode disables the reminder — no events = no way to
           // know whether to fire it.
           getRemindAfterDays: () => (privacyMode ? null : remindAfterDays),
+          getThreadId: () =>
+            privacyMode ? null : view.getThreadID?.() ?? null,
+          onSent: (cb) => {
+            if (!privacyMode) sentCallbacks.push(cb)
+          },
           cancel: () => sdkEvent.cancel(),
         }
 

@@ -53,7 +53,7 @@ app.use(
     origin: originPolicy,
     credentials: false,
     allowHeaders: ['Content-Type', 'Authorization'],
-    allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   }),
 )
 

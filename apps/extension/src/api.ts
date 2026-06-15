@@ -13,6 +13,8 @@ export interface MintEmailRequest {
   subject?: string
   recipients?: RecipientInput[]
   remindAfterDays?: number
+  threadId?: string
+  messageId?: string
 }
 
 export interface RecipientPixel {
@@ -68,6 +70,28 @@ export async function mintEmail(req: MintEmailRequest): Promise<MintEmailRespons
     throw new Error(`mint failed: ${res.status} ${await res.text()}`)
   }
   return (await res.json()) as MintEmailResponse
+}
+
+/**
+ * Backfill Gmail's threadId + messageId once Gmail confirms the send.
+ * Best-effort — failure here doesn't break tracking, just reply
+ * detection won't find the row.
+ */
+export async function patchEmailIds(
+  id: string,
+  patch: { threadId?: string; messageId?: string },
+): Promise<void> {
+  const res = await fetch(
+    `${config.apiHost}/v1/emails/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+      body: JSON.stringify(patch),
+    },
+  )
+  if (!res.ok) {
+    throw new Error(`patch failed: ${res.status}`)
+  }
 }
 
 export async function requestCode(email: string): Promise<void> {

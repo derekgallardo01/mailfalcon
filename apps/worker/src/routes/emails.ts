@@ -35,6 +35,15 @@ const mintSchema = z.object({
   // If set, the worker inserts a follow_ups row that the cron
   // evaluator will fire as a reminder if no non-bot open by then.
   remindAfterDays: z.number().int().min(1).max(60).optional(),
+  // Captured pre-send from InboxSDK if available. Stored so reply
+  // detection can correlate inbound messages back to a tracked email.
+  threadId: z.string().min(1).max(200).optional(),
+  messageId: z.string().min(1).max(200).optional(),
+})
+
+const patchSchema = z.object({
+  threadId: z.string().min(1).max(200).optional(),
+  messageId: z.string().min(1).max(200).optional(),
 })
 
 const sortSchema = z.enum([
@@ -131,8 +140,8 @@ emailsRouter.post('/', async (c) => {
       userId,
       subjectHash: null,
       subject: parsed.data.subject ?? null,
-      threadId: null,
-      messageId: null,
+      threadId: parsed.data.threadId ?? null,
+      messageId: parsed.data.messageId ?? null,
       recipientCount: parsed.data.recipientCount,
       sentAt,
       hmacSalt,
@@ -363,4 +372,48 @@ emailsRouter.get('/:id', async (c) => {
       isFirstOpen: e.isFirstOpen === 1,
     })),
   })
+})
+
+/**
+ * PATCH /v1/emails/:id — currently used by the extension to backfill
+ * Gmail's threadID and messageID once Gmail confirms the send (the IDs
+ * aren't known at presend time). Admin tier can patch any email; other
+ * users only their own.
+ */
+emailsRouter.patch('/:id', async (c) => {
+  const id = c.req.param('id')
+  const body = await c.req.json().catch(() => null)
+  const parsed = patchSchema.safeParse(body)
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
+  }
+
+  const userId = c.get('userId')
+  const db = getDb(c.env.DB)
+
+  const currentUser = await db
+    .select({ tier: users.tier })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get()
+  const isAdmin = currentUser?.tier === 'admin'
+
+  const updates: Record<string, unknown> = {}
+  if (parsed.data.threadId !== undefined) updates.threadId = parsed.data.threadId
+  if (parsed.data.messageId !== undefined)
+    updates.messageId = parsed.data.messageId
+  if (Object.keys(updates).length === 0) return c.json({ ok: true })
+
+  const result = await db
+    .update(trackedEmails)
+    .set(updates)
+    .where(
+      isAdmin
+        ? eq(trackedEmails.id, id)
+        : and(eq(trackedEmails.id, id), eq(trackedEmails.userId, userId)),
+    )
+    .run()
+
+  if (result.meta.changes === 0) return c.json({ error: 'not_found' }, 404)
+  return c.json({ ok: true })
 })
