@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import {
   type EmailListItem,
@@ -17,12 +17,26 @@ import {
 import { clearSession, getSession, type Session } from '../../lib/auth-store'
 import { config } from '../../lib/config'
 
+const WEEKDAY_FMT = new Intl.DateTimeFormat('en-US', { weekday: 'short' })
+const MONTHDAY_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+
 function formatRelative(ts: number): string {
   const diff = Date.now() - ts
   if (diff < 60_000) return 'just now'
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
   return `${Math.floor(diff / 86_400_000)}d ago`
+}
+
+/** Shorter format for the table — recent stays relative, older shows
+ *  the day of week or date. Keeps the column narrow + readable. */
+function formatSent(ts: number): string {
+  const diff = Date.now() - ts
+  if (diff < 60_000) return 'just now'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+  if (diff < 7 * 86_400_000) return WEEKDAY_FMT.format(new Date(ts))
+  return MONTHDAY_FMT.format(new Date(ts))
 }
 
 type DatePreset = 'today' | '7d' | '30d' | 'all'
@@ -182,82 +196,85 @@ function DashboardInner() {
   const hasFilters =
     urlQ || urlSort !== 'sentAt-desc' || urlDate !== 'all' || urlTag
 
+  const stats = (() => {
+    const sent = emails.length
+    const opens = emails.reduce((s, e) => s + e.openCount, 0)
+    const clicks = emails.reduce((s, e) => s + e.clickCount, 0)
+    const opened = emails.filter((e) => e.openCount > 0).length
+    const openRate = sent > 0 ? Math.round((opened / sent) * 100) : 0
+    return { sent, opens, clicks, openRate }
+  })()
+
+  const dateScopeLabel = (() => {
+    if (urlDate === 'today') return 'today'
+    if (urlDate === '7d') return 'last 7 days'
+    if (urlDate === '30d') return 'last 30 days'
+    return 'all time'
+  })()
+
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <header className="flex items-center justify-between border-b border-falcon-200 pb-4">
-        <div>
-          <h1 className="text-xl font-semibold text-falcon-700">MailFalcon</h1>
-          <p className="text-xs text-falcon-500">{session.email}</p>
-        </div>
-        <div className="flex items-center gap-4">
-          {liveCount > 0 && (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-              live · {liveCount} new
-            </span>
-          )}
-          {isFree && (
-            <button
-              type="button"
-              onClick={handleUpgrade}
-              className="rounded bg-falcon-500 px-3 py-1 text-xs font-medium text-white hover:bg-falcon-600"
-            >
-              Upgrade
-            </button>
-          )}
-          {me && !isFree && !isAdmin && me.hasStripeCustomer && (
-            <button
-              type="button"
-              onClick={handleManageBilling}
-              className="text-sm text-falcon-500 hover:text-falcon-700"
-            >
-              Manage billing
-            </button>
-          )}
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200"
-            >
-              admin
-            </Link>
-          )}
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="text-sm text-falcon-500 hover:text-falcon-700"
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+    <div className="mx-auto max-w-6xl px-6 py-6">
+      <DashboardHeader
+        session={session}
+        me={me}
+        isAdmin={isAdmin}
+        isFree={isFree}
+        liveCount={liveCount}
+        onUpgrade={handleUpgrade}
+        onManageBilling={handleManageBilling}
+        onLogout={handleLogout}
+      />
 
       {isFree && me && (
-        <div className="mt-4 flex items-center justify-between rounded border border-falcon-200 bg-falcon-50 px-4 py-2 text-xs text-falcon-700">
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-falcon-200 bg-falcon-50 px-4 py-2.5 text-xs text-falcon-700">
           <span>
             Free plan · <strong>{me.usage.used}</strong> / {me.usage.limit} tracked emails today
           </span>
           <button
             type="button"
             onClick={handleUpgrade}
-            className="text-falcon-500 hover:text-falcon-700"
+            className="font-medium text-falcon-500 hover:text-falcon-700"
           >
             Upgrade to Pro →
           </button>
         </div>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <input
-          type="search"
-          value={qInput}
-          onChange={(e) => setQInput(e.target.value)}
-          placeholder="Search subjects…"
-          className="min-w-[200px] flex-1 rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
-        />
+      <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label={`Sent · ${dateScopeLabel}`} value={stats.sent} />
+        <StatCard label="Opens" value={stats.opens} />
+        <StatCard label="Open rate" value={`${stats.openRate}%`} hint={`${emails.filter((e) => e.openCount > 0).length} of ${stats.sent}`} />
+        <StatCard label="Clicks" value={stats.clicks} accent={stats.clicks > 0} />
+      </section>
+
+      <div className="mt-6 flex flex-wrap items-center gap-2 rounded-lg border border-falcon-200 bg-white px-3 py-2">
+        <div className="relative min-w-[220px] flex-1">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-falcon-400"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            type="search"
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+            placeholder="Search subject + notes…"
+            className="w-full rounded border border-falcon-200 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-falcon-500 focus:outline-none"
+          />
+        </div>
         <select
           value={urlSort}
           onChange={(e) => updateParams({ sort: e.target.value === 'sentAt-desc' ? '' : e.target.value })}
-          className="rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+          className="rounded border border-falcon-200 bg-white px-3 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
         >
           {SORT_OPTIONS.map((o) => (
             <option key={o.key} value={o.key}>
@@ -271,7 +288,7 @@ function DashboardInner() {
               key={p.key}
               type="button"
               onClick={() => updateParams({ date: p.key === 'all' ? '' : p.key })}
-              className={`px-3 py-2 ${i > 0 ? 'border-l border-falcon-200' : ''} ${
+              className={`px-3 py-1.5 ${i > 0 ? 'border-l border-falcon-200' : ''} ${
                 urlDate === p.key
                   ? 'bg-falcon-100 font-medium text-falcon-700'
                   : 'text-falcon-500 hover:bg-falcon-50'
@@ -285,12 +302,12 @@ function DashboardInner() {
           <select
             value={urlTag}
             onChange={(e) => updateParams({ tag: e.target.value })}
-            className="rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+            className="rounded border border-falcon-200 bg-white px-3 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
           >
             <option value="">All tags</option>
             {tagOptions.map((t) => (
               <option key={t} value={t}>
-                {t}
+                #{t}
               </option>
             ))}
           </select>
@@ -302,7 +319,7 @@ function DashboardInner() {
               setQInput('')
               router.replace('/dashboard', { scroll: false })
             }}
-            className="text-xs text-falcon-500 hover:text-falcon-700"
+            className="ml-auto rounded border border-falcon-200 px-2 py-1 text-xs text-falcon-500 hover:bg-falcon-50 hover:text-falcon-700"
           >
             Clear
           </button>
@@ -380,51 +397,89 @@ function DashboardInner() {
           </div>
         )}
         {!loading && !error && emails.length > 0 && (
-          <div className="overflow-hidden rounded border border-falcon-200">
+          <div className="overflow-hidden rounded-lg border border-falcon-200 bg-white">
             <table className="w-full text-sm">
-              <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
+              <thead className="bg-falcon-50 text-[11px] uppercase tracking-wide text-falcon-500">
                 <tr>
-                  <th className="px-4 py-2 text-left font-medium">Subject</th>
-                  <th className="px-4 py-2 text-right font-medium">To</th>
-                  <th className="px-4 py-2 text-right font-medium">Opens</th>
-                  <th className="px-4 py-2 text-right font-medium">Clicks</th>
-                  <th className="px-4 py-2 text-right font-medium">Sent</th>
-                  <th className="px-4 py-2 text-right font-medium">Last event</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Subject</th>
+                  <th className="px-3 py-2.5 text-right font-medium">To</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Opens</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Clicks</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Sent</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Last event</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-falcon-100">
-                {emails.map((e) => (
-                  <tr
-                    key={e.id}
-                    className="cursor-pointer hover:bg-falcon-50"
-                    onClick={() => router.push(`/dashboard/email?id=${e.id}`)}
-                  >
-                    <td className="px-4 py-3 text-falcon-700">
-                      <Link href={`/dashboard/email?id=${e.id}`} className="block max-w-md truncate">
-                        {e.subject || <span className="italic text-falcon-400">(no subject)</span>}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-right text-falcon-700">
-                      {e.recipientCount}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={e.openCount > 0 ? 'font-medium text-falcon-700' : 'text-falcon-400'}>
-                        {e.openCount}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={e.clickCount > 0 ? 'font-medium text-falcon-700' : 'text-falcon-400'}>
-                        {e.clickCount}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-falcon-500">
-                      {formatRelative(e.sentAt)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-falcon-500">
-                      {e.lastEventAt ? formatRelative(e.lastEventAt) : '—'}
-                    </td>
-                  </tr>
-                ))}
+                {emails.map((e) => {
+                  const opened = e.openCount > 0
+                  const clicked = e.clickCount > 0
+                  return (
+                    <tr
+                      key={e.id}
+                      className="group cursor-pointer transition-colors hover:bg-falcon-50"
+                      onClick={() => router.push(`/dashboard/email?id=${e.id}`)}
+                    >
+                      <td className="px-4 py-2.5">
+                        <Link
+                          href={`/dashboard/email?id=${e.id}`}
+                          className="flex max-w-md items-center gap-2 truncate text-falcon-700 group-hover:text-falcon-900"
+                        >
+                          <span
+                            className={`inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                              clicked
+                                ? 'bg-blue-500'
+                                : opened
+                                ? 'bg-emerald-500'
+                                : 'bg-falcon-200'
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <span className="truncate">
+                            {e.subject || (
+                              <span className="italic text-falcon-400">(no subject)</span>
+                            )}
+                          </span>
+                          {e.privacyMode && (
+                            <span className="rounded bg-falcon-100 px-1.5 py-0.5 text-[10px] font-medium text-falcon-500">
+                              privacy
+                            </span>
+                          )}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-falcon-500">
+                        {e.recipientCount}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        <span
+                          className={
+                            opened
+                              ? 'font-semibold text-emerald-700'
+                              : 'text-falcon-300'
+                          }
+                        >
+                          {e.openCount}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        <span
+                          className={
+                            clicked
+                              ? 'font-semibold text-blue-700'
+                              : 'text-falcon-300'
+                          }
+                        >
+                          {e.clickCount}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-falcon-500" title={new Date(e.sentAt).toLocaleString()}>
+                        {formatSent(e.sentAt)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-falcon-500">
+                        {e.lastEventAt ? formatRelative(e.lastEventAt) : <span className="text-falcon-300">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -434,11 +489,154 @@ function DashboardInner() {
   )
 }
 
+function StatCard({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string
+  value: number | string
+  hint?: string
+  accent?: boolean
+}) {
+  return (
+    <div className="rounded-lg border border-falcon-200 bg-white px-4 py-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-falcon-500">
+        {label}
+      </p>
+      <p
+        className={`mt-1 text-2xl font-semibold tabular-nums ${
+          accent ? 'text-blue-700' : 'text-falcon-700'
+        }`}
+      >
+        {value}
+      </p>
+      {hint && <p className="mt-0.5 text-[11px] text-falcon-400">{hint}</p>}
+    </div>
+  )
+}
+
+interface DashboardHeaderProps {
+  session: Session
+  me: MeResponse | null
+  isAdmin: boolean
+  isFree: boolean
+  liveCount: number
+  onUpgrade: () => void | Promise<void>
+  onManageBilling: () => void | Promise<void>
+  onLogout: () => void | Promise<void>
+}
+
+function DashboardHeader({
+  session,
+  me,
+  isAdmin,
+  isFree,
+  liveCount,
+  onUpgrade,
+  onManageBilling,
+  onLogout,
+}: DashboardHeaderProps) {
+  const pathname = usePathname() ?? '/dashboard'
+  const tierLabel = me?.tier
+  const tierClass =
+    tierLabel === 'admin'
+      ? 'bg-amber-100 text-amber-800'
+      : tierLabel === 'pro' || tierLabel === 'team'
+      ? 'bg-emerald-100 text-emerald-800'
+      : null
+
+  const navLink = (href: string, label: string) => {
+    const active = pathname === href || pathname.startsWith(`${href}/`)
+    return (
+      <Link
+        href={href}
+        className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+          active
+            ? 'bg-falcon-100 text-falcon-700'
+            : 'text-falcon-500 hover:bg-falcon-50 hover:text-falcon-700'
+        }`}
+      >
+        {label}
+      </Link>
+    )
+  }
+
+  return (
+    <header className="flex flex-col gap-3 border-b border-falcon-200 pb-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-2">
+          <img
+            src="/icon.png"
+            alt=""
+            className="h-7 w-7 rounded"
+            aria-hidden="true"
+          />
+          <span className="text-lg font-semibold text-falcon-700">
+            MailFalcon
+          </span>
+        </Link>
+        {tierLabel && tierClass && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tierClass}`}
+          >
+            {tierLabel}
+          </span>
+        )}
+        {liveCount > 0 && (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+            live · {liveCount} new
+          </span>
+        )}
+      </div>
+
+      <nav className="flex flex-wrap items-center gap-1">
+        {navLink('/dashboard', 'Dashboard')}
+        {navLink('/templates', 'Templates')}
+        {navLink('/settings', 'Settings')}
+        {isAdmin && navLink('/admin', 'Admin')}
+      </nav>
+
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        {isFree && (
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="rounded bg-falcon-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-falcon-600"
+          >
+            Upgrade
+          </button>
+        )}
+        {me && !isFree && !isAdmin && me.hasStripeCustomer && (
+          <button
+            type="button"
+            onClick={onManageBilling}
+            className="text-xs text-falcon-500 hover:text-falcon-700"
+          >
+            Manage billing
+          </button>
+        )}
+        <span className="hidden text-xs text-falcon-400 md:inline">
+          {session.email}
+        </span>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="text-xs text-falcon-500 hover:text-falcon-700"
+        >
+          Sign out
+        </button>
+      </div>
+    </header>
+  )
+}
+
 export default function DashboardPage() {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto max-w-5xl px-6 py-8">
+        <main className="mx-auto max-w-6xl px-6 py-6">
           <p className="text-sm text-falcon-500">Loading…</p>
         </main>
       }
