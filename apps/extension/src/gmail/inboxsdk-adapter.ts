@@ -56,37 +56,37 @@ interface SentEventPayload {
 }
 
 function buildStatusBarHtml(): string {
+  // Four controls in one row. We use a horizontal-scroll fallback for
+  // very narrow composes — wrapping looked broken because InboxSDK's
+  // status bar has a fixed height and any extra rows get clipped.
   return `
-    <div style="display:flex;align-items:center;gap:14px;width:100%;flex-wrap:wrap;">
-      <label class="mf-priv-wrap" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;" title="Tracking is on by default. Check this to skip the pixel and link rewrite for this email only.">
+    <div style="display:flex;align-items:center;gap:14px;width:100%;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;">
+      <label class="mf-priv-wrap" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;flex-shrink:0;" title="Tracking is on by default. Check this to skip the pixel and link rewrite for this email only.">
         <input type="checkbox" class="mf-priv" style="margin:0;">
         <span>Privacy mode</span>
       </label>
-      <span style="opacity:0.4;">·</span>
-      <label class="mf-tpl-wrap" style="display:inline-flex;align-items:center;gap:6px;" title="Insert one of your saved templates.">
+      <label class="mf-tpl-wrap" style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;" title="Insert one of your saved templates.">
         <span>Template:</span>
-        <select class="mf-tpl" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;">
+        <select class="mf-tpl" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;max-width:160px;">
           <option value="">— pick one —</option>
         </select>
       </label>
-      <span style="opacity:0.4;">·</span>
-      <label class="mf-rem-wrap" style="display:inline-flex;align-items:center;gap:6px;" title="If no one opens within this window, MailFalcon will email you a reminder.">
-        <span>Remind in:</span>
+      <label class="mf-rem-wrap" style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;" title="If no one opens within this window, MailFalcon will email you a reminder.">
+        <span>Remind:</span>
         <select class="mf-rem" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;">
-          <option value="">no reminder</option>
-          <option value="1">1 day</option>
-          <option value="3">3 days</option>
-          <option value="7">7 days</option>
+          <option value="">never</option>
+          <option value="1">1d</option>
+          <option value="3">3d</option>
+          <option value="7">7d</option>
         </select>
       </label>
-      <span style="opacity:0.4;">·</span>
-      <label class="mf-sch-wrap" style="display:inline-flex;align-items:center;gap:6px;" title="Schedule the send for later. The browser must be running at the scheduled time.">
+      <label class="mf-sch-wrap" style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;" title="Schedule the send for later. The browser must be running at the scheduled time.">
         <span>Send:</span>
         <select class="mf-sch" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;">
           <option value="now">now</option>
-          <option value="in-1h">in 1 hour</option>
-          <option value="in-3h">in 3 hours</option>
-          <option value="tomorrow-9am">tomorrow 9am</option>
+          <option value="in-1h">1h</option>
+          <option value="in-3h">3h</option>
+          <option value="tomorrow-9am">9am tmr</option>
         </select>
       </label>
     </div>
@@ -165,10 +165,10 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       let templates: Template[] = []
 
       try {
-        const bar = view.addStatusBar?.({ height: 28, orderHint: 0 })
+        const bar = view.addStatusBar?.({ height: 32, orderHint: 0 })
         if (bar?.el) {
           bar.el.style.cssText =
-            'background:#f5f7fa;border-top:1px solid #e3e9f2;display:flex;align-items:center;padding:0 12px;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;'
+            'background:#f5f7fa;border-top:1px solid #e3e9f2;display:flex;align-items:center;padding:0 12px;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;overflow:hidden;'
           bar.el.innerHTML = buildStatusBarHtml()
 
           const privCb = bar.el.querySelector('.mf-priv') as HTMLInputElement | null
