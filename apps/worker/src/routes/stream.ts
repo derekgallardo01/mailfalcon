@@ -4,6 +4,7 @@ import { events, trackedEmails } from '@mailfalcon/db/schema'
 import { getDb } from '../lib/db'
 import { getJwtSecret, verifyJwt } from '../lib/jwt'
 import { createLogger, errorMeta } from '../lib/logger'
+import { concurrentDec, concurrentInc } from '../lib/rate-limit'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -13,6 +14,11 @@ type Bindings = {
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
 }
+
+const STREAM_MAX_PER_USER = 3
+// Stream max duration is 60s so this TTL only covers an outlier where
+// the decrement never runs — KV reaps the stale counter.
+const STREAM_TTL_SEC = 120
 
 interface SessionRecord {
   userId: string
@@ -47,6 +53,22 @@ streamRouter.get('/', async (c) => {
     } else {
       return c.json({ error: 'unauthorized' }, 401)
     }
+  }
+
+  // Cap concurrent SSE connections per user. Stops one bad client from
+  // burning worker concurrency or our SSE budget by holding open many
+  // streams. Counter is decremented when the stream closes.
+  const concurrentKey = `stream:${userId}`
+  const count = await concurrentInc(c.env.KV, concurrentKey, STREAM_TTL_SEC)
+  if (count > STREAM_MAX_PER_USER) {
+    await concurrentDec(c.env.KV, concurrentKey, STREAM_TTL_SEC)
+    createLogger({ env: c.env }).warn('stream_concurrent_throttle', {
+      userId,
+      count,
+    })
+    return c.json({ error: 'too_many_streams' }, 429, {
+      'Retry-After': '60',
+    })
   }
 
   const since = Number.parseInt(c.req.query('since') ?? '', 10)
@@ -126,6 +148,10 @@ streamRouter.get('/', async (c) => {
 
       controller.enqueue(encoder.encode(`event: bye\ndata: reconnect\n\n`))
       controller.close()
+      await concurrentDec(c.env.KV, concurrentKey, STREAM_TTL_SEC)
+    },
+    async cancel() {
+      await concurrentDec(c.env.KV, concurrentKey, STREAM_TTL_SEC)
     },
   })
 

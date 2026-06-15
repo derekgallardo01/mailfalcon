@@ -4,9 +4,11 @@ import { eq } from 'drizzle-orm'
 import { users } from '@mailfalcon/db/schema'
 import { newTrackingId } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
+import { getClientIp } from '../lib/ip'
 import { getJwtSecret, signJwt, verifyJwt } from '../lib/jwt'
 import { createLogger, errorMeta } from '../lib/logger'
 import { sendCode } from '../lib/mailer'
+import { rateLimit } from '../lib/rate-limit'
 
 const requestSchema = z.object({
   email: z.string().email().max(254).transform((s) => s.toLowerCase()),
@@ -50,7 +52,17 @@ authRouter.post('/request', async (c) => {
   if (!parsed.success) return c.json({ error: 'invalid_email' }, 400)
   const email = parsed.data.email
 
-  // Rate limit: 1 code per 60s per email (silent)
+  // IP cap: 5 sign-in requests per 10 min from one IP. Stops mass abuse
+  // before the per-email throttle even sees the request.
+  const ip = getClientIp(c)
+  const ipLimit = await rateLimit(c.env.KV, `auth-req-ip:${ip}`, 5, 600)
+  if (!ipLimit.allowed) {
+    createLogger({ env: c.env }).warn('auth_request_ip_throttle', { ip })
+    return c.json({ error: 'rate_limited' }, 429, { 'Retry-After': '600' })
+  }
+
+  // Per-email throttle: 1 code per 60s. Silent so we don't tip off the
+  // attacker whether the email exists.
   const rlKey = `code-rl:${email}`
   const inFlight = await c.env.KV.get(rlKey)
   if (inFlight) return c.json({ ok: true })

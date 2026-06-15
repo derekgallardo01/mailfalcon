@@ -3,8 +3,10 @@ import { eq } from 'drizzle-orm'
 import { events, links, trackedEmails } from '@mailfalcon/db/schema'
 import { verify } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
+import { getClientIp } from '../lib/ip'
 import { createLogger, errorMeta } from '../lib/logger'
 import { fanoutPush } from '../lib/push-fanout'
+import { rateLimit } from '../lib/rate-limit'
 import { getHmacSecret } from '../lib/secrets'
 import { extractCfGeo, parseUa, truncateIpV4 } from '../lib/ua'
 
@@ -12,6 +14,7 @@ type Bindings = {
   ENVIRONMENT: string
   HMAC_SECRET?: string
   DB: D1Database
+  KV: KVNamespace
   VAPID_PUBLIC_KEY?: string
   VAPID_PRIVATE_KEY_JWK?: string
   VAPID_SUBJECT?: string
@@ -50,6 +53,16 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
       .get(),
   ])
   if (!link || !email) return c.notFound()
+
+  // Per-IP throttle: 60 clicks per IP per minute. On exceed, still
+  // redirect (so the user doesn't see a broken link), but skip the DB
+  // write so a bot can't amplify event volume.
+  const ip = getClientIp(c)
+  const ipLimit = await rateLimit(c.env.KV, `clk:${ip}`, 60, 60)
+  if (!ipLimit.allowed) {
+    createLogger({ env: c.env }).warn('click_ip_throttle', { ip, id })
+    return c.redirect(link.originalUrl, 302)
+  }
 
   const ua = c.req.header('User-Agent') ?? ''
   const uaDetails = parseUa(ua)

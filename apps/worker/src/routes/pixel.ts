@@ -3,8 +3,10 @@ import { eq } from 'drizzle-orm'
 import { events, trackedEmails } from '@mailfalcon/db/schema'
 import { verify } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
+import { getClientIp } from '../lib/ip'
 import { createLogger, errorMeta } from '../lib/logger'
 import { fanoutPush } from '../lib/push-fanout'
+import { rateLimit } from '../lib/rate-limit'
 import { getHmacSecret } from '../lib/secrets'
 import { extractCfGeo, hashUa, parseUa, truncateIpV4 } from '../lib/ua'
 
@@ -46,6 +48,16 @@ pixelRouter.get('/:idWithExt', async (c) => {
   const secret = getHmacSecret(c.env)
   const valid = await verify(id, sig, secret, 12).catch(() => false)
   if (!valid) return gif()
+
+  // Per-IP throttle: 60 pixel hits per IP per minute. On exceed, still
+  // serve the GIF (so attacker can't tell), but skip the DB write so a
+  // bot can't amplify event volume.
+  const ip = getClientIp(c)
+  const ipLimit = await rateLimit(c.env.KV, `pix:${ip}`, 60, 60)
+  if (!ipLimit.allowed) {
+    createLogger({ env: c.env }).warn('pixel_ip_throttle', { ip, id })
+    return gif()
+  }
 
   const db = getDb(c.env.DB)
   const row = await db
