@@ -46,6 +46,7 @@ interface ComposeView {
   setBccRecipients?: (addrs: string[]) => void
   getSubject?: () => string
   getThreadID?: () => string | null
+  getThreadIDAsync?: () => Promise<string | null>
   send?: (opts?: { sendAndArchive?: boolean }) => void
   close?: () => void
 }
@@ -121,12 +122,15 @@ const reentered = new WeakSet<object>()
 
 interface MessageView {
   getMessageID?: () => string
+  getMessageIDAsync?: () => Promise<string>
   getSender?: () => { emailAddress?: string } | null
   getBodyElement?: () => HTMLElement | null
 }
 
 interface ThreadView {
+  // Both deprecated in newer InboxSDK; we use Async at call sites.
   getThreadID?: () => string | null
+  getThreadIDAsync?: () => Promise<string | null>
   on: (event: string, cb: (e: unknown) => void) => void
 }
 
@@ -163,6 +167,19 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       let scheduledAt: number | null = null
       let consumedWithoutSend = false
       let templates: Template[] = []
+      // Pre-fetch the threadID once (replaces deprecated sync getThreadID).
+      let cachedThreadId: string | null = null
+      void (async () => {
+        try {
+          if (view.getThreadIDAsync) {
+            cachedThreadId = await view.getThreadIDAsync()
+          } else if (view.getThreadID) {
+            cachedThreadId = view.getThreadID()
+          }
+        } catch {
+          cachedThreadId = null
+        }
+      })()
 
       try {
         // Height accommodates up to 2 wrapped rows (28px × 2 + 4px gap).
@@ -272,8 +289,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           // Privacy mode disables the reminder — no events = no way to
           // know whether to fire it.
           getRemindAfterDays: () => (privacyMode ? null : remindAfterDays),
-          getThreadId: () =>
-            privacyMode ? null : view.getThreadID?.() ?? null,
+          getThreadId: () => (privacyMode ? null : cachedThreadId),
           onSent: (cb) => {
             if (!privacyMode) sentCallbacks.push(cb)
           },
@@ -345,32 +361,55 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
     const seen = new Set<string>()
 
     conversations.registerThreadViewHandler((threadView) => {
-      const threadId = threadView.getThreadID?.()
-      if (!threadId) return
+      // Kick off the async fetch once per thread view. getThreadID()
+      // (sync) is deprecated, getThreadIDAsync() is the supported call.
+      // We hold the promise in a closure so the messageAdded handler
+      // awaits it (resolving instantly after the first round-trip).
+      const threadIdPromise: Promise<string | null> = (async () => {
+        if (threadView.getThreadIDAsync) {
+          try {
+            return await threadView.getThreadIDAsync()
+          } catch {
+            return null
+          }
+        }
+        return threadView.getThreadID?.() ?? null
+      })()
 
       threadView.on('messageAdded', (raw) => {
         const view = (raw as { messageView?: MessageView }).messageView
         if (!view) return
-        const messageId = view.getMessageID?.()
-        if (!messageId || seen.has(messageId)) return
-        seen.add(messageId)
 
-        const sender = view.getSender?.() ?? null
-        const senderAddress = sender?.emailAddress ?? null
-        const bodyText = (view.getBodyElement?.()?.textContent ?? '').slice(0, 400)
+        void (async () => {
+          const threadId = await threadIdPromise
+          if (!threadId) return
 
-        for (const handler of this.incomingMessageHandlers) {
-          try {
-            handler({
-              threadId,
-              gmailMessageId: messageId,
-              senderAddress,
-              bodyPreview: bodyText,
-            })
-          } catch {
-            /* ignore */
+          const messageId = view.getMessageIDAsync
+            ? await view.getMessageIDAsync().catch(() => null)
+            : view.getMessageID?.()
+          if (!messageId || seen.has(messageId)) return
+          seen.add(messageId)
+
+          const sender = view.getSender?.() ?? null
+          const senderAddress = sender?.emailAddress ?? null
+          const bodyText = (view.getBodyElement?.()?.textContent ?? '').slice(
+            0,
+            400,
+          )
+
+          for (const handler of this.incomingMessageHandlers) {
+            try {
+              handler({
+                threadId,
+                gmailMessageId: messageId,
+                senderAddress,
+                bodyPreview: bodyText,
+              })
+            } catch {
+              /* ignore */
+            }
           }
-        }
+        })()
       })
     })
   }
