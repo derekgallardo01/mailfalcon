@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { AppHeader } from '../../lib/AppHeader'
 import {
   admin,
   type AdminEmail,
@@ -140,45 +141,37 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <p className="text-sm text-falcon-500">Loading…</p>
+      <main className="mx-auto max-w-6xl px-6 py-6">
+        <AppHeader />
+        <p className="mt-6 text-sm text-falcon-500">Loading…</p>
       </main>
     )
   }
 
   if (forbidden) {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <h1 className="text-xl font-semibold text-falcon-700">Admin</h1>
-        <p className="mt-2 text-sm text-red-700">
-          Your account does not have admin access.
-        </p>
-        <Link
-          href="/dashboard"
-          className="mt-4 inline-block text-sm text-falcon-500 hover:text-falcon-700"
-        >
-          ← Back to dashboard
-        </Link>
+      <main className="mx-auto max-w-6xl px-6 py-6">
+        <AppHeader />
+        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-6">
+          <h1 className="text-base font-semibold text-falcon-700">Admin</h1>
+          <p className="mt-1 text-sm text-red-700">
+            Your account does not have admin access.
+          </p>
+        </div>
       </main>
     )
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <header className="flex items-center justify-between border-b border-falcon-200 pb-4">
-        <div>
-          <h1 className="text-xl font-semibold text-falcon-700">MailFalcon · admin</h1>
-          <p className="text-xs text-falcon-500">All users, all activity</p>
-        </div>
-        <Link
-          href="/dashboard"
-          className="text-sm text-falcon-500 hover:text-falcon-700"
-        >
-          My dashboard →
-        </Link>
-      </header>
+    <div className="mx-auto max-w-6xl px-6 py-6">
+      <AppHeader />
 
-      <nav className="mt-6 flex gap-1 border-b border-falcon-200">
+      <div className="mt-6">
+        <h1 className="text-xl font-semibold text-falcon-700">Admin</h1>
+        <p className="text-xs text-falcon-500">All users, all activity</p>
+      </div>
+
+      <nav className="mt-4 flex gap-1 border-b border-falcon-200">
         {(['stats', 'users', 'emails', 'events'] as Tab[]).map((t) => (
           <button
             key={t}
@@ -206,7 +199,7 @@ export default function AdminPage() {
             <StatCard label="New users today" value={stats.today.newUsers} />
             <StatCard label="Emails sent today" value={stats.today.emailsSent} />
             <StatCard label="Events today" value={stats.today.eventsLogged} />
-            <div className="col-span-2 rounded border border-falcon-200 p-4 md:col-span-3">
+            <div className="col-span-2 rounded-lg border border-falcon-200 bg-white p-4 md:col-span-3">
               <p className="text-xs uppercase tracking-wide text-falcon-500">
                 Users by tier
               </p>
@@ -223,7 +216,7 @@ export default function AdminPage() {
         )}
 
         {tab === 'users' && (
-          <div className="overflow-hidden rounded border border-falcon-200">
+          <div className="overflow-hidden rounded-lg border border-falcon-200 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
                 <tr>
@@ -321,7 +314,7 @@ export default function AdminPage() {
                   : 'No emails yet.'}
               </div>
             ) : (
-              <div className="overflow-hidden rounded border border-falcon-200">
+              <div className="overflow-hidden rounded-lg border border-falcon-200 bg-white">
                 <table className="w-full text-sm">
                   <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
                     <tr>
@@ -374,7 +367,7 @@ export default function AdminPage() {
         )}
 
         {tab === 'events' && (
-          <div className="overflow-x-auto rounded border border-falcon-200">
+          <div className="overflow-x-auto rounded-lg border border-falcon-200 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
                 <tr>
@@ -455,7 +448,7 @@ export default function AdminPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded border border-falcon-200 p-4">
+    <div className="rounded-lg border border-falcon-200 bg-white p-4">
       <p className="text-xs uppercase tracking-wide text-falcon-500">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-falcon-700">
         {value.toLocaleString()}

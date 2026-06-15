@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
@@ -12,6 +11,7 @@ import {
   startCheckout,
   updateMe,
 } from '../../lib/api'
+import { AppHeader } from '../../lib/AppHeader'
 import { clearSession, getSession } from '../../lib/auth-store'
 
 export default function SettingsPage() {
@@ -133,30 +133,27 @@ export default function SettingsPage() {
 
   if (loading || !me) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-12">
-        <p className="text-sm text-falcon-500">Loading…</p>
+      <main className="mx-auto max-w-3xl px-6 py-6">
+        <AppHeader />
+        <p className="mt-6 text-sm text-falcon-500">Loading…</p>
       </main>
     )
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <header className="border-b border-falcon-200 pb-4">
-        <Link
-          href="/dashboard"
-          className="text-xs text-falcon-500 hover:text-falcon-700"
-        >
-          ← Dashboard
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-falcon-700">Settings</h1>
-        <p className="mt-1 text-xs text-falcon-500">{me.email}</p>
-      </header>
+    <main className="mx-auto max-w-3xl px-6 py-6">
+      <AppHeader />
+
+      <div className="mt-6">
+        <h1 className="text-xl font-semibold text-falcon-700">Settings</h1>
+        <p className="mt-0.5 text-xs text-falcon-500">{me.email}</p>
+      </div>
 
       <section className="mt-8">
         <h2 className="text-base font-semibold text-falcon-700">
           Email notifications
         </h2>
-        <div className="mt-4 rounded border border-falcon-200 bg-white p-4">
+        <div className="mt-4 rounded-lg border border-falcon-200 bg-white p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <div className="flex items-center gap-2">
@@ -211,7 +208,7 @@ export default function SettingsPage() {
 
       <section className="mt-8">
         <h2 className="text-base font-semibold text-falcon-700">Account</h2>
-        <div className="mt-4 rounded border border-falcon-200 bg-white p-4">
+        <div className="mt-4 rounded-lg border border-falcon-200 bg-white p-4">
           <dl className="space-y-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-falcon-500">Email</dt>
@@ -243,7 +240,7 @@ export default function SettingsPage() {
 
       <section className="mt-12">
         <h2 className="text-base font-semibold text-red-700">Danger zone</h2>
-        <div className="mt-4 space-y-4 rounded border border-red-200 bg-red-50/30 p-4">
+        <div className="mt-4 space-y-4 rounded-lg border border-red-200 bg-red-50/30 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-medium text-falcon-700">Download your data</p>
@@ -291,7 +288,7 @@ export default function SettingsPage() {
             </div>
 
             {deleteStage !== 'idle' && (
-              <div className="mt-4 space-y-3 rounded border border-red-200 bg-white p-3">
+              <div className="mt-4 space-y-3 rounded-lg border border-red-200 bg-white p-3">
                 <p className="text-sm text-falcon-700">
                   Check {me.email} for a 6-digit code and paste it below.
                 </p>

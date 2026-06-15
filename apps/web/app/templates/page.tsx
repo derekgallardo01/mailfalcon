@@ -1,9 +1,9 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { type Template, templates } from '../../lib/api'
+import { AppHeader } from '../../lib/AppHeader'
 import { clearSession, getSession } from '../../lib/auth-store'
 import { formatRelative } from '../../lib/format'
 
@@ -94,25 +94,20 @@ export default function TemplatesPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <p className="text-sm text-falcon-500">Loading…</p>
+      <main className="mx-auto max-w-6xl px-6 py-6">
+        <AppHeader />
+        <p className="mt-6 text-sm text-falcon-500">Loading…</p>
       </main>
     )
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <header className="flex items-center justify-between border-b border-falcon-200 pb-4">
+    <div className="mx-auto max-w-6xl px-6 py-6">
+      <AppHeader />
+
+      <div className="mt-6 flex items-center justify-between">
         <div>
-          <Link
-            href="/dashboard"
-            className="text-xs text-falcon-500 hover:text-falcon-700"
-          >
-            ← Dashboard
-          </Link>
-          <h1 className="mt-1 text-xl font-semibold text-falcon-700">
-            Templates
-          </h1>
+          <h1 className="text-xl font-semibold text-falcon-700">Templates</h1>
           <p className="text-xs text-falcon-500">
             Reusable subject + body. Pick one from compose to insert.
           </p>
@@ -124,7 +119,7 @@ export default function TemplatesPage() {
         >
           New template
         </button>
-      </header>
+      </div>
 
       {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
 
@@ -161,7 +156,7 @@ export default function TemplatesPage() {
           )}
         </aside>
 
-        <section className="rounded border border-falcon-200 bg-white p-6">
+        <section className="rounded-lg border border-falcon-200 bg-white p-6">
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-medium uppercase tracking-wide text-falcon-500">

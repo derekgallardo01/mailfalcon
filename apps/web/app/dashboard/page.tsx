@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import {
   type EmailListItem,
@@ -10,10 +10,9 @@ import {
   getMe,
   listEmailTags,
   listEmails,
-  logout as apiLogout,
-  openBillingPortal,
   startCheckout,
 } from '../../lib/api'
+import { AppHeader } from '../../lib/AppHeader'
 import { clearSession, getSession, type Session } from '../../lib/auth-store'
 import { config } from '../../lib/config'
 
@@ -167,27 +166,12 @@ function DashboardInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, urlQ, urlSort, urlDate, urlTag])
 
-  async function handleLogout() {
-    await apiLogout()
-    clearSession()
-    router.replace('/sign-in')
-  }
-
   async function handleUpgrade() {
     try {
       const url = await startCheckout()
       window.location.assign(url)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upgrade failed')
-    }
-  }
-
-  async function handleManageBilling() {
-    try {
-      const url = await openBillingPortal()
-      window.location.assign(url)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Portal failed')
     }
   }
 
@@ -214,16 +198,7 @@ function DashboardInner() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
-      <DashboardHeader
-        session={session}
-        me={me}
-        isAdmin={isAdmin}
-        isFree={isFree}
-        liveCount={liveCount}
-        onUpgrade={handleUpgrade}
-        onManageBilling={handleManageBilling}
-        onLogout={handleLogout}
-      />
+      <AppHeader liveCount={liveCount} />
 
       {isFree && me && (
         <div className="mt-4 flex items-center justify-between rounded-lg border border-falcon-200 bg-falcon-50 px-4 py-2.5 text-xs text-falcon-700">
@@ -514,121 +489,6 @@ function StatCard({
       </p>
       {hint && <p className="mt-0.5 text-[11px] text-falcon-400">{hint}</p>}
     </div>
-  )
-}
-
-interface DashboardHeaderProps {
-  session: Session
-  me: MeResponse | null
-  isAdmin: boolean
-  isFree: boolean
-  liveCount: number
-  onUpgrade: () => void | Promise<void>
-  onManageBilling: () => void | Promise<void>
-  onLogout: () => void | Promise<void>
-}
-
-function DashboardHeader({
-  session,
-  me,
-  isAdmin,
-  isFree,
-  liveCount,
-  onUpgrade,
-  onManageBilling,
-  onLogout,
-}: DashboardHeaderProps) {
-  const pathname = usePathname() ?? '/dashboard'
-  const tierLabel = me?.tier
-  const tierClass =
-    tierLabel === 'admin'
-      ? 'bg-amber-100 text-amber-800'
-      : tierLabel === 'pro' || tierLabel === 'team'
-      ? 'bg-emerald-100 text-emerald-800'
-      : null
-
-  const navLink = (href: string, label: string) => {
-    const active = pathname === href || pathname.startsWith(`${href}/`)
-    return (
-      <Link
-        href={href}
-        className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
-          active
-            ? 'bg-falcon-100 text-falcon-700'
-            : 'text-falcon-500 hover:bg-falcon-50 hover:text-falcon-700'
-        }`}
-      >
-        {label}
-      </Link>
-    )
-  }
-
-  return (
-    <header className="flex flex-col gap-3 border-b border-falcon-200 pb-4 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center gap-3">
-        <Link href="/" className="flex items-center gap-2">
-          <img
-            src="/icon.png"
-            alt=""
-            className="h-7 w-7 rounded"
-            aria-hidden="true"
-          />
-          <span className="text-lg font-semibold text-falcon-700">
-            MailFalcon
-          </span>
-        </Link>
-        {tierLabel && tierClass && (
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tierClass}`}
-          >
-            {tierLabel}
-          </span>
-        )}
-        {liveCount > 0 && (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
-            live · {liveCount} new
-          </span>
-        )}
-      </div>
-
-      <nav className="flex flex-wrap items-center gap-1">
-        {navLink('/dashboard', 'Dashboard')}
-        {navLink('/templates', 'Templates')}
-        {navLink('/settings', 'Settings')}
-        {isAdmin && navLink('/admin', 'Admin')}
-      </nav>
-
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        {isFree && (
-          <button
-            type="button"
-            onClick={onUpgrade}
-            className="rounded bg-falcon-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-falcon-600"
-          >
-            Upgrade
-          </button>
-        )}
-        {me && !isFree && !isAdmin && me.hasStripeCustomer && (
-          <button
-            type="button"
-            onClick={onManageBilling}
-            className="text-xs text-falcon-500 hover:text-falcon-700"
-          >
-            Manage billing
-          </button>
-        )}
-        <span className="hidden text-xs text-falcon-400 md:inline">
-          {session.email}
-        </span>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="text-xs text-falcon-500 hover:text-falcon-700"
-        >
-          Sign out
-        </button>
-      </div>
-    </header>
   )
 }
 
