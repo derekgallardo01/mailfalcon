@@ -27,14 +27,19 @@ export default defineContentScript({
       const originalHtml = event.getHtmlBody()
 
       try {
-        const { html, id, linkCount } = await prepareTrackedBody({
+        const { html, id, linkCount, originalLinks } = await prepareTrackedBody({
           html: originalHtml,
           recipientCount,
           trackerHost: config.trackerHost,
           mint: mintEmail,
         })
         event.setHtmlBody(html)
-        console.log('[mailfalcon] tracked send', { id, recipientCount, linkCount })
+        console.log('[mailfalcon] tracked send', {
+          id,
+          recipientCount,
+          linkCount,
+          links: originalLinks,
+        })
       } catch (err) {
         console.error('[mailfalcon] tracking failed, letting send proceed clean:', err)
       }
