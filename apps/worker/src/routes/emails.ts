@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { and, asc, desc, eq, gte, like, lte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, like, lte, or, sql } from 'drizzle-orm'
 import {
   events,
   followUps,
@@ -41,9 +41,18 @@ const mintSchema = z.object({
   messageId: z.string().min(1).max(200).optional(),
 })
 
+const tagSchema = z
+  .string()
+  .min(1)
+  .max(30)
+  .transform((s) => s.toLowerCase().trim())
+  .refine((s) => s.length > 0, 'empty')
+
 const patchSchema = z.object({
   threadId: z.string().min(1).max(200).optional(),
   messageId: z.string().min(1).max(200).optional(),
+  tags: z.array(tagSchema).max(10).optional(),
+  notes: z.string().max(5000).optional(),
 })
 
 const sortSchema = z.enum([
@@ -60,6 +69,7 @@ const listQuerySchema = z.object({
   sort: sortSchema.default('sentAt-desc'),
   from: z.coerce.number().int().nonnegative().optional(),
   to: z.coerce.number().int().nonnegative().optional(),
+  tag: z.string().max(30).optional(),
 })
 
 // SQLite's LIKE uses % and _ as wildcards. Escape them so user input is
@@ -185,6 +195,7 @@ emailsRouter.get('/', async (c) => {
     sort: c.req.query('sort'),
     from: c.req.query('from'),
     to: c.req.query('to'),
+    tag: c.req.query('tag'),
   })
   if (!q.success) return c.json({ error: 'invalid_query' }, 400)
 
@@ -201,8 +212,14 @@ emailsRouter.get('/', async (c) => {
     filters.push(sql`${trackedEmails.sentAt} < ${q.data.cursor}`)
   }
   if (q.data.q && q.data.q.trim().length > 0) {
+    const pattern = `%${sqlLikeEscape(q.data.q.trim())}%`
+    // Search subject + notes; either match qualifies. Notes are user-
+    // private metadata so this never leaks anything across users.
     filters.push(
-      like(trackedEmails.subject, `%${sqlLikeEscape(q.data.q.trim())}%`),
+      or(
+        like(trackedEmails.subject, pattern),
+        like(trackedEmails.notes, pattern),
+      )!,
     )
   }
   if (q.data.from !== undefined) {
@@ -210,6 +227,12 @@ emailsRouter.get('/', async (c) => {
   }
   if (q.data.to !== undefined) {
     filters.push(lte(trackedEmails.sentAt, q.data.to))
+  }
+  if (q.data.tag) {
+    // Tags column is a JSON array stored as text — match "...","tag",...
+    // bracketed by JSON delimiters so "ux" doesn't match "uxd".
+    const t = q.data.tag.toLowerCase().trim()
+    filters.push(like(trackedEmails.tags, `%"${sqlLikeEscape(t)}"%`))
   }
 
   const orderBy = (() => {
@@ -267,6 +290,36 @@ emailsRouter.get('/', async (c) => {
     })),
     nextCursor,
   })
+})
+
+/**
+ * GET /v1/emails/tags — distinct tags across the caller's emails, for
+ * the dashboard filter dropdown. Registered before /:id so the literal
+ * path wins routing.
+ */
+emailsRouter.get('/tags', async (c) => {
+  const userId = c.get('userId')
+  const db = getDb(c.env.DB)
+  const rows = await db
+    .select({ tags: trackedEmails.tags })
+    .from(trackedEmails)
+    .where(eq(trackedEmails.userId, userId))
+    .all()
+
+  const set = new Set<string>()
+  for (const r of rows) {
+    try {
+      const parsed = JSON.parse(r.tags) as unknown
+      if (Array.isArray(parsed)) {
+        for (const t of parsed) {
+          if (typeof t === 'string' && t.length > 0) set.add(t)
+        }
+      }
+    } catch {
+      /* skip malformed rows */
+    }
+  }
+  return c.json({ tags: [...set].sort() })
 })
 
 emailsRouter.get('/:id', async (c) => {
@@ -331,6 +384,17 @@ emailsRouter.get('/:id', async (c) => {
       recipientCount: email.recipientCount,
       privacyMode: email.privacyMode === 1,
       threadId: email.threadId,
+      tags: ((): string[] => {
+        try {
+          const parsed = JSON.parse(email.tags) as unknown
+          return Array.isArray(parsed)
+            ? parsed.filter((x): x is string => typeof x === 'string')
+            : []
+        } catch {
+          return []
+        }
+      })(),
+      notes: email.notes,
     },
     counts: {
       opens: Number(counters?.opens ?? 0),
@@ -402,6 +466,12 @@ emailsRouter.patch('/:id', async (c) => {
   if (parsed.data.threadId !== undefined) updates.threadId = parsed.data.threadId
   if (parsed.data.messageId !== undefined)
     updates.messageId = parsed.data.messageId
+  if (parsed.data.tags !== undefined) {
+    // Dedup while preserving order; cap at 10.
+    const dedup = Array.from(new Set(parsed.data.tags)).slice(0, 10)
+    updates.tags = JSON.stringify(dedup)
+  }
+  if (parsed.data.notes !== undefined) updates.notes = parsed.data.notes
   if (Object.keys(updates).length === 0) return c.json({ ok: true })
 
   const result = await db

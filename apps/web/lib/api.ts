@@ -73,6 +73,7 @@ export interface EmailQueryParams {
   to?: number
   cursor?: number
   limit?: number
+  tag?: string
 }
 
 export async function listEmails(
@@ -85,12 +86,36 @@ export async function listEmails(
   if (params.sort) url.searchParams.set('sort', params.sort)
   if (params.from !== undefined) url.searchParams.set('from', String(params.from))
   if (params.to !== undefined) url.searchParams.set('to', String(params.to))
+  if (params.tag) url.searchParams.set('tag', params.tag)
   const res = await fetch(url, {
     headers: { ...authHeader() },
   })
   if (res.status === 401) throw new Error('unauthorized')
   if (!res.ok) throw new Error(`list_failed:${res.status}`)
   return (await res.json()) as EmailListResponse
+}
+
+export async function listEmailTags(): Promise<string[]> {
+  const res = await fetch(`${config.apiHost}/v1/emails/tags`, {
+    headers: { ...authHeader() },
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`tags_failed:${res.status}`)
+  const data = (await res.json()) as { tags: string[] }
+  return data.tags
+}
+
+export async function patchEmailMeta(
+  id: string,
+  patch: { tags?: string[]; notes?: string },
+): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/emails/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(patch),
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`patch_failed:${res.status}`)
 }
 
 export interface EmailDetail {
@@ -101,6 +126,8 @@ export interface EmailDetail {
     recipientCount: number
     privacyMode: boolean
     threadId: string | null
+    tags: string[]
+    notes: string
   }
   counts: { opens: number; clicks: number; humanOpens: number }
   links: { idx: number; originalUrl: string }[]

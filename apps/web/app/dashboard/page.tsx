@@ -8,6 +8,7 @@ import {
   type EmailSort,
   type MeResponse,
   getMe,
+  listEmailTags,
   listEmails,
   logout as apiLogout,
   openBillingPortal,
@@ -69,7 +70,9 @@ function DashboardInner() {
   const urlQ = searchParams.get('q') ?? ''
   const urlSort = (searchParams.get('sort') as EmailSort | null) ?? 'sentAt-desc'
   const urlDate = (searchParams.get('date') as DatePreset | null) ?? 'all'
+  const urlTag = searchParams.get('tag') ?? ''
   const [qInput, setQInput] = useState(urlQ)
+  const [tagOptions, setTagOptions] = useState<string[]>([])
 
   // Keep the search box in sync if URL changes (e.g. via "Clear filters").
   useEffect(() => {
@@ -108,6 +111,7 @@ function DashboardInner() {
         sort: urlSort,
         from: presetToFrom(urlDate),
         limit: 100,
+        ...(urlTag ? { tag: urlTag } : {}),
       })
         .then((res) => setEmails(res.emails))
         .catch((err) => {
@@ -124,6 +128,10 @@ function DashboardInner() {
 
     getMe()
       .then(setMe)
+      .catch(() => undefined)
+
+    listEmailTags()
+      .then(setTagOptions)
       .catch(() => undefined)
 
     const url = new URL(`${config.apiHost}/stream`)
@@ -143,7 +151,7 @@ function DashboardInner() {
       esRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, urlQ, urlSort, urlDate])
+  }, [router, urlQ, urlSort, urlDate, urlTag])
 
   async function handleLogout() {
     await apiLogout()
@@ -171,7 +179,8 @@ function DashboardInner() {
 
   if (!session) return null
 
-  const hasFilters = urlQ || urlSort !== 'sentAt-desc' || urlDate !== 'all'
+  const hasFilters =
+    urlQ || urlSort !== 'sentAt-desc' || urlDate !== 'all' || urlTag
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -272,6 +281,20 @@ function DashboardInner() {
             </button>
           ))}
         </div>
+        {tagOptions.length > 0 && (
+          <select
+            value={urlTag}
+            onChange={(e) => updateParams({ tag: e.target.value })}
+            className="rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+          >
+            <option value="">All tags</option>
+            {tagOptions.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        )}
         {hasFilters && (
           <button
             type="button"

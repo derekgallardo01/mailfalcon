@@ -39,6 +39,11 @@ export const trackedEmails = sqliteTable(
     sentAt: integer('sent_at').notNull(),
     hmacSalt: text('hmac_salt').notNull(),
     privacyMode: integer('privacy_mode').notNull().default(0),
+    // Power-user metadata. tags is a JSON array of strings (lowercased,
+    // ≤30 chars each, max 10 per email). notes is freeform text up to
+    // 5000 chars. Both used by dashboard filters; nothing recipient-side.
+    tags: text('tags').notNull().default('[]'),
+    notes: text('notes').notNull().default(''),
   },
   (table) => ({
     userSentIdx: index('tracked_emails_user_sent_idx').on(table.userId, table.sentAt),

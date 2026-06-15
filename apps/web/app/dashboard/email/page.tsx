@@ -7,6 +7,7 @@ import {
   type EmailDetail,
   followups,
   getEmailDetail,
+  patchEmailMeta,
 } from '../../../lib/api'
 import { clearSession, getSession } from '../../../lib/auth-store'
 import { config } from '../../../lib/config'
@@ -29,7 +30,60 @@ function EmailDetailInner() {
   const [error, setError] = useState<string | null>(null)
   const [liveCount, setLiveCount] = useState(0)
   const [followupMsg, setFollowupMsg] = useState<string | null>(null)
+  const [newTag, setNewTag] = useState('')
+  const [notes, setNotes] = useState('')
+  const [notesStatus, setNotesStatus] = useState<'idle' | 'saving' | 'saved'>(
+    'idle',
+  )
   const esRef = useRef<EventSource | null>(null)
+
+  useEffect(() => {
+    if (data) setNotes(data.email.notes)
+  }, [data?.email.id])
+
+  async function addTag(tag: string) {
+    if (!data || !id) return
+    const cleaned = tag.toLowerCase().trim()
+    if (!cleaned || cleaned.length > 30) return
+    if (data.email.tags.includes(cleaned)) {
+      setNewTag('')
+      return
+    }
+    const next = [...data.email.tags, cleaned].slice(0, 10)
+    try {
+      await patchEmailMeta(id, { tags: next })
+      setData({ ...data, email: { ...data.email, tags: next } })
+      setNewTag('')
+    } catch (err) {
+      if (err instanceof Error) setError(err.message)
+    }
+  }
+
+  async function removeTag(tag: string) {
+    if (!data || !id) return
+    const next = data.email.tags.filter((t) => t !== tag)
+    try {
+      await patchEmailMeta(id, { tags: next })
+      setData({ ...data, email: { ...data.email, tags: next } })
+    } catch (err) {
+      if (err instanceof Error) setError(err.message)
+    }
+  }
+
+  async function commitNotes() {
+    if (!data || !id) return
+    if (notes === data.email.notes) return
+    setNotesStatus('saving')
+    try {
+      await patchEmailMeta(id, { notes })
+      setData({ ...data, email: { ...data.email, notes } })
+      setNotesStatus('saved')
+      setTimeout(() => setNotesStatus('idle'), 1500)
+    } catch (err) {
+      setNotesStatus('idle')
+      if (err instanceof Error) setError(err.message)
+    }
+  }
 
   async function addFollowup(days: number) {
     if (!id) return
@@ -242,6 +296,65 @@ function EmailDetailInner() {
             })}
           </ul>
         )}
+      </section>
+
+      <section className="mt-8 rounded border border-falcon-200 bg-white p-4">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-falcon-500">
+          Tags
+        </h2>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {data.email.tags.map((t) => (
+            <span
+              key={t}
+              className="inline-flex items-center gap-1 rounded-full bg-falcon-100 px-3 py-0.5 text-xs font-medium text-falcon-700"
+            >
+              {t}
+              <button
+                type="button"
+                onClick={() => removeTag(t)}
+                className="text-falcon-500 hover:text-falcon-700"
+                aria-label={`Remove tag ${t}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {data.email.tags.length < 10 && (
+            <input
+              type="text"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void addTag(newTag)
+                }
+              }}
+              placeholder="+ add tag"
+              className="rounded border border-dashed border-falcon-200 px-2 py-0.5 text-xs focus:border-falcon-500 focus:outline-none"
+              maxLength={30}
+            />
+          )}
+        </div>
+
+        <h2 className="mt-4 text-xs font-medium uppercase tracking-wide text-falcon-500">
+          Notes
+          {notesStatus === 'saving' && (
+            <span className="ml-2 text-falcon-400">saving…</span>
+          )}
+          {notesStatus === 'saved' && (
+            <span className="ml-2 text-emerald-700">saved</span>
+          )}
+        </h2>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={() => void commitNotes()}
+          placeholder="Private notes for yourself — recipients don't see this."
+          rows={3}
+          maxLength={5000}
+          className="mt-2 w-full rounded border border-falcon-200 px-2 py-1 text-sm focus:border-falcon-500 focus:outline-none"
+        />
       </section>
 
       <section className="mt-8">
