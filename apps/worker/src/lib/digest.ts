@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm'
 import {
   events,
   trackedEmails,
@@ -261,6 +261,9 @@ export async function sendDailyDigests(db: DB, env: DigestEnv): Promise<{
   const today = todayKey()
   const webUrl = env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app'
 
+  // Digest is a Pro feature. Free users see an upgrade CTA in /settings
+  // instead of the toggle. tier='admin' still gets the user digest in
+  // addition to the admin platform digest — useful for dogfooding.
   const candidates = await db
     .select({
       id: users.id,
@@ -268,7 +271,12 @@ export async function sendDailyDigests(db: DB, env: DigestEnv): Promise<{
       digestLastSentDay: users.digestLastSentDay,
     })
     .from(users)
-    .where(eq(users.digestEnabled, 1))
+    .where(
+      and(
+        eq(users.digestEnabled, 1),
+        inArray(users.tier, ['pro', 'team', 'admin']),
+      ),
+    )
     .all()
 
   let considered = 0

@@ -3,7 +3,12 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { type MeResponse, getMe, updateMe } from '../../lib/api'
+import {
+  type MeResponse,
+  getMe,
+  startCheckout,
+  updateMe,
+} from '../../lib/api'
 import { clearSession, getSession } from '../../lib/auth-store'
 
 export default function SettingsPage() {
@@ -78,30 +83,53 @@ export default function SettingsPage() {
         </h2>
         <div className="mt-4 rounded border border-falcon-200 bg-white p-4">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-medium text-falcon-700">Daily digest</p>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-falcon-700">Daily digest</p>
+                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-800">
+                  Pro
+                </span>
+              </div>
               <p className="mt-1 text-sm text-falcon-500">
                 A summary email at 6pm Eastern with your tracked-email
                 activity from that day. Empty days are skipped.
               </p>
-              {me.digestLastSentDay && (
+              {me.digestLastSentDay && me.tier !== 'free' && (
                 <p className="mt-2 text-xs text-falcon-400">
                   Last sent: {me.digestLastSentDay}
                 </p>
               )}
+              {me.tier === 'free' && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const url = await startCheckout()
+                      window.location.assign(url)
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'Upgrade failed')
+                    }
+                  }}
+                  className="mt-3 inline-flex items-center gap-2 rounded bg-falcon-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-falcon-600"
+                >
+                  Upgrade to Pro →
+                </button>
+              )}
             </div>
-            <label className="flex shrink-0 cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={me.digestEnabled}
-                onChange={(e) => void toggleDigest(e.target.checked)}
-                disabled={saving}
-                className="h-5 w-5 rounded border-falcon-300 text-falcon-500"
-              />
-              <span className="text-sm text-falcon-700">
-                {me.digestEnabled ? 'On' : 'Off'}
-              </span>
-            </label>
+            {me.tier !== 'free' && (
+              <label className="flex shrink-0 cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={me.digestEnabled}
+                  onChange={(e) => void toggleDigest(e.target.checked)}
+                  disabled={saving}
+                  className="h-5 w-5 rounded border-falcon-300 text-falcon-500"
+                />
+                <span className="text-sm text-falcon-700">
+                  {me.digestEnabled ? 'On' : 'Off'}
+                </span>
+              </label>
+            )}
           </div>
         </div>
       </section>

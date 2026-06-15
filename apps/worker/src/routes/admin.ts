@@ -268,6 +268,16 @@ adminRouter.get('/users/:id', async (c) => {
   })
 })
 
+// Fire-test endpoint — sends the admin digest right now to every admin.
+// Handy for verifying the template + Resend wiring without waiting for
+// the 22:00 UTC cron.
+adminRouter.post('/digest/test', async (c) => {
+  const db = getDb(c.env.DB)
+  const { sendAdminDigests } = await import('../lib/admin-digest')
+  const result = await sendAdminDigests(db, c.env as never)
+  return c.json(result)
+})
+
 adminRouter.get('/events', async (c) => {
   const limit = Math.min(Number(c.req.query('limit') ?? '200'), 500)
   const db = getDb(c.env.DB)
