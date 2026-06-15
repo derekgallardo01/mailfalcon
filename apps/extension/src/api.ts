@@ -21,6 +21,7 @@ export interface RecipientPixel {
   recipientId: string
   displayLabel: string | null
   sig: string
+  clickSig: string
 }
 
 export interface MintEmailResponse {

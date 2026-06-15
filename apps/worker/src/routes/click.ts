@@ -28,6 +28,7 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
   const id = c.req.param('id')
   const linkIdxParam = c.req.param('linkIdx')
   const sig = c.req.query('s') ?? ''
+  const recipientId = c.req.query('r') ?? null
   const linkIdx = Number.parseInt(linkIdxParam, 10)
 
   if (!Number.isInteger(linkIdx) || linkIdx < 0) {
@@ -35,7 +36,11 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
   }
 
   const secret = getHmacSecret(c.env)
-  const valid = await verify(id, sig, secret, 12).catch(() => false)
+  // Per-recipient URL signs `${id}:${recipientId}:c`. Legacy URLs sign
+  // just `${id}`. Try the recipient-bound version first when r= is
+  // present; fall back so old extension builds keep working.
+  const signedMessage = recipientId ? `${id}:${recipientId}:c` : id
+  const valid = await verify(signedMessage, sig, secret, 12).catch(() => false)
   if (!valid) return c.notFound()
 
   const db = getDb(c.env.DB)
@@ -77,7 +82,7 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
         .insert(events)
         .values({
           emailId: id,
-          recipientId: null,
+          recipientId,
           type: 'click',
           linkId,
           ts: Date.now(),

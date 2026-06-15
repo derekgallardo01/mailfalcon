@@ -75,6 +75,11 @@ function buildStatusBarHtml(): string {
             <span><strong>Privacy mode</strong> — skip tracking</span>
           </label>
 
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;" title="Sends a separate copy to each recipient with their own tracking pixel. Recipients won't see each other in the To field — but you get accurate per-recipient opens AND clicks.">
+            <input type="checkbox" class="mf-merge" style="margin:0;">
+            <span><strong>Mail-merge</strong> — separate copy per recipient</span>
+          </label>
+
           <label style="display:flex;flex-direction:column;gap:4px;">
             <span style="font-weight:500;">Template</span>
             <select class="mf-tpl" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:3px 6px;width:100%;">
@@ -132,6 +137,11 @@ async function populateTemplateSelect(
 }
 
 const reentered = new WeakSet<object>()
+// Views that we opened programmatically (mail-merge dispatch + scheduled
+// sends). For these we skip our presend mint pipeline entirely — the
+// body either already has tracking baked in or, in the scheduled case,
+// is being re-sent as a normal compose that re-runs the full flow.
+const programmaticPassthrough = new WeakSet<object>()
 
 interface MessageView {
   getMessageID?: () => string
@@ -176,6 +186,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       const view = rawView as ComposeView
 
       let privacyMode = false
+      let mailMerge = false
       let remindAfterDays: number | null = null
       let scheduledAt: number | null = null
       let consumedWithoutSend = false
@@ -209,6 +220,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           const popover = bar.el.querySelector('.mf-popover') as HTMLElement | null
           const summaryEl = bar.el.querySelector('.mf-summary') as HTMLElement | null
           const privCb = bar.el.querySelector('.mf-priv') as HTMLInputElement | null
+          const mergeCb = bar.el.querySelector('.mf-merge') as HTMLInputElement | null
           const tplSelect = bar.el.querySelector('.mf-tpl') as HTMLSelectElement | null
           const remSelect = bar.el.querySelector('.mf-rem') as HTMLSelectElement | null
           const schSelect = bar.el.querySelector('.mf-sch') as HTMLSelectElement | null
@@ -219,6 +231,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             if (!summaryEl) return
             const parts: string[] = []
             if (privacyMode) parts.push('Privacy on')
+            if (mailMerge) parts.push('Mail-merge')
             if (remindAfterDays !== null) {
               parts.push(`Remind ${remindAfterDays}d`)
             }
@@ -261,6 +274,11 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
 
           privCb?.addEventListener('change', () => {
             privacyMode = !!privCb.checked
+            updateSummary()
+          })
+
+          mergeCb?.addEventListener('change', () => {
+            mailMerge = !!mergeCb.checked
             updateSummary()
           })
 
@@ -310,6 +328,10 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       }
 
       view.on('presending', async (rawEvent) => {
+        // Programmatic mail-merge sends already have tracking baked in;
+        // let Gmail send unmodified without our mint interception.
+        if (programmaticPassthrough.has(view)) return
+
         if (reentered.has(view)) return
 
         const sdkEvent = rawEvent as { cancel: () => void }
@@ -361,6 +383,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             if (!privacyMode) sentCallbacks.push(cb)
           },
           getScheduledAt: () => scheduledAt,
+          isMailMerge: () => mailMerge,
           close: () => {
             consumedWithoutSend = true
             view.close?.()
@@ -396,6 +419,23 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
   }
 
   async fireProgrammaticSend(spec: ProgrammaticCompose): Promise<void> {
+    const view = await this.openProgrammaticCompose(spec)
+    // Scheduled sends should run the FULL presend pipeline so they get
+    // a fresh tracking row. Don't mark as passthrough.
+    await new Promise((r) => setTimeout(r, 250))
+    view.send?.()
+  }
+
+  async dispatchPrebakedSend(spec: ProgrammaticCompose): Promise<void> {
+    const view = await this.openProgrammaticCompose(spec)
+    programmaticPassthrough.add(view as object)
+    await new Promise((r) => setTimeout(r, 250))
+    view.send?.()
+  }
+
+  private async openProgrammaticCompose(
+    spec: ProgrammaticCompose,
+  ): Promise<ComposeView> {
     const sdk = this.sdk as {
       Compose?: {
         openNewComposeView?: () => Promise<ComposeView>
@@ -410,10 +450,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
     if (spec.bcc.length > 0) view.setBccRecipients?.(spec.bcc)
     if (spec.subject.length > 0) view.setSubject?.(spec.subject)
     view.setBodyHTML?.(spec.bodyHtml)
-    // Brief delay so InboxSDK finishes wiring fields before send fires —
-    // otherwise some recipient setters race.
-    await new Promise((r) => setTimeout(r, 250))
-    view.send?.()
+    return view
   }
 
   private attachReplyDetection(

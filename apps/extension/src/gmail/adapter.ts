@@ -19,6 +19,9 @@ export interface ComposeEvent {
   onSent(cb: (info: { messageId: string; threadId: string }) => void): void
   /** Null when "Send now"; epoch ms otherwise. */
   getScheduledAt(): number | null
+  /** True when the user opted into mail-merge — send a separate copy
+   *  per recipient so per-recipient open + click attribution works. */
+  isMailMerge(): boolean
   /** Programmatically close the compose without sending or saving as draft. */
   close(): void
   cancel(): void
@@ -51,4 +54,9 @@ export interface GmailAdapter {
    *  the normal presend interception so it gets tracked + the row is
    *  minted as usual. */
   fireProgrammaticSend(spec: ProgrammaticCompose): Promise<void>
+  /** Same as fireProgrammaticSend but the body already has tracking
+   *  pixels + click URLs baked in. Used by mail-merge dispatch where
+   *  the originating compose already minted the tracking row. The
+   *  presend pipeline skips re-minting for this send. */
+  dispatchPrebakedSend(spec: ProgrammaticCompose): Promise<void>
 }

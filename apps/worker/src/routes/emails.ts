@@ -169,13 +169,15 @@ emailsRouter.post('/', async (c) => {
     ...(followupRow ? [db.insert(followUps).values(followupRow)] : []),
   ])
 
-  // For each recipient, sign `${id}:${recipientId}` so the per-recipient
-  // pixel URLs can't be swapped by a forwarder without invalidating.
+  // For each recipient, two signatures: one for the pixel URL and one
+  // shared across all click URLs in that recipient's body variant. Both
+  // are bound to the recipientId so a forwarder can't swap them.
   const recipientPixels = await Promise.all(
     recipientRows.map(async (r) => ({
       recipientId: r.id,
       displayLabel: r.displayLabel,
       sig: await sign(`${id}:${r.id}`, secret, 12),
+      clickSig: await sign(`${id}:${r.id}:c`, secret, 12),
     })),
   )
 

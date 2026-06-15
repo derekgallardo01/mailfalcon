@@ -107,31 +107,68 @@ export default defineContentScript({
       const recipientCount = event.getRecipientCount()
       const recipients = event.getRecipients()
       const originalHtml = event.getHtmlBody()
-      const subject = event.getSubject().trim() || undefined
+      const subjectStr = event.getSubject()
+      const subject = subjectStr.trim() || undefined
       const remindAfterDays = event.getRemindAfterDays() ?? undefined
       const presendThreadId = event.getThreadId() ?? undefined
+      const mailMerge = event.isMailMerge() && recipientCount > 1
 
       try {
-        const { html, id, linkCount, originalLinks, pixelCount } =
-          await prepareTrackedBody({
-            html: originalHtml,
-            recipientCount,
-            recipients,
-            subject,
-            ...(remindAfterDays !== undefined ? { remindAfterDays } : {}),
-            ...(presendThreadId ? { threadId: presendThreadId } : {}),
-            trackerHost: config.trackerHost,
-            mint: mintEmail,
-          })
-        event.setHtmlBody(html)
-        console.log('[mailfalcon] tracked send', {
-          id,
+        const result = await prepareTrackedBody({
+          html: originalHtml,
           recipientCount,
-          pixelCount,
-          linkCount,
+          recipients,
+          subject,
+          ...(remindAfterDays !== undefined ? { remindAfterDays } : {}),
+          ...(presendThreadId ? { threadId: presendThreadId } : {}),
+          mailMerge,
+          trackerHost: config.trackerHost,
+          mint: mintEmail,
+        })
+
+        if (result.mode === 'merge') {
+          // Cancel the original and dispatch one tracked send per
+          // recipient with that recipient's tracking pre-baked into
+          // their body variant.
+          event.close()
+          console.log('[mailfalcon] mail-merge dispatch', {
+            id: result.id,
+            variants: result.variants.length,
+            linkCount: result.linkCount,
+          })
+          for (const variant of result.variants) {
+            try {
+              await adapter.dispatchPrebakedSend({
+                to: [variant.recipient.address],
+                cc: [],
+                bcc: [],
+                subject: subjectStr,
+                bodyHtml: variant.html,
+              })
+            } catch (err) {
+              console.error(
+                '[mailfalcon] mail-merge variant send failed:',
+                variant.recipient.address,
+                err,
+              )
+            }
+          }
+          // Reply detection works off threadId — for mail-merge we get
+          // N different threads, so we don't backfill or remember any
+          // particular one. Reply attribution for merged sends is a
+          // v2 polish item.
+          return
+        }
+
+        event.setHtmlBody(result.html)
+        console.log('[mailfalcon] tracked send', {
+          id: result.id,
+          recipientCount,
+          pixelCount: result.pixelCount,
+          linkCount: result.linkCount,
           remindAfterDays,
           threadId: presendThreadId,
-          links: originalLinks,
+          links: result.originalLinks,
         })
 
         // Gmail mints the real threadID + messageID on send confirmation.
@@ -139,7 +176,7 @@ export default defineContentScript({
         // and add the threadId to the local "tracked threads" set so the
         // content-script listener fires for inbound messages on it.
         event.onSent(({ messageId, threadId }) => {
-          void patchEmailIds(id, { messageId, threadId }).catch((err) => {
+          void patchEmailIds(result.id, { messageId, threadId }).catch((err) => {
             console.warn('[mailfalcon] patch ids failed:', err)
           })
           void rememberTrackedThread(threadId)

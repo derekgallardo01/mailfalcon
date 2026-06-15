@@ -18,11 +18,19 @@ export function pixelUrl(
   return `${host}/p/${id}.gif?s=${sig}${r}`
 }
 
+/**
+ * Click URL. When `recipientId` is provided, the sig must be over
+ * `${id}:${recipientId}:c` and the server records the click against that
+ * recipient. Without `recipientId`, the sig is over `${id}` and the
+ * click is recorded with `recipientId=null` (backwards compatible).
+ */
 export function clickUrl(
   id: string,
   linkIdx: number,
   sig: string,
   host = DEFAULT_TRACKER_HOST,
+  recipientId?: string,
 ): string {
-  return `${host}/c/${id}/${linkIdx}?s=${sig}`
+  const r = recipientId ? `&r=${encodeURIComponent(recipientId)}` : ''
+  return `${host}/c/${id}/${linkIdx}?s=${sig}${r}`
 }

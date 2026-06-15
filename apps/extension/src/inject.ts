@@ -5,15 +5,6 @@ export interface RecipientHandle {
   name?: string
 }
 
-export interface PrepareResult {
-  html: string
-  id: string
-  sig: string
-  linkCount: number
-  originalLinks: string[]
-  pixelCount: number
-}
-
 export interface MintRecipientInput {
   hashedAddr: string
   displayLabel?: string
@@ -23,6 +14,7 @@ export interface MintRecipientPixel {
   recipientId: string
   displayLabel: string | null
   sig: string
+  clickSig: string
 }
 
 export interface MintFn {
@@ -39,6 +31,43 @@ export interface MintFn {
     recipientPixels?: MintRecipientPixel[]
   }>
 }
+
+/**
+ * Output shape:
+ *
+ * - mode: 'single' — one body to send as-is. Single-recipient sends use
+ *   a per-recipient pixel + click sig so attribution works. Multi-
+ *   recipient shared-body sends emit ONE shared pixel and shared click
+ *   sigs (no recipientId on events — accurate counts, no per-recipient
+ *   attribution).
+ *
+ * - mode: 'merge' — N body variants, one per recipient. The caller is
+ *   responsible for dispatching N programmatic Gmail sends. Each
+ *   recipient gets their own pixel + click URLs scoped to them, so
+ *   per-recipient open AND click attribution works.
+ */
+export interface SinglePrepareResult {
+  mode: 'single'
+  html: string
+  id: string
+  linkCount: number
+  originalLinks: string[]
+  pixelCount: number
+}
+
+export interface MergePrepareResult {
+  mode: 'merge'
+  variants: Array<{
+    recipient: RecipientHandle
+    html: string
+  }>
+  id: string
+  linkCount: number
+  originalLinks: string[]
+  pixelCount: number
+}
+
+export type PrepareResult = SinglePrepareResult | MergePrepareResult
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"',.;!?)\]'`]/g
 const SKIP_PARENT_TAGS = new Set(['A', 'CODE', 'PRE', 'SCRIPT', 'STYLE'])
@@ -106,7 +135,6 @@ async function sha256Hex(input: string): Promise<string> {
 
 function makeLabel(r: RecipientHandle): string {
   if (r.name && r.name.length > 0) return r.name
-  // Local-part is short and matches what Gmail itself shows.
   const at = r.address.indexOf('@')
   return at > 0 ? r.address.slice(0, at) : r.address
 }
@@ -121,6 +149,48 @@ function makePixelImg(doc: Document, src: string): HTMLImageElement {
   return img
 }
 
+interface LinkRef {
+  el: Element
+  originalUrl: string
+}
+
+function collectLinks(body: HTMLElement): LinkRef[] {
+  const linkRefs: LinkRef[] = []
+  body.querySelectorAll('a[href]').forEach((a) => {
+    const href = a.getAttribute('href') ?? ''
+    if (!/^https?:\/\//i.test(href)) return
+    linkRefs.push({ el: a, originalUrl: href })
+  })
+  return linkRefs
+}
+
+function applyTracking(
+  doc: Document,
+  body: HTMLElement,
+  linkRefs: LinkRef[],
+  args: {
+    id: string
+    pixelSig: string
+    clickSig: string
+    recipientId?: string
+    trackerHost: string
+  },
+): void {
+  linkRefs.forEach(({ el, originalUrl }, idx) => {
+    el.setAttribute(
+      'href',
+      clickUrl(args.id, idx, args.clickSig, args.trackerHost, args.recipientId),
+    )
+    el.setAttribute('data-mfk-orig', originalUrl)
+  })
+  body.appendChild(
+    makePixelImg(
+      doc,
+      pixelUrl(args.id, args.pixelSig, args.trackerHost, args.recipientId),
+    ),
+  )
+}
+
 export async function prepareTrackedBody(args: {
   html: string
   recipientCount: number
@@ -128,6 +198,7 @@ export async function prepareTrackedBody(args: {
   recipients?: RecipientHandle[]
   remindAfterDays?: number
   threadId?: string
+  mailMerge?: boolean
   trackerHost: string
   mint: MintFn
 }): Promise<PrepareResult> {
@@ -138,24 +209,23 @@ export async function prepareTrackedBody(args: {
     recipients,
     remindAfterDays,
     threadId,
+    mailMerge,
     trackerHost,
     mint,
   } = args
 
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html')
-  const body = doc.body
-
-  linkifyTextNodes(body)
-
-  const linkRefs: Array<{ el: Element; originalUrl: string }> = []
-  body.querySelectorAll('a[href]').forEach((a) => {
-    const href = a.getAttribute('href') ?? ''
-    if (!/^https?:\/\//i.test(href)) return
-    linkRefs.push({ el: a, originalUrl: href })
-  })
-
-  const originalLinks = linkRefs.map((r) => r.originalUrl)
+  // First pass: linkify + collect links on a base document so we know
+  // how many links there are. We re-parse from the original HTML for
+  // each merge variant so each one has its own DOM.
+  const baseParser = new DOMParser()
+  const baseDoc = baseParser.parseFromString(`<body>${html}</body>`, 'text/html')
+  linkifyTextNodes(baseDoc.body)
+  const baseLinks = collectLinks(baseDoc.body)
+  const originalLinks = baseLinks.map((r) => r.originalUrl)
+  // We've linkified — re-serialize so subsequent variants start from
+  // the linkified HTML (otherwise we'd have to redo the walker each
+  // time).
+  const linkifiedHtml = baseDoc.body.innerHTML
 
   const recipientInputs: MintRecipientInput[] = []
   if (recipients && recipients.length > 0) {
@@ -177,33 +247,65 @@ export async function prepareTrackedBody(args: {
     ...(threadId ? { threadId } : {}),
   })
 
-  linkRefs.forEach(({ el, originalUrl }, idx) => {
-    el.setAttribute('href', clickUrl(id, idx, sig, trackerHost))
-    el.setAttribute('data-mfk-orig', originalUrl)
-  })
-
-  // Pixel placement: emit one per recipient if the server returned
-  // per-recipient sigs, else fall back to one shared pixel (legacy
-  // behavior so a partial rollout still works).
-  let pixelCount = 0
-  if (recipientPixels && recipientPixels.length > 0) {
-    for (const rp of recipientPixels) {
-      body.appendChild(
-        makePixelImg(doc, pixelUrl(id, rp.sig, trackerHost, rp.recipientId)),
-      )
-      pixelCount++
-    }
-  } else {
-    body.appendChild(makePixelImg(doc, pixelUrl(id, sig, trackerHost)))
-    pixelCount = 1
+  const buildVariant = (recipientId?: string, pixelSig?: string, clickSig?: string): string => {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(`<body>${linkifiedHtml}</body>`, 'text/html')
+    const variantBody = doc.body
+    const variantLinks = collectLinks(variantBody)
+    applyTracking(doc, variantBody, variantLinks, {
+      id,
+      pixelSig: pixelSig ?? sig,
+      clickSig: clickSig ?? sig,
+      ...(recipientId ? { recipientId } : {}),
+      trackerHost,
+    })
+    return variantBody.innerHTML
   }
 
+  // Mail-merge path: one body per recipient with per-recipient sigs.
+  if (mailMerge && recipients && recipients.length > 1 && recipientPixels) {
+    const variants = recipients.map((recipient, idx) => {
+      const rp = recipientPixels[idx]
+      if (!rp) {
+        return { recipient, html: buildVariant() }
+      }
+      return {
+        recipient,
+        html: buildVariant(rp.recipientId, rp.sig, rp.clickSig),
+      }
+    })
+    return {
+      mode: 'merge',
+      variants,
+      id,
+      linkCount: baseLinks.length,
+      originalLinks,
+      pixelCount: variants.length,
+    }
+  }
+
+  // Single-recipient: use the recipient's own sigs so opens + clicks are
+  // attributed to them.
+  if (recipientPixels && recipientPixels.length === 1) {
+    const rp = recipientPixels[0]!
+    return {
+      mode: 'single',
+      html: buildVariant(rp.recipientId, rp.sig, rp.clickSig),
+      id,
+      linkCount: baseLinks.length,
+      originalLinks,
+      pixelCount: 1,
+    }
+  }
+
+  // Multi-recipient shared-body (no mail-merge): one shared pixel, no
+  // recipientId on events. Accurate counts, no per-recipient attribution.
   return {
-    html: body.innerHTML,
+    mode: 'single',
+    html: buildVariant(),
     id,
-    sig,
-    linkCount: linkRefs.length,
+    linkCount: baseLinks.length,
     originalLinks,
-    pixelCount,
+    pixelCount: 1,
   }
 }
