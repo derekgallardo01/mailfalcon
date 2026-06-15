@@ -4,6 +4,10 @@ import type { ComposeEvent, GmailAdapter } from './adapter'
 
 type AnySdk = unknown
 
+// Compose views that have already been rewritten and re-dispatched. We
+// must not re-intercept their second presending or we'd loop forever.
+const reentered = new WeakSet<object>()
+
 export class InboxSdkGmailAdapter implements GmailAdapter {
   private sdk: AnySdk = null
   private presendingHandlers: Array<(event: ComposeEvent) => Promise<void> | void> = []
@@ -30,6 +34,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
         getToRecipients?: () => unknown[]
         getCcRecipients?: () => unknown[]
         getBccRecipients?: () => unknown[]
+        send?: (opts?: { sendAndArchive?: boolean }) => void
       }
 
       let privacyMode = false
@@ -55,7 +60,19 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       }
 
       view.on('presending', async (rawEvent) => {
+        // Second time around — we already rewrote and re-sent. Let it
+        // through.
+        if (reentered.has(view)) {
+          return
+        }
+
         const sdkEvent = rawEvent as { cancel: () => void }
+
+        // First time: cancel synchronously so Gmail doesn't ship the
+        // original body while we await the mint. InboxSDK's event
+        // emitter doesn't await our async handler, so we'd otherwise
+        // race.
+        sdkEvent.cancel()
 
         const wrapper: ComposeEvent = {
           getHtmlBody: () => view.getHTMLContent?.() ?? '',
@@ -72,8 +89,21 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           cancel: () => sdkEvent.cancel(),
         }
 
-        for (const handler of this.presendingHandlers) {
-          await handler(wrapper)
+        try {
+          for (const handler of this.presendingHandlers) {
+            await handler(wrapper)
+          }
+        } catch (err) {
+          console.warn('[mailfalcon] presending handler threw:', err)
+        }
+
+        // Re-fire send. The second presending pass falls through the
+        // `reentered.has(view)` guard above.
+        reentered.add(view)
+        try {
+          view.send?.()
+        } catch (err) {
+          console.error('[mailfalcon] programmatic send failed:', err)
         }
       })
     })
