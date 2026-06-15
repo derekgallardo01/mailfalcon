@@ -1,9 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <rect width="128" height="128" rx="22" fill="#3b6cb7"/>
   <g fill="#ffffff">
-    <!-- Falcon head profile, facing right with prominent hooked beak -->
-    <path d="M 22 64 Q 22 32 56 26 Q 84 22 96 38 L 114 32 Q 122 38 116 50 L 102 54 L 96 56 L 92 62 Q 90 84 80 96 Q 70 106 56 106 Q 42 106 36 100 L 26 104 L 34 92 Q 22 84 22 64 Z"/>
-    <!-- Eye -->
-    <circle cx="62" cy="50" r="4.5" fill="#3b6cb7"/>
+    <!-- Side-view peregrine falcon in flight, facing left -->
+    <!-- Pointed wing swept up and back (peregrine signature) -->
+    <path d="M 56 56 L 106 22 Q 114 22 112 30 L 90 52 L 74 64 Z"/>
+    <!-- Body (compact oval) -->
+    <ellipse cx="46" cy="66" rx="26" ry="11"/>
+    <!-- Head (round, slightly forward of body) -->
+    <ellipse cx="22" cy="60" rx="12" ry="10"/>
+    <!-- Hooked beak — curves down then back, iconic falcon feature -->
+    <path d="M 12 60 Q 4 58 4 64 Q 6 70 14 68 L 14 64 Z"/>
+    <!-- Tail (long narrow peregrine tail extending back) -->
+    <path d="M 70 72 L 104 92 Q 108 96 104 98 L 72 82 Z"/>
   </g>
+  <!-- Eye -->
+  <circle cx="22" cy="58" r="2.5" fill="#3b6cb7"/>
 </svg>
