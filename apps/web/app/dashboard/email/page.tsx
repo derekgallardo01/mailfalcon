@@ -3,7 +3,11 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useRef, useState } from 'react'
-import { type EmailDetail, getEmailDetail } from '../../../lib/api'
+import {
+  type EmailDetail,
+  followups,
+  getEmailDetail,
+} from '../../../lib/api'
 import { clearSession, getSession } from '../../../lib/auth-store'
 import { config } from '../../../lib/config'
 import {
@@ -24,7 +28,24 @@ function EmailDetailInner() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [liveCount, setLiveCount] = useState(0)
+  const [followupMsg, setFollowupMsg] = useState<string | null>(null)
   const esRef = useRef<EventSource | null>(null)
+
+  async function addFollowup(days: number) {
+    if (!id) return
+    setFollowupMsg(null)
+    try {
+      const res = await followups.create({
+        emailId: id,
+        remindAfterDays: days,
+        condition: 'no_open',
+      })
+      const at = new Date(res.remindAt).toLocaleDateString()
+      setFollowupMsg(`Reminder set for ${at} if no open by then.`)
+    } catch (err) {
+      if (err instanceof Error) setFollowupMsg(err.message)
+    }
+  }
 
   useEffect(() => {
     const s = getSession()
@@ -146,6 +167,25 @@ function EmailDetailInner() {
         <StatCard label="Opens" value={data.counts.opens} hint={`${data.counts.humanOpens} human`} />
         <StatCard label="Clicks" value={data.counts.clicks} />
         <StatCard label="Bot opens" value={data.counts.opens - data.counts.humanOpens} muted />
+      </section>
+
+      <section className="mt-6 flex flex-wrap items-center gap-3 rounded border border-falcon-200 bg-white px-4 py-3">
+        <span className="text-xs text-falcon-500">
+          Remind me if no open in
+        </span>
+        {[1, 3, 7].map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => addFollowup(d)}
+            className="rounded border border-falcon-200 px-3 py-1 text-xs text-falcon-700 hover:bg-falcon-50"
+          >
+            {d} day{d === 1 ? '' : 's'}
+          </button>
+        ))}
+        {followupMsg && (
+          <span className="text-xs text-falcon-500">{followupMsg}</span>
+        )}
       </section>
 
       {totalRecipients > 0 && (

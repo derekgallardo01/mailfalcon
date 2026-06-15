@@ -9,11 +9,13 @@ import { billingRouter } from './routes/billing'
 import { clickRouter } from './routes/click'
 import { emailsRouter } from './routes/emails'
 import { eventsRouter } from './routes/events'
+import { followupsRouter } from './routes/followups'
 import { meRouter } from './routes/me'
 import { pixelRouter } from './routes/pixel'
 import { pushRouter } from './routes/push'
 import { streamRouter } from './routes/stream'
 import { stripeWebhookRouter } from './routes/stripe-webhook'
+import { templatesRouter } from './routes/templates'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -86,6 +88,8 @@ app.route('/v1/me', meRouter)
 app.route('/v1/admin', adminRouter)
 app.route('/v1/emails', emailsRouter)
 app.route('/v1/events', eventsRouter)
+app.route('/v1/templates', templatesRouter)
+app.route('/v1/followups', followupsRouter)
 app.route('/v1/push', pushRouter)
 app.route('/v1/billing', billingRouter)
 
@@ -121,6 +125,7 @@ app.onError((err, c) => {
 import { sendAdminDigests } from './lib/admin-digest'
 import { sendDailyDigests } from './lib/digest'
 import { getDb } from './lib/db'
+import { evaluateFollowups } from './lib/followups'
 
 export default {
   fetch: app.fetch,
@@ -145,6 +150,12 @@ export default {
           log.info('cron_admin_digest', { cron: event.cron, ...admin })
         } catch (err) {
           log.error('cron_admin_digest_failed', errorMeta(err))
+        }
+        try {
+          const fu = await evaluateFollowups(db, env)
+          log.info('cron_followups', { cron: event.cron, ...fu })
+        } catch (err) {
+          log.error('cron_followups_failed', errorMeta(err))
         }
       })(),
     )

@@ -235,6 +235,107 @@ export async function startCheckout(): Promise<string> {
   return data.url
 }
 
+export interface Template {
+  id: string
+  name: string
+  subject: string
+  bodyHtml: string
+  createdAt: number
+}
+
+export interface TemplateInput {
+  name: string
+  subject: string
+  bodyHtml: string
+}
+
+export const templates = {
+  list: async (): Promise<Template[]> => {
+    const res = await fetch(`${config.apiHost}/v1/templates`, {
+      headers: { ...authHeader() },
+    })
+    if (res.status === 401) throw new Error('unauthorized')
+    if (!res.ok) throw new Error(`templates_list_failed:${res.status}`)
+    const data = (await res.json()) as { templates: Template[] }
+    return data.templates
+  },
+  create: async (input: TemplateInput): Promise<string> => {
+    const res = await fetch(`${config.apiHost}/v1/templates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) throw new Error(`templates_create_failed:${res.status}`)
+    const data = (await res.json()) as { id: string }
+    return data.id
+  },
+  update: async (id: string, input: TemplateInput): Promise<void> => {
+    const res = await fetch(
+      `${config.apiHost}/v1/templates/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify(input),
+      },
+    )
+    if (!res.ok) throw new Error(`templates_update_failed:${res.status}`)
+  },
+  remove: async (id: string): Promise<void> => {
+    const res = await fetch(
+      `${config.apiHost}/v1/templates/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+        headers: { ...authHeader() },
+      },
+    )
+    if (!res.ok) throw new Error(`templates_delete_failed:${res.status}`)
+  },
+}
+
+export interface Followup {
+  id: string
+  emailId: string
+  subject: string | null
+  remindAt: number
+  condition: 'no_open' | 'no_reply' | 'always'
+  fired: boolean
+}
+
+export const followups = {
+  list: async (): Promise<Followup[]> => {
+    const res = await fetch(`${config.apiHost}/v1/followups`, {
+      headers: { ...authHeader() },
+    })
+    if (res.status === 401) throw new Error('unauthorized')
+    if (!res.ok) throw new Error(`followups_list_failed:${res.status}`)
+    const data = (await res.json()) as { followups: Followup[] }
+    return data.followups
+  },
+  create: async (input: {
+    emailId: string
+    remindAfterDays: number
+    condition?: 'no_open' | 'no_reply' | 'always'
+  }): Promise<{ id: string; remindAt: number }> => {
+    const res = await fetch(`${config.apiHost}/v1/followups`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) throw new Error(`followups_create_failed:${res.status}`)
+    return (await res.json()) as { id: string; remindAt: number }
+  },
+  remove: async (id: string): Promise<void> => {
+    const res = await fetch(
+      `${config.apiHost}/v1/followups/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+        headers: { ...authHeader() },
+      },
+    )
+    if (!res.ok) throw new Error(`followups_delete_failed:${res.status}`)
+  },
+}
+
 export async function openBillingPortal(): Promise<string> {
   const res = await fetch(`${config.apiHost}/v1/billing/portal`, {
     method: 'POST',
