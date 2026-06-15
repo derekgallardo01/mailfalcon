@@ -57,39 +57,51 @@ interface SentEventPayload {
 }
 
 function buildStatusBarHtml(): string {
-  // Four controls. Wrap onto a second row when the compose is narrow
-  // instead of horizontal-scrolling — scrolling can leave the leftmost
-  // control hidden when the bar re-renders after a width change.
+  // Single button + active-state summary. The full options live in a
+  // popover anchored to the button so the compose bar stays quiet.
   return `
-    <div style="display:flex;align-items:center;gap:12px;width:100%;flex-wrap:wrap;row-gap:4px;">
-      <label class="mf-priv-wrap" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;flex-shrink:0;" title="Tracking is on by default. Check this to skip the pixel and link rewrite for this email only.">
-        <input type="checkbox" class="mf-priv" style="margin:0;">
-        <span>Privacy</span>
-      </label>
-      <label class="mf-tpl-wrap" style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;min-width:0;" title="Insert one of your saved templates.">
-        <span>Template:</span>
-        <select class="mf-tpl" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;max-width:140px;">
-          <option value="">— pick one —</option>
-        </select>
-      </label>
-      <label class="mf-rem-wrap" style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;" title="If no one opens within this window, MailFalcon will email you a reminder.">
-        <span>Remind:</span>
-        <select class="mf-rem" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;">
-          <option value="">never</option>
-          <option value="1">1d</option>
-          <option value="3">3d</option>
-          <option value="7">7d</option>
-        </select>
-      </label>
-      <label class="mf-sch-wrap" style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;" title="Schedule the send for later. The browser must be running at the scheduled time.">
-        <span>Send:</span>
-        <select class="mf-sch" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;">
-          <option value="now">now</option>
-          <option value="in-1h">1h</option>
-          <option value="in-3h">3h</option>
-          <option value="tomorrow-9am">9am tmr</option>
-        </select>
-      </label>
+    <div class="mf-bar" style="position:relative;display:flex;align-items:center;gap:10px;width:100%;">
+      <button class="mf-options" type="button" title="MailFalcon tracking options" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid #c4d0e3;background:#fff;border-radius:4px;cursor:pointer;font:inherit;color:#264168;line-height:1.2;">
+        <span style="font-weight:600;">MailFalcon</span>
+        <span style="opacity:0.55;font-size:10px;">▾</span>
+      </button>
+      <span class="mf-summary" style="font-size:11px;color:#6886b1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;"></span>
+
+      <div class="mf-popover" style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;min-width:260px;max-width:320px;background:#fff;border:1px solid #c4d0e3;border-radius:6px;box-shadow:0 8px 24px rgba(15,26,46,0.12);padding:12px 14px;z-index:9999;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
+            <input type="checkbox" class="mf-priv" style="margin:0;">
+            <span><strong>Privacy mode</strong> — skip tracking</span>
+          </label>
+
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span style="font-weight:500;">Template</span>
+            <select class="mf-tpl" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:3px 6px;width:100%;">
+              <option value="">— pick one —</option>
+            </select>
+          </label>
+
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span style="font-weight:500;">Remind me if no opens in</span>
+            <select class="mf-rem" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:3px 6px;width:100%;">
+              <option value="">no reminder</option>
+              <option value="1">1 day</option>
+              <option value="3">3 days</option>
+              <option value="7">7 days</option>
+            </select>
+          </label>
+
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            <span style="font-weight:500;">Send</span>
+            <select class="mf-sch" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:3px 6px;width:100%;">
+              <option value="now">now</option>
+              <option value="in-1h">in 1 hour</option>
+              <option value="in-3h">in 3 hours</option>
+              <option value="tomorrow-9am">tomorrow 9am</option>
+            </select>
+          </label>
+        </div>
+      </div>
     </div>
   `
 }
@@ -182,19 +194,71 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       })()
 
       try {
-        // Height accommodates up to 2 wrapped rows (28px × 2 + 4px gap).
-        const bar = view.addStatusBar?.({ height: 60, orderHint: 0 })
+        const bar = view.addStatusBar?.({ height: 32, orderHint: 0 })
         if (bar?.el) {
           bar.el.style.cssText =
-            'background:#f5f7fa;border-top:1px solid #e3e9f2;display:flex;align-items:center;padding:6px 12px;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;box-sizing:border-box;'
+            'background:#f5f7fa;border-top:1px solid #e3e9f2;display:flex;align-items:center;padding:0 12px;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;box-sizing:border-box;overflow:visible;'
           bar.el.innerHTML = buildStatusBarHtml()
 
+          const optionsBtn = bar.el.querySelector('.mf-options') as HTMLButtonElement | null
+          const popover = bar.el.querySelector('.mf-popover') as HTMLElement | null
+          const summaryEl = bar.el.querySelector('.mf-summary') as HTMLElement | null
           const privCb = bar.el.querySelector('.mf-priv') as HTMLInputElement | null
+          const tplSelect = bar.el.querySelector('.mf-tpl') as HTMLSelectElement | null
+          const remSelect = bar.el.querySelector('.mf-rem') as HTMLSelectElement | null
+          const schSelect = bar.el.querySelector('.mf-sch') as HTMLSelectElement | null
+
+          // Active-state summary shown next to the button. Surfaces only
+          // the non-default values, so a default compose stays quiet.
+          const updateSummary = (): void => {
+            if (!summaryEl) return
+            const parts: string[] = []
+            if (privacyMode) parts.push('Privacy on')
+            if (remindAfterDays !== null) {
+              parts.push(`Remind ${remindAfterDays}d`)
+            }
+            if (scheduledAt !== null) {
+              const ms = scheduledAt - Date.now()
+              if (ms < 86_400_000) {
+                parts.push(`Send in ${Math.round(ms / 3_600_000) || 1}h`)
+              } else {
+                parts.push('Send tomorrow')
+              }
+            }
+            summaryEl.textContent = parts.join(' · ')
+          }
+
+          // Popover open/close + outside-click dismiss.
+          if (optionsBtn && popover) {
+            const close = (): void => {
+              popover.style.display = 'none'
+              document.removeEventListener('mousedown', onDocClick, true)
+            }
+            const onDocClick = (e: MouseEvent): void => {
+              if (!popover.contains(e.target as Node) && e.target !== optionsBtn) {
+                close()
+              }
+            }
+            optionsBtn.addEventListener('click', (e) => {
+              e.preventDefault()
+              if (popover.style.display === 'block') {
+                close()
+              } else {
+                popover.style.display = 'block'
+                // Defer registration so this click itself doesn't fire the
+                // outside-click closer.
+                setTimeout(() => {
+                  document.addEventListener('mousedown', onDocClick, true)
+                }, 0)
+              }
+            })
+          }
+
           privCb?.addEventListener('change', () => {
             privacyMode = !!privCb.checked
+            updateSummary()
           })
 
-          const tplSelect = bar.el.querySelector('.mf-tpl') as HTMLSelectElement | null
           if (tplSelect) {
             void populateTemplateSelect(tplSelect).then((list) => {
               templates = list
@@ -216,26 +280,24 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             })
           }
 
-          const remSelect = bar.el.querySelector('.mf-rem') as HTMLSelectElement | null
           remSelect?.addEventListener('change', () => {
             const v = Number.parseInt(remSelect.value, 10)
             remindAfterDays = Number.isFinite(v) && v > 0 ? v : null
+            updateSummary()
           })
 
-          const schSelect = bar.el.querySelector('.mf-sch') as HTMLSelectElement | null
           schSelect?.addEventListener('change', () => {
             const v = schSelect.value
             if (v === 'now' || !v) {
               scheduledAt = null
-              return
-            }
-            if (
+            } else if (
               v === 'in-1h' ||
               v === 'in-3h' ||
               v === 'tomorrow-9am'
             ) {
               scheduledAt = presetToEpoch(v)
             }
+            updateSummary()
           })
         }
       } catch (err) {
