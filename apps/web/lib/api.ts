@@ -60,9 +60,31 @@ export interface EmailListResponse {
   nextCursor: number | null
 }
 
-export async function listEmails(cursor?: number): Promise<EmailListResponse> {
+export type EmailSort =
+  | 'sentAt-desc'
+  | 'sentAt-asc'
+  | 'opens-desc'
+  | 'clicks-desc'
+
+export interface EmailQueryParams {
+  q?: string
+  sort?: EmailSort
+  from?: number
+  to?: number
+  cursor?: number
+  limit?: number
+}
+
+export async function listEmails(
+  params: EmailQueryParams = {},
+): Promise<EmailListResponse> {
   const url = new URL(`${config.apiHost}/v1/emails`)
-  if (cursor) url.searchParams.set('cursor', String(cursor))
+  if (params.cursor) url.searchParams.set('cursor', String(params.cursor))
+  if (params.limit) url.searchParams.set('limit', String(params.limit))
+  if (params.q) url.searchParams.set('q', params.q)
+  if (params.sort) url.searchParams.set('sort', params.sort)
+  if (params.from !== undefined) url.searchParams.set('from', String(params.from))
+  if (params.to !== undefined) url.searchParams.set('to', String(params.to))
   const res = await fetch(url, {
     headers: { ...authHeader() },
   })
@@ -344,10 +366,27 @@ export interface AdminUserDetail {
   }>
 }
 
+export interface AdminEmailQueryParams {
+  q?: string
+  sort?: EmailSort
+  from?: number
+  to?: number
+  userId?: string
+}
+
 export const admin = {
   stats: () => adminGet<AdminStats>('/stats'),
   users: () => adminGet<{ users: AdminUser[]; nextCursor: number | null }>('/users'),
   userDetail: (id: string) => adminGet<AdminUserDetail>(`/users/${encodeURIComponent(id)}`),
-  emails: () => adminGet<{ emails: AdminEmail[] }>('/emails'),
+  emails: (params: AdminEmailQueryParams = {}) => {
+    const qs = new URLSearchParams()
+    if (params.q) qs.set('q', params.q)
+    if (params.sort) qs.set('sort', params.sort)
+    if (params.from !== undefined) qs.set('from', String(params.from))
+    if (params.to !== undefined) qs.set('to', String(params.to))
+    if (params.userId) qs.set('userId', params.userId)
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return adminGet<{ emails: AdminEmail[] }>(`/emails${suffix}`)
+  },
   events: () => adminGet<{ events: AdminEvent[] }>('/events'),
 }

@@ -9,6 +9,7 @@ import {
   type AdminEvent,
   type AdminStats,
   type AdminUser,
+  type EmailSort,
   getMe,
 } from '../../lib/api'
 import { clearSession, getSession } from '../../lib/auth-store'
@@ -23,6 +24,33 @@ import {
 } from '../../lib/format'
 
 type Tab = 'stats' | 'users' | 'emails' | 'events'
+type DatePreset = 'today' | '7d' | '30d' | 'all'
+
+function presetToFrom(preset: DatePreset): number | undefined {
+  if (preset === 'all') return undefined
+  if (preset === 'today') {
+    const d = new Date()
+    d.setUTCHours(0, 0, 0, 0)
+    return d.getTime()
+  }
+  if (preset === '7d') return Date.now() - 7 * 86_400_000
+  if (preset === '30d') return Date.now() - 30 * 86_400_000
+  return undefined
+}
+
+const ADMIN_DATE_PRESETS: { key: DatePreset; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: '7d', label: '7 days' },
+  { key: '30d', label: '30 days' },
+  { key: 'all', label: 'All time' },
+]
+
+const ADMIN_SORT_OPTIONS: { key: EmailSort; label: string }[] = [
+  { key: 'sentAt-desc', label: 'Newest first' },
+  { key: 'sentAt-asc', label: 'Oldest first' },
+  { key: 'opens-desc', label: 'Most opens' },
+  { key: 'clicks-desc', label: 'Most clicks' },
+]
 
 export default function AdminPage() {
   const router = useRouter()
@@ -34,6 +62,36 @@ export default function AdminPage() {
   const [emails, setEmails] = useState<AdminEmail[]>([])
   const [events, setEvents] = useState<AdminEvent[]>([])
   const [error, setError] = useState<string | null>(null)
+
+  // Filters for the emails tab (admin-local state, not URL-synced).
+  const [emailQ, setEmailQ] = useState('')
+  const [emailQInput, setEmailQInput] = useState('')
+  const [emailSort, setEmailSort] = useState<EmailSort>('sentAt-desc')
+  const [emailDate, setEmailDate] = useState<DatePreset>('all')
+
+  // Debounce search box → query state.
+  useEffect(() => {
+    if (emailQInput === emailQ) return
+    const t = setTimeout(() => setEmailQ(emailQInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [emailQInput, emailQ])
+
+  // Refetch when emails-tab filters change.
+  useEffect(() => {
+    if (forbidden || loading) return
+    admin
+      .emails({
+        q: emailQ || undefined,
+        sort: emailSort,
+        from: presetToFrom(emailDate),
+      })
+      .then((res) => setEmails(res.emails))
+      .catch((err) => {
+        if (err instanceof Error && err.message !== 'forbidden') {
+          setError(err.message)
+        }
+      })
+  }, [emailQ, emailSort, emailDate, forbidden, loading])
 
   useEffect(() => {
     if (!getSession()) {
@@ -76,6 +134,9 @@ export default function AdminPage() {
       }
     })()
   }, [router])
+
+  const hasEmailFilters =
+    emailQ || emailSort !== 'sentAt-desc' || emailDate !== 'all'
 
   if (loading) {
     return (
@@ -201,53 +262,114 @@ export default function AdminPage() {
         )}
 
         {tab === 'emails' && (
-          <div className="overflow-hidden rounded border border-falcon-200">
-            <table className="w-full text-sm">
-              <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
-                <tr>
-                  <th className="px-4 py-2 text-left font-medium">Sender</th>
-                  <th className="px-4 py-2 text-left font-medium">Subject</th>
-                  <th className="px-4 py-2 text-right font-medium">To</th>
-                  <th className="px-4 py-2 text-right font-medium">Opens</th>
-                  <th className="px-4 py-2 text-right font-medium">Clicks</th>
-                  <th className="px-4 py-2 text-right font-medium">Sent</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-falcon-100">
-                {emails.map((e) => (
-                  <tr
-                    key={e.id}
-                    className="cursor-pointer hover:bg-falcon-50"
-                    onClick={() => router.push(`/dashboard/email?id=${encodeURIComponent(e.id)}`)}
-                  >
-                    <td className="px-4 py-3 text-falcon-700">{e.userEmail}</td>
-                    <td className="max-w-md truncate px-4 py-3 text-falcon-700">
-                      {e.subject || <span className="italic text-falcon-400">(no subject)</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right text-falcon-700">
-                      {e.recipientCount}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span
-                        className={e.opens > 0 ? 'font-medium text-falcon-700' : 'text-falcon-400'}
-                      >
-                        {e.opens}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span
-                        className={e.clicks > 0 ? 'font-medium text-falcon-700' : 'text-falcon-400'}
-                      >
-                        {e.clicks}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-falcon-500">
-                      {formatRelative(e.sentAt)}
-                    </td>
-                  </tr>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="search"
+                value={emailQInput}
+                onChange={(e) => setEmailQInput(e.target.value)}
+                placeholder="Search subjects or sender email…"
+                className="min-w-[240px] flex-1 rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+              />
+              <select
+                value={emailSort}
+                onChange={(e) => setEmailSort(e.target.value as EmailSort)}
+                className="rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+              >
+                {ADMIN_SORT_OPTIONS.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
                 ))}
-              </tbody>
-            </table>
+              </select>
+              <div className="inline-flex overflow-hidden rounded border border-falcon-200 bg-white text-xs">
+                {ADMIN_DATE_PRESETS.map((p, i) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => setEmailDate(p.key)}
+                    className={`px-3 py-2 ${i > 0 ? 'border-l border-falcon-200' : ''} ${
+                      emailDate === p.key
+                        ? 'bg-falcon-100 font-medium text-falcon-700'
+                        : 'text-falcon-500 hover:bg-falcon-50'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {hasEmailFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailQInput('')
+                    setEmailQ('')
+                    setEmailSort('sentAt-desc')
+                    setEmailDate('all')
+                  }}
+                  className="text-xs text-falcon-500 hover:text-falcon-700"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {emails.length === 0 ? (
+              <div className="rounded border border-dashed border-falcon-200 bg-white p-8 text-center text-sm text-falcon-500">
+                {hasEmailFilters
+                  ? 'No emails match these filters.'
+                  : 'No emails yet.'}
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded border border-falcon-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium">Sender</th>
+                      <th className="px-4 py-2 text-left font-medium">Subject</th>
+                      <th className="px-4 py-2 text-right font-medium">To</th>
+                      <th className="px-4 py-2 text-right font-medium">Opens</th>
+                      <th className="px-4 py-2 text-right font-medium">Clicks</th>
+                      <th className="px-4 py-2 text-right font-medium">Sent</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-falcon-100">
+                    {emails.map((e) => (
+                      <tr
+                        key={e.id}
+                        className="cursor-pointer hover:bg-falcon-50"
+                        onClick={() => router.push(`/dashboard/email?id=${encodeURIComponent(e.id)}`)}
+                      >
+                        <td className="px-4 py-3 text-falcon-700">{e.userEmail}</td>
+                        <td className="max-w-md truncate px-4 py-3 text-falcon-700">
+                          {e.subject || <span className="italic text-falcon-400">(no subject)</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right text-falcon-700">
+                          {e.recipientCount}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span
+                            className={e.opens > 0 ? 'font-medium text-falcon-700' : 'text-falcon-400'}
+                          >
+                            {e.opens}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span
+                            className={e.clicks > 0 ? 'font-medium text-falcon-700' : 'text-falcon-400'}
+                          >
+                            {e.clicks}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-falcon-500">
+                          {formatRelative(e.sentAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 

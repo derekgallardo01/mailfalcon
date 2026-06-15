@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { desc, eq, gt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, like, lte, or, sql } from 'drizzle-orm'
 import {
   events,
   trackedEmails,
@@ -118,10 +118,47 @@ adminRouter.get('/users', async (c) => {
   })
 })
 
+// Escape SQL LIKE wildcards in user input so they're treated as literal
+// characters in the substring search.
+function sqlLikeEscape(s: string): string {
+  return s.replace(/[\\%_]/g, '\\$&')
+}
+
 adminRouter.get('/emails', async (c) => {
   const userFilter = c.req.query('userId')
+  const q = (c.req.query('q') ?? '').slice(0, 100).trim()
+  const sortParam = c.req.query('sort') ?? 'sentAt-desc'
+  const from = Number(c.req.query('from'))
+  const to = Number(c.req.query('to'))
   const limit = Math.min(Number(c.req.query('limit') ?? '100'), 200)
   const db = getDb(c.env.DB)
+
+  const opensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`
+  const clicksExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`
+
+  const filters = []
+  if (userFilter) filters.push(eq(trackedEmails.userId, userFilter))
+  if (q.length > 0) {
+    const needle = `%${sqlLikeEscape(q)}%`
+    // Admin q matches either subject OR sender email.
+    filters.push(or(like(trackedEmails.subject, needle), like(users.email, needle))!)
+  }
+  if (Number.isFinite(from)) filters.push(gte(trackedEmails.sentAt, from))
+  if (Number.isFinite(to)) filters.push(lte(trackedEmails.sentAt, to))
+
+  const orderBy = (() => {
+    switch (sortParam) {
+      case 'sentAt-asc':
+        return asc(trackedEmails.sentAt)
+      case 'opens-desc':
+        return desc(opensExpr)
+      case 'clicks-desc':
+        return desc(clicksExpr)
+      case 'sentAt-desc':
+      default:
+        return desc(trackedEmails.sentAt)
+    }
+  })()
 
   const rows = await db
     .select({
@@ -132,15 +169,15 @@ adminRouter.get('/emails', async (c) => {
       sentAt: trackedEmails.sentAt,
       recipientCount: trackedEmails.recipientCount,
       privacyMode: trackedEmails.privacyMode,
-      opens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`,
-      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
+      opens: opensExpr,
+      clicks: clicksExpr,
     })
     .from(trackedEmails)
     .innerJoin(users, eq(users.id, trackedEmails.userId))
     .leftJoin(events, eq(events.emailId, trackedEmails.id))
-    .where(userFilter ? eq(trackedEmails.userId, userFilter) : undefined)
+    .where(filters.length > 0 ? and(...filters) : undefined)
     .groupBy(trackedEmails.id)
-    .orderBy(desc(trackedEmails.sentAt))
+    .orderBy(orderBy)
     .limit(limit)
     .all()
 

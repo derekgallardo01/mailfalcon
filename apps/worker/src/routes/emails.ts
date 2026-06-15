@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, like, lte, sql } from 'drizzle-orm'
 import {
   events,
   links,
@@ -20,10 +20,27 @@ const mintSchema = z.object({
   subject: z.string().max(500).optional(),
 })
 
+const sortSchema = z.enum([
+  'sentAt-desc',
+  'sentAt-asc',
+  'opens-desc',
+  'clicks-desc',
+])
+
 const listQuerySchema = z.object({
   cursor: z.coerce.number().int().nonnegative().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  q: z.string().max(100).optional(),
+  sort: sortSchema.default('sentAt-desc'),
+  from: z.coerce.number().int().nonnegative().optional(),
+  to: z.coerce.number().int().nonnegative().optional(),
 })
+
+// SQLite's LIKE uses % and _ as wildcards. Escape them so user input is
+// treated as a literal substring search.
+function sqlLikeEscape(s: string): string {
+  return s.replace(/[\\%_]/g, '\\$&')
+}
 
 type Bindings = {
   ENVIRONMENT: string
@@ -106,11 +123,50 @@ emailsRouter.get('/', async (c) => {
   const q = listQuerySchema.safeParse({
     cursor: c.req.query('cursor'),
     limit: c.req.query('limit'),
+    q: c.req.query('q'),
+    sort: c.req.query('sort'),
+    from: c.req.query('from'),
+    to: c.req.query('to'),
   })
   if (!q.success) return c.json({ error: 'invalid_query' }, 400)
 
   const userId = c.get('userId')
   const db = getDb(c.env.DB)
+
+  // Aggregate expressions reused for both SELECT and ORDER BY.
+  const opensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`
+  const clicksExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`
+
+  const filters = [eq(trackedEmails.userId, userId)]
+  // Cursor pagination only applies to the default sort (sentAt-desc).
+  if (q.data.sort === 'sentAt-desc' && q.data.cursor) {
+    filters.push(sql`${trackedEmails.sentAt} < ${q.data.cursor}`)
+  }
+  if (q.data.q && q.data.q.trim().length > 0) {
+    filters.push(
+      like(trackedEmails.subject, `%${sqlLikeEscape(q.data.q.trim())}%`),
+    )
+  }
+  if (q.data.from !== undefined) {
+    filters.push(gte(trackedEmails.sentAt, q.data.from))
+  }
+  if (q.data.to !== undefined) {
+    filters.push(lte(trackedEmails.sentAt, q.data.to))
+  }
+
+  const orderBy = (() => {
+    switch (q.data.sort) {
+      case 'sentAt-asc':
+        return asc(trackedEmails.sentAt)
+      case 'opens-desc':
+        return desc(opensExpr)
+      case 'clicks-desc':
+        return desc(clicksExpr)
+      case 'sentAt-desc':
+      default:
+        return desc(trackedEmails.sentAt)
+    }
+  })()
 
   const rows = await db
     .select({
@@ -119,28 +175,26 @@ emailsRouter.get('/', async (c) => {
       sentAt: trackedEmails.sentAt,
       recipientCount: trackedEmails.recipientCount,
       privacyMode: trackedEmails.privacyMode,
-      openCount: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`,
-      clickCount: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
+      openCount: opensExpr,
+      clickCount: clicksExpr,
       lastEventAt: sql<number | null>`MAX(${events.ts})`,
     })
     .from(trackedEmails)
     .leftJoin(events, eq(events.emailId, trackedEmails.id))
-    .where(
-      q.data.cursor
-        ? and(
-            eq(trackedEmails.userId, userId),
-            sql`${trackedEmails.sentAt} < ${q.data.cursor}`,
-          )
-        : eq(trackedEmails.userId, userId),
-    )
+    .where(and(...filters))
     .groupBy(trackedEmails.id)
-    .orderBy(desc(trackedEmails.sentAt))
+    .orderBy(orderBy)
     .limit(q.data.limit + 1)
     .all()
 
   const hasMore = rows.length > q.data.limit
   const page = hasMore ? rows.slice(0, q.data.limit) : rows
-  const nextCursor = hasMore ? page[page.length - 1]!.sentAt : null
+  // Cursor only makes sense for the default sort. Other sorts don't
+  // tie-break cleanly so we don't expose a next-cursor for them.
+  const nextCursor =
+    q.data.sort === 'sentAt-desc' && hasMore
+      ? page[page.length - 1]!.sentAt
+      : null
 
   return c.json({
     emails: page.map((r) => ({

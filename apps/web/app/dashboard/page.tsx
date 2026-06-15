@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import {
   type EmailListItem,
+  type EmailSort,
   type MeResponse,
   getMe,
   listEmails,
@@ -23,8 +24,37 @@ function formatRelative(ts: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`
 }
 
-export default function DashboardPage() {
+type DatePreset = 'today' | '7d' | '30d' | 'all'
+
+function presetToFrom(preset: DatePreset): number | undefined {
+  if (preset === 'all') return undefined
+  if (preset === 'today') {
+    const d = new Date()
+    d.setUTCHours(0, 0, 0, 0)
+    return d.getTime()
+  }
+  if (preset === '7d') return Date.now() - 7 * 86_400_000
+  if (preset === '30d') return Date.now() - 30 * 86_400_000
+  return undefined
+}
+
+const DATE_PRESETS: { key: DatePreset; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: '7d', label: '7 days' },
+  { key: '30d', label: '30 days' },
+  { key: 'all', label: 'All time' },
+]
+
+const SORT_OPTIONS: { key: EmailSort; label: string }[] = [
+  { key: 'sentAt-desc', label: 'Newest first' },
+  { key: 'sentAt-asc', label: 'Oldest first' },
+  { key: 'opens-desc', label: 'Most opens' },
+  { key: 'clicks-desc', label: 'Most clicks' },
+]
+
+function DashboardInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [session, setSessionState] = useState<Session | null>(null)
   const [emails, setEmails] = useState<EmailListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,6 +65,35 @@ export default function DashboardPage() {
   const isAdmin = me?.tier === 'admin'
   const isFree = me?.tier === 'free'
 
+  // Filter state mirrors URL; debounce only the search input.
+  const urlQ = searchParams.get('q') ?? ''
+  const urlSort = (searchParams.get('sort') as EmailSort | null) ?? 'sentAt-desc'
+  const urlDate = (searchParams.get('date') as DatePreset | null) ?? 'all'
+  const [qInput, setQInput] = useState(urlQ)
+
+  // Keep the search box in sync if URL changes (e.g. via "Clear filters").
+  useEffect(() => {
+    setQInput(urlQ)
+  }, [urlQ])
+
+  function updateParams(next: Partial<Record<string, string>>) {
+    const params = new URLSearchParams(searchParams.toString())
+    for (const [k, v] of Object.entries(next)) {
+      if (!v) params.delete(k)
+      else params.set(k, v)
+    }
+    const qs = params.toString()
+    router.replace(qs ? `/dashboard?${qs}` : '/dashboard', { scroll: false })
+  }
+
+  // Debounce the search box → URL.
+  useEffect(() => {
+    if (qInput === urlQ) return
+    const t = setTimeout(() => updateParams({ q: qInput.trim() }), 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qInput])
+
   useEffect(() => {
     const s = getSession()
     if (!s) {
@@ -44,7 +103,12 @@ export default function DashboardPage() {
     setSessionState(s)
 
     function refresh() {
-      return listEmails()
+      return listEmails({
+        q: urlQ || undefined,
+        sort: urlSort,
+        from: presetToFrom(urlDate),
+        limit: 100,
+      })
         .then((res) => setEmails(res.emails))
         .catch((err) => {
           if (err instanceof Error && err.message === 'unauthorized') {
@@ -78,7 +142,8 @@ export default function DashboardPage() {
       es.close()
       esRef.current = null
     }
-  }, [router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, urlQ, urlSort, urlDate])
 
   async function handleLogout() {
     await apiLogout()
@@ -105,6 +170,8 @@ export default function DashboardPage() {
   }
 
   if (!session) return null
+
+  const hasFilters = urlQ || urlSort !== 'sentAt-desc' || urlDate !== 'all'
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -170,10 +237,59 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <main className="mt-8">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          value={qInput}
+          onChange={(e) => setQInput(e.target.value)}
+          placeholder="Search subjects…"
+          className="min-w-[200px] flex-1 rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+        />
+        <select
+          value={urlSort}
+          onChange={(e) => updateParams({ sort: e.target.value === 'sentAt-desc' ? '' : e.target.value })}
+          className="rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <div className="inline-flex overflow-hidden rounded border border-falcon-200 bg-white text-xs">
+          {DATE_PRESETS.map((p, i) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => updateParams({ date: p.key === 'all' ? '' : p.key })}
+              className={`px-3 py-2 ${i > 0 ? 'border-l border-falcon-200' : ''} ${
+                urlDate === p.key
+                  ? 'bg-falcon-100 font-medium text-falcon-700'
+                  : 'text-falcon-500 hover:bg-falcon-50'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setQInput('')
+              router.replace('/dashboard', { scroll: false })
+            }}
+            className="text-xs text-falcon-500 hover:text-falcon-700"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      <main className="mt-6">
         {loading && <p className="text-sm text-falcon-500">Loading…</p>}
         {error && <p className="text-sm text-red-700">{error}</p>}
-        {!loading && !error && emails.length === 0 && (
+        {!loading && !error && emails.length === 0 && !hasFilters && (
           <div className="rounded border border-dashed border-falcon-200 bg-white p-10 text-center">
             <p className="text-base font-semibold text-falcon-700">
               No tracked emails yet
@@ -223,6 +339,21 @@ export default function DashboardPage() {
               data center — we filter those out of your notifications and
               they show as <code className="font-mono">bot</code> opens.
             </p>
+          </div>
+        )}
+        {!loading && !error && emails.length === 0 && hasFilters && (
+          <div className="rounded border border-dashed border-falcon-200 bg-white p-8 text-center">
+            <p className="text-sm text-falcon-700">No emails match these filters.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setQInput('')
+                router.replace('/dashboard', { scroll: false })
+              }}
+              className="mt-2 text-xs text-falcon-500 hover:text-falcon-700"
+            >
+              Clear filters
+            </button>
           </div>
         )}
         {!loading && !error && emails.length > 0 && (
@@ -277,5 +408,19 @@ export default function DashboardPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-5xl px-6 py-8">
+          <p className="text-sm text-falcon-500">Loading…</p>
+        </main>
+      }
+    >
+      <DashboardInner />
+    </Suspense>
   )
 }
