@@ -1,10 +1,61 @@
+import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import './globals.css'
 
-export const metadata = {
-  title: 'MailFalcon',
-  description: 'Email tracking for Gmail.',
+const SITE_URL = 'https://app.mailfalcon.app'
+const TITLE = 'MailFalcon — Email tracking for Gmail'
+const DESCRIPTION =
+  'Know the moment your email is read. Real-time opens, clicks, and full device + location detail for Gmail.'
+
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: TITLE,
+    template: '%s · MailFalcon',
+  },
+  description: DESCRIPTION,
+  applicationName: 'MailFalcon',
+  keywords: [
+    'email tracking',
+    'gmail tracking',
+    'open tracking',
+    'click tracking',
+    'mailtrack alternative',
+  ],
+  authors: [{ name: 'MailFalcon' }],
+  alternates: { canonical: SITE_URL },
+  openGraph: {
+    type: 'website',
+    url: SITE_URL,
+    siteName: 'MailFalcon',
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [
+      {
+        url: '/icon.png',
+        width: 512,
+        height: 512,
+        alt: 'MailFalcon',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    title: TITLE,
+    description: DESCRIPTION,
+    images: ['/icon.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#3b6cb7',
+  width: 'device-width',
+  initialScale: 1,
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
