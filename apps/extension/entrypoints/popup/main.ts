@@ -10,6 +10,11 @@ import {
   setSession,
 } from '../../src/auth-store'
 import { logout, requestCode, verifyCode } from '../../src/api'
+import {
+  cancel as cancelScheduled,
+  listPending as listScheduled,
+  type ScheduledSend,
+} from '../../src/scheduled'
 
 const root = document.getElementById('root')!
 
@@ -38,6 +43,61 @@ function render(node: DocumentFragment): void {
   root.replaceChildren(node)
 }
 
+function formatCountdown(scheduledAt: number): string {
+  const ms = scheduledAt - Date.now()
+  if (ms <= 0) return 'firing now'
+  if (ms < 60_000) return 'in <1m'
+  if (ms < 3_600_000) return `in ${Math.round(ms / 60_000)}m`
+  if (ms < 86_400_000) return `in ${Math.round(ms / 3_600_000)}h`
+  return `in ${Math.round(ms / 86_400_000)}d`
+}
+
+function renderScheduledQueue(
+  container: HTMLElement,
+  records: ScheduledSend[],
+  reload: () => Promise<void>,
+): void {
+  container.replaceChildren()
+  if (records.length === 0) return
+  const h = document.createElement('p')
+  h.className = 'muted'
+  h.style.marginTop = '12px'
+  h.textContent = `Scheduled sends (${records.length})`
+  container.appendChild(h)
+
+  for (const r of records) {
+    const row = document.createElement('div')
+    row.className = 'row'
+    row.style.cssText =
+      'align-items:flex-start;gap:6px;padding:4px 0;border-top:1px solid #e3e9f2;'
+
+    const left = document.createElement('div')
+    left.style.cssText = 'flex:1;min-width:0;'
+    const subj = document.createElement('div')
+    subj.style.cssText =
+      'font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+    subj.textContent = r.subject || '(no subject)'
+    const meta = document.createElement('div')
+    meta.style.cssText = 'font-size:11px;color:#6886b1;'
+    meta.textContent = `${formatCountdown(r.scheduledAt)} · to ${r.to[0] ?? '?'}${r.to.length > 1 ? ` +${r.to.length - 1}` : ''}`
+    left.appendChild(subj)
+    left.appendChild(meta)
+
+    const cancelBtn = document.createElement('button')
+    cancelBtn.type = 'button'
+    cancelBtn.className = 'link'
+    cancelBtn.textContent = 'cancel'
+    cancelBtn.addEventListener('click', async () => {
+      await cancelScheduled(r.id)
+      await reload()
+    })
+
+    row.appendChild(left)
+    row.appendChild(cancelBtn)
+    container.appendChild(row)
+  }
+}
+
 async function showSignedIn(email: string): Promise<void> {
   const frag = cloneTemplate('tpl-signed-in')
   bind(frag, { email })
@@ -57,6 +117,15 @@ async function showSignedIn(email: string): Promise<void> {
     await resetOnboarding()
     await showOnboarding(email)
   })
+
+  const queueEl = document.getElementById('scheduled-queue')
+  if (queueEl) {
+    const reload = async (): Promise<void> => {
+      const records = await listScheduled()
+      renderScheduledQueue(queueEl, records, reload)
+    }
+    void reload()
+  }
 }
 
 async function showRequest(prefill = ''): Promise<void> {

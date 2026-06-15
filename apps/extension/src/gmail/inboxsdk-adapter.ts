@@ -4,9 +4,11 @@ import { config } from '../config'
 import type {
   ComposeEvent,
   GmailAdapter,
+  ProgrammaticCompose,
   RecipientHandle,
   ReplyCandidate,
 } from './adapter'
+import { presetToEpoch } from '../scheduled'
 
 interface SdkRecipient {
   emailAddress?: string
@@ -39,9 +41,13 @@ interface ComposeView {
   getToRecipients?: () => unknown[]
   getCcRecipients?: () => unknown[]
   getBccRecipients?: () => unknown[]
+  setToRecipients?: (addrs: string[]) => void
+  setCcRecipients?: (addrs: string[]) => void
+  setBccRecipients?: (addrs: string[]) => void
   getSubject?: () => string
   getThreadID?: () => string | null
   send?: (opts?: { sendAndArchive?: boolean }) => void
+  close?: () => void
 }
 
 interface SentEventPayload {
@@ -51,7 +57,7 @@ interface SentEventPayload {
 
 function buildStatusBarHtml(): string {
   return `
-    <div style="display:flex;align-items:center;gap:14px;width:100%;">
+    <div style="display:flex;align-items:center;gap:14px;width:100%;flex-wrap:wrap;">
       <label class="mf-priv-wrap" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;" title="Tracking is on by default. Check this to skip the pixel and link rewrite for this email only.">
         <input type="checkbox" class="mf-priv" style="margin:0;">
         <span>Privacy mode</span>
@@ -71,6 +77,16 @@ function buildStatusBarHtml(): string {
           <option value="1">1 day</option>
           <option value="3">3 days</option>
           <option value="7">7 days</option>
+        </select>
+      </label>
+      <span style="opacity:0.4;">·</span>
+      <label class="mf-sch-wrap" style="display:inline-flex;align-items:center;gap:6px;" title="Schedule the send for later. The browser must be running at the scheduled time.">
+        <span>Send:</span>
+        <select class="mf-sch" style="font:inherit;color:inherit;border:1px solid #c4d0e3;background:#fff;border-radius:3px;padding:1px 4px;">
+          <option value="now">now</option>
+          <option value="in-1h">in 1 hour</option>
+          <option value="in-3h">in 3 hours</option>
+          <option value="tomorrow-9am">tomorrow 9am</option>
         </select>
       </label>
     </div>
@@ -144,6 +160,8 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
 
       let privacyMode = false
       let remindAfterDays: number | null = null
+      let scheduledAt: number | null = null
+      let consumedWithoutSend = false
       let templates: Template[] = []
 
       try {
@@ -184,6 +202,22 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           remSelect?.addEventListener('change', () => {
             const v = Number.parseInt(remSelect.value, 10)
             remindAfterDays = Number.isFinite(v) && v > 0 ? v : null
+          })
+
+          const schSelect = bar.el.querySelector('.mf-sch') as HTMLSelectElement | null
+          schSelect?.addEventListener('change', () => {
+            const v = schSelect.value
+            if (v === 'now' || !v) {
+              scheduledAt = null
+              return
+            }
+            if (
+              v === 'in-1h' ||
+              v === 'in-3h' ||
+              v === 'tomorrow-9am'
+            ) {
+              scheduledAt = presetToEpoch(v)
+            }
           })
         }
       } catch (err) {
@@ -242,6 +276,11 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           onSent: (cb) => {
             if (!privacyMode) sentCallbacks.push(cb)
           },
+          getScheduledAt: () => scheduledAt,
+          close: () => {
+            consumedWithoutSend = true
+            view.close?.()
+          },
           cancel: () => sdkEvent.cancel(),
         }
 
@@ -254,6 +293,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
         }
 
         reentered.add(view)
+        if (consumedWithoutSend) return
         try {
           view.send?.()
         } catch (err) {
@@ -269,6 +309,27 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
 
   onIncomingMessage(handler: (candidate: ReplyCandidate) => void): void {
     this.incomingMessageHandlers.push(handler)
+  }
+
+  async fireProgrammaticSend(spec: ProgrammaticCompose): Promise<void> {
+    const sdk = this.sdk as {
+      Compose?: {
+        openNewComposeView?: () => Promise<ComposeView>
+      }
+    }
+    if (!sdk.Compose?.openNewComposeView) {
+      throw new Error('InboxSDK Compose.openNewComposeView unavailable')
+    }
+    const view = await sdk.Compose.openNewComposeView()
+    if (spec.to.length > 0) view.setToRecipients?.(spec.to)
+    if (spec.cc.length > 0) view.setCcRecipients?.(spec.cc)
+    if (spec.bcc.length > 0) view.setBccRecipients?.(spec.bcc)
+    if (spec.subject.length > 0) view.setSubject?.(spec.subject)
+    view.setBodyHTML?.(spec.bodyHtml)
+    // Brief delay so InboxSDK finishes wiring fields before send fires —
+    // otherwise some recipient setters race.
+    await new Promise((r) => setTimeout(r, 250))
+    view.send?.()
   }
 
   private attachReplyDetection(

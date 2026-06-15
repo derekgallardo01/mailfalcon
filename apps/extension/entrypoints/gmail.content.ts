@@ -9,6 +9,7 @@ import { getSession } from '../src/auth-store'
 import { config } from '../src/config'
 import { InboxSdkGmailAdapter } from '../src/gmail/inboxsdk-adapter'
 import { prepareTrackedBody } from '../src/inject'
+import { schedule as scheduleSend, type ScheduledSend } from '../src/scheduled'
 
 const AUTOREPLY_RE = /^\s*(auto[ -]?reply|out of office|away|on vacation|vacation responder)/i
 
@@ -48,7 +49,56 @@ export default defineContentScript({
       }
     })
 
+    // Listen for the SW dispatching a scheduled-send to this tab. We
+     // open a new compose, set the fields, and let the normal presend
+     // pipeline track + send.
+     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+       if (!msg || typeof msg !== 'object' || msg.type !== 'fire-scheduled-send') {
+         return false
+       }
+       const record = msg.record as ScheduledSend
+       void (async () => {
+         try {
+           await adapter.fireProgrammaticSend({
+             to: record.to,
+             cc: record.cc,
+             bcc: record.bcc,
+             subject: record.subject,
+             bodyHtml: record.bodyHtml,
+           })
+           sendResponse({ ok: true })
+         } catch (err) {
+           console.error('[mailfalcon] programmatic dispatch failed:', err)
+           sendResponse({ ok: false, error: String(err) })
+         }
+       })()
+       return true
+     })
+
     adapter.onPresending(async (event) => {
+      // If the user picked a future send time, queue the compose and
+      // close. We DO NOT mint a tracking row here — the row is minted
+      // when the alarm fires and we re-open the compose.
+      const scheduledAt = event.getScheduledAt()
+      if (scheduledAt && scheduledAt > Date.now() + 30_000) {
+        try {
+          const recipients = event.getRecipients()
+          await scheduleSend({
+            scheduledAt,
+            to: recipients.map((r) => r.address),
+            cc: [],
+            bcc: [],
+            subject: event.getSubject(),
+            bodyHtml: event.getHtmlBody(),
+          })
+          event.close()
+          console.log('[mailfalcon] scheduled send queued', { scheduledAt })
+        } catch (err) {
+          console.error('[mailfalcon] schedule failed:', err)
+        }
+        return
+      }
+
       if (event.isPrivacyMode()) {
         console.log('[mailfalcon] privacy mode: send going out untracked')
         return

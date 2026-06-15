@@ -1,6 +1,11 @@
 import { getSession } from '../src/auth-store'
 import { config } from '../src/config'
 import { dropPushSubscription, ensurePushSubscription } from '../src/push-client'
+import {
+  alarmNameToId,
+  cancel as cancelScheduled,
+  get as getScheduled,
+} from '../src/scheduled'
 import { StreamClient, type StreamEvent } from '../src/stream-client'
 
 const NOTIF_PREFIX = 'mf-event-'
@@ -197,6 +202,44 @@ export default defineBackground(() => {
     if (!notifId.startsWith(NOTIF_PREFIX)) return
     chrome.tabs.create({ url: 'https://app.mailfalcon.app/dashboard' })
     chrome.notifications.clear(notifId)
+  })
+
+  // Scheduled-send dispatch. Alarm fires; find an open Gmail tab; tell
+  // its content script to fire the programmatic compose. If no Gmail
+  // tab is open, snooze the alarm by 1 hour.
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    const id = alarmNameToId(alarm.name)
+    if (!id) return
+    void (async () => {
+      const record = await getScheduled(id)
+      if (!record) return
+      const tabs = await chrome.tabs.query({ url: 'https://mail.google.com/*' })
+      let dispatched = false
+      for (const tab of tabs) {
+        if (!tab.id) continue
+        try {
+          const res = (await chrome.tabs.sendMessage(tab.id, {
+            type: 'fire-scheduled-send',
+            record,
+          })) as { ok?: boolean } | undefined
+          if (res?.ok) {
+            dispatched = true
+            break
+          }
+        } catch {
+          // Content script not ready on this tab; try the next one.
+        }
+      }
+      if (dispatched) {
+        await cancelScheduled(id)
+      } else {
+        console.warn(
+          '[mailfalcon] scheduled send had no live Gmail tab; snoozing 1h',
+          { id },
+        )
+        await chrome.alarms.create(alarm.name, { delayInMinutes: 60 })
+      }
+    })()
   })
 
   void start()
