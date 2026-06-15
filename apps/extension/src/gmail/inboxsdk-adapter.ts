@@ -46,7 +46,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           bar.el.style.cssText =
             'background:#f5f7fa;border-top:1px solid #e3e9f2;display:flex;align-items:center;padding:0 12px;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;'
           bar.el.innerHTML = `
-            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
+            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;" title="Tracking is on by default. Check this to skip the pixel and link rewrite for this email only. The send goes through Gmail untouched.">
               <input type="checkbox" class="mf-priv" style="margin:0;">
               <span>Privacy mode &mdash; skip tracking for this email</span>
             </label>

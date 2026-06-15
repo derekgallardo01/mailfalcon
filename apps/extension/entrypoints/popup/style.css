@@ -122,6 +122,39 @@ button.link:hover {
   flex: 1;
 }
 
+#dashboard-link {
+  margin-top: 4px;
+  display: inline-block;
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+#dashboard-link:hover {
+  text-decoration: underline;
+}
+
+ol.steps {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+ol.steps li {
+  margin-bottom: 6px;
+}
+
+ol.steps a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+ol.steps a:hover {
+  text-decoration: underline;
+}
+
 .msg {
   margin: 0;
   font-size: 12px;

@@ -2,6 +2,7 @@ const TOKEN_KEY = 'mf.token'
 const EMAIL_KEY = 'mf.email'
 const USER_ID_KEY = 'mf.userId'
 const PENDING_KEY = 'mf.pendingVerify'
+const ONBOARDING_KEY = 'mf.seenOnboarding'
 
 const PENDING_TTL_MS = 15 * 60 * 1000
 
@@ -55,4 +56,17 @@ export async function getPendingVerify(): Promise<PendingVerify | null> {
 
 export async function clearPendingVerify(): Promise<void> {
   await chrome.storage.local.remove(PENDING_KEY)
+}
+
+export async function hasSeenOnboarding(): Promise<boolean> {
+  const result = await chrome.storage.local.get(ONBOARDING_KEY)
+  return result[ONBOARDING_KEY] === true
+}
+
+export async function markOnboardingSeen(): Promise<void> {
+  await chrome.storage.local.set({ [ONBOARDING_KEY]: true })
+}
+
+export async function resetOnboarding(): Promise<void> {
+  await chrome.storage.local.remove(ONBOARDING_KEY)
 }

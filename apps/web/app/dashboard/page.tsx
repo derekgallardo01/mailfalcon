@@ -174,10 +174,54 @@ export default function DashboardPage() {
         {loading && <p className="text-sm text-falcon-500">Loading…</p>}
         {error && <p className="text-sm text-red-700">{error}</p>}
         {!loading && !error && emails.length === 0 && (
-          <div className="rounded border border-dashed border-falcon-200 p-12 text-center">
-            <p className="text-sm text-falcon-500">No tracked emails yet.</p>
-            <p className="mt-1 text-xs text-falcon-400">
-              Open Gmail with the extension installed and send an email.
+          <div className="rounded border border-dashed border-falcon-200 bg-white p-10 text-center">
+            <p className="text-base font-semibold text-falcon-700">
+              No tracked emails yet
+            </p>
+            <p className="mt-1 text-sm text-falcon-500">
+              Three steps to your first tracked send:
+            </p>
+            <ol className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-4 text-left text-sm md:grid-cols-3">
+              <li className="rounded border border-falcon-100 bg-falcon-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-falcon-400">
+                  Step 1
+                </p>
+                <p className="mt-2 text-falcon-700">
+                  Compose a message in{' '}
+                  <a
+                    href="https://mail.google.com/"
+                    target="_blank"
+                    rel="noopener"
+                    className="text-falcon-500 underline hover:text-falcon-700"
+                  >
+                    Gmail
+                  </a>
+                  .
+                </p>
+              </li>
+              <li className="rounded border border-falcon-100 bg-falcon-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-falcon-400">
+                  Step 2
+                </p>
+                <p className="mt-2 text-falcon-700">
+                  Leave the <strong>Privacy mode</strong> checkbox above the
+                  body unchecked.
+                </p>
+              </li>
+              <li className="rounded border border-falcon-100 bg-falcon-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-falcon-400">
+                  Step 3
+                </p>
+                <p className="mt-2 text-falcon-700">
+                  Hit Send. Opens + clicks land here within ~5 seconds of the
+                  recipient interacting.
+                </p>
+              </li>
+            </ol>
+            <p className="mt-6 text-xs text-falcon-400">
+              The first open often comes from Gmail's image proxy in a Google
+              data center — we filter those out of your notifications and
+              they show as <code className="font-mono">bot</code> opens.
             </p>
           </div>
         )}

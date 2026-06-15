@@ -19,7 +19,29 @@
       <div class="card">
         <p class="muted">Signed in as</p>
         <p class="email" data-bind="email"></p>
-        <button id="logout-btn" type="button" class="link">Sign out</button>
+        <a id="dashboard-link" href="https://app.mailfalcon.app/dashboard/" target="_blank" rel="noopener">Open dashboard ↗</a>
+        <div class="row" style="margin-top:8px;">
+          <button id="replay-onboarding" type="button" class="link">Replay intro</button>
+          <button id="logout-btn" type="button" class="link">Sign out</button>
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-onboarding">
+      <div class="card">
+        <p class="muted">You're in. Three steps to your first tracked email:</p>
+        <ol class="steps">
+          <li>
+            <strong>Compose a message</strong> in Gmail (or reply to one)
+          </li>
+          <li>
+            Leave the <strong>"Privacy mode"</strong> checkbox above the body <em>unchecked</em> &mdash; that's the kill switch if you ever want to send untracked
+          </li>
+          <li>
+            Hit Send. Watch <a href="https://app.mailfalcon.app/dashboard/" target="_blank" rel="noopener">app.mailfalcon.app/dashboard</a> &mdash; opens and clicks land within ~5 seconds
+          </li>
+        </ol>
+        <button id="onboarding-done" type="button">Got it</button>
       </div>
     </template>
 

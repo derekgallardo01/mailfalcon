@@ -3,6 +3,9 @@ import {
   clearSession,
   getPendingVerify,
   getSession,
+  hasSeenOnboarding,
+  markOnboardingSeen,
+  resetOnboarding,
   setPendingVerify,
   setSession,
 } from '../../src/auth-store'
@@ -50,6 +53,10 @@ async function showSignedIn(email: string): Promise<void> {
     }
     await showRequest()
   })
+  document.getElementById('replay-onboarding')?.addEventListener('click', async () => {
+    await resetOnboarding()
+    await showOnboarding(email)
+  })
 }
 
 async function showRequest(prefill = ''): Promise<void> {
@@ -92,7 +99,13 @@ async function showVerify(email: string): Promise<void> {
       } catch {
         // background SW may be cold; it picks up on next start
       }
-      await showSignedIn(result.email)
+      // First sign-in on this device shows the 3-step intro. Returning
+      // users skip it.
+      if (await hasSeenOnboarding()) {
+        await showSignedIn(result.email)
+      } else {
+        await showOnboarding(result.email)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Verify failed'
       setMsg('verify-msg', humanizeError(msg), 'err')
@@ -101,6 +114,15 @@ async function showVerify(email: string): Promise<void> {
   document.getElementById('verify-back')?.addEventListener('click', async () => {
     await clearPendingVerify()
     await showRequest(email)
+  })
+}
+
+async function showOnboarding(email: string): Promise<void> {
+  const frag = cloneTemplate('tpl-onboarding')
+  render(frag)
+  document.getElementById('onboarding-done')?.addEventListener('click', async () => {
+    await markOnboardingSeen()
+    await showSignedIn(email)
   })
 }
 
