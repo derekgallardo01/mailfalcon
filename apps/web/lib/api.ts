@@ -152,6 +152,53 @@ export async function updateMe(patch: {
   if (!res.ok) throw new Error(`me_patch_failed:${res.status}`)
 }
 
+/** Triggers a JSON download of every row scoped to the current user. */
+export async function exportMe(): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/me/export`, {
+    headers: { ...authHeader() },
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`export_failed:${res.status}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `mailfalcon-export-${new Date().toISOString().slice(0, 10)}.json`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export async function requestAccountDeletion(): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/me/delete-request`, {
+    method: 'POST',
+    headers: { ...authHeader() },
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`delete_request_failed:${res.status}`)
+}
+
+export interface DeleteAccountResponse {
+  ok: true
+  stripeWarning: string | null
+}
+
+export async function confirmAccountDeletion(
+  code: string,
+): Promise<DeleteAccountResponse> {
+  const res = await fetch(`${config.apiHost}/v1/me`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ code }),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `delete_failed:${res.status}`)
+  }
+  return (await res.json()) as DeleteAccountResponse
+}
+
 export async function startCheckout(): Promise<string> {
   const res = await fetch(`${config.apiHost}/v1/billing/checkout`, {
     method: 'POST',

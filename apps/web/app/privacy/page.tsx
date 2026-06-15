@@ -182,16 +182,39 @@ export default function PrivacyPage() {
         </h2>
         <p className="mt-2 leading-relaxed">
           You can sign in to your dashboard at any time to review every
-          tracked email and event we've stored. To request export or deletion
-          of your account data, email{' '}
+          tracked email and event we've stored. Use the{' '}
+          <a
+            href="/settings"
+            className="text-falcon-500 underline hover:text-falcon-700"
+          >
+            Settings page
+          </a>{' '}
+          to:
+        </p>
+        <ul className="mt-2 list-inside list-disc space-y-1 leading-relaxed">
+          <li>
+            <strong>Download your data</strong> — a JSON file with every row
+            scoped to your account (user record, tracked emails, links, events,
+            push subscriptions, templates, follow-ups, billing).
+          </li>
+          <li>
+            <strong>Delete your account</strong> — sends a 6-digit
+            confirmation code to your registered email; on confirm we
+            permanently remove your user record and cascade-delete every
+            associated row.
+          </li>
+        </ul>
+        <p className="mt-2 leading-relaxed">
+          Both actions are self-serve and complete within seconds. For
+          anything else, email{' '}
           <a
             href="mailto:hello@mailfalcon.app"
             className="text-falcon-500 underline hover:text-falcon-700"
           >
             hello@mailfalcon.app
           </a>{' '}
-          from the email address registered to your account. We respond within
-          7 days.
+          from the address registered to your account. We respond within 7
+          days.
         </p>
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">

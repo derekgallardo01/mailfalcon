@@ -55,3 +55,55 @@ export async function sendCode({ email, code, env }: SendCodeArgs): Promise<void
     throw new Error(`Resend send failed: ${res.status} ${await res.text()}`)
   }
 }
+
+function renderDeleteHtml(code: string): string {
+  return `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f7fa;padding:40px 16px;">
+    <tr><td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
+        <tr><td style="padding:32px 32px 8px;">
+          <p style="margin:0;font-size:14px;font-weight:600;color:#b91c1c;letter-spacing:0.02em;">MailFalcon &middot; delete account</p>
+        </td></tr>
+        <tr><td style="padding:8px 32px 8px;">
+          <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">Your account-deletion confirmation code is:</p>
+        </td></tr>
+        <tr><td style="padding:8px 32px 16px;">
+          <p style="margin:0;font-size:32px;font-weight:700;letter-spacing:0.08em;color:#0f1a2e;font-family:ui-monospace,'SF Mono',Menlo,monospace;">${code}</p>
+        </td></tr>
+        <tr><td style="padding:8px 32px 32px;">
+          <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">Paste this code in the Settings page to confirm. <strong>This deletes every tracked email, event, push subscription, and your user record</strong>. It expires in 15 minutes. If you didn't request this, you can safely ignore the email and nothing happens.</p>
+        </td></tr>
+      </table>
+      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">MailFalcon</p>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
+export async function sendDeleteCode({ email, code, env }: SendCodeArgs): Promise<void> {
+  if (env.ENVIRONMENT === 'development' || !env.RESEND_API_KEY) {
+    console.log(`[mailfalcon] dev mailer: delete code for ${email} = ${code}`)
+    return
+  }
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'MailFalcon <hello@mailfalcon.app>',
+      to: email,
+      subject: 'Confirm account deletion — MailFalcon',
+      text: `Your account-deletion confirmation code is ${code}.\n\nPaste it in the Settings page to confirm. This permanently deletes every tracked email, event, push subscription, and your user record. The code expires in 15 minutes.\n\nIf you didn't request this, ignore this email.\n\nMailFalcon`,
+      html: renderDeleteHtml(code),
+    }),
+  })
+  if (!res.ok) {
+    throw new Error(`Resend delete-code send failed: ${res.status} ${await res.text()}`)
+  }
+}
