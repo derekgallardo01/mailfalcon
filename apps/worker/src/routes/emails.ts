@@ -14,10 +14,23 @@ import { getDb } from '../lib/db'
 import { getHmacSecret } from '../lib/secrets'
 import { checkAndIncrementUsage } from '../lib/usage'
 
+const recipientInput = z.object({
+  // SHA-256 hex of lowercased email — extension hashes client-side so
+  // raw addresses never reach the server.
+  hashedAddr: z.string().regex(/^[a-f0-9]{64}$/i),
+  // "Display Name" or first part of the address. Used only to render
+  // the dashboard ("Opened by Alice") — short and non-sensitive.
+  displayLabel: z.string().max(80).optional(),
+})
+
 const mintSchema = z.object({
   recipientCount: z.number().int().min(0).max(500),
   links: z.array(z.string().url()).max(500).default([]),
   subject: z.string().max(500).optional(),
+  // Optional per-recipient detail. When absent the email gets one
+  // shared pixel (recipientId=null on every event) — keeps old
+  // extension builds working.
+  recipients: z.array(recipientInput).max(500).optional(),
 })
 
 const sortSchema = z.enum([
@@ -89,6 +102,13 @@ emailsRouter.post('/', async (c) => {
   const hmacSalt = newSalt()
   const sig = await sign(id, secret, 12)
 
+  const recipientRows = (parsed.data.recipients ?? []).map((r) => ({
+    id: `${id}:r${Math.random().toString(36).slice(2, 10)}`,
+    emailId: id,
+    hashedAddr: r.hashedAddr,
+    displayLabel: r.displayLabel ?? null,
+  }))
+
   await db.batch([
     db.insert(trackedEmails).values({
       id,
@@ -110,11 +130,23 @@ emailsRouter.post('/', async (c) => {
         originalUrl: url,
       }),
     ),
+    ...recipientRows.map((r) => db.insert(recipients).values(r)),
   ])
+
+  // For each recipient, sign `${id}:${recipientId}` so the per-recipient
+  // pixel URLs can't be swapped by a forwarder without invalidating.
+  const recipientPixels = await Promise.all(
+    recipientRows.map(async (r) => ({
+      recipientId: r.id,
+      displayLabel: r.displayLabel,
+      sig: await sign(`${id}:${r.id}`, secret, 12),
+    })),
+  )
 
   return c.json({
     id,
     sig,
+    recipientPixels,
     usage: { used: usage.used, limit: usage.limit, tier },
   })
 })
@@ -292,6 +324,7 @@ emailsRouter.get('/:id', async (c) => {
       type: e.type,
       ts: e.ts,
       linkId: e.linkId,
+      recipientId: e.recipientId,
       uaClass: e.uaClass,
       ipPrefix: e.ipPrefix,
       ipFull: e.ipFull,

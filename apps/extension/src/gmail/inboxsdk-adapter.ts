@@ -1,6 +1,24 @@
 import * as InboxSDK from '@inboxsdk/core'
 import { config } from '../config'
-import type { ComposeEvent, GmailAdapter } from './adapter'
+import type { ComposeEvent, GmailAdapter, RecipientHandle } from './adapter'
+
+interface SdkRecipient {
+  emailAddress?: string
+  name?: string
+}
+
+function toHandles(raw: unknown[]): RecipientHandle[] {
+  const out: RecipientHandle[] = []
+  for (const r of raw) {
+    const obj = r as SdkRecipient
+    if (typeof obj.emailAddress !== 'string' || obj.emailAddress.length === 0) continue
+    out.push({
+      address: obj.emailAddress,
+      ...(obj.name && obj.name.length > 0 ? { name: obj.name } : {}),
+    })
+  }
+  return out
+}
 
 type AnySdk = unknown
 
@@ -85,6 +103,12 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             const cc = view.getCcRecipients?.() ?? []
             const bcc = view.getBccRecipients?.() ?? []
             return to.length + cc.length + bcc.length
+          },
+          getRecipients: () => {
+            const to = view.getToRecipients?.() ?? []
+            const cc = view.getCcRecipients?.() ?? []
+            const bcc = view.getBccRecipients?.() ?? []
+            return [...toHandles(to), ...toHandles(cc), ...toHandles(bcc)]
           },
           getSubject: () => view.getSubject?.() ?? '',
           isPrivacyMode: () => privacyMode,

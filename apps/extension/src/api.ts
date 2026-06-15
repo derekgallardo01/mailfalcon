@@ -2,15 +2,28 @@ import type { Session } from './auth-store'
 import { getSession } from './auth-store'
 import { config } from './config'
 
+export interface RecipientInput {
+  hashedAddr: string
+  displayLabel?: string
+}
+
 export interface MintEmailRequest {
   recipientCount: number
   links: string[]
   subject?: string
+  recipients?: RecipientInput[]
+}
+
+export interface RecipientPixel {
+  recipientId: string
+  displayLabel: string | null
+  sig: string
 }
 
 export interface MintEmailResponse {
   id: string
   sig: string
+  recipientPixels?: RecipientPixel[]
 }
 
 // Try direct chrome.storage first (popup + SW context), then fall back

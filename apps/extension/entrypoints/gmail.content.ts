@@ -24,21 +24,25 @@ export default defineContentScript({
       }
 
       const recipientCount = event.getRecipientCount()
+      const recipients = event.getRecipients()
       const originalHtml = event.getHtmlBody()
       const subject = event.getSubject().trim() || undefined
 
       try {
-        const { html, id, linkCount, originalLinks } = await prepareTrackedBody({
-          html: originalHtml,
-          recipientCount,
-          subject,
-          trackerHost: config.trackerHost,
-          mint: mintEmail,
-        })
+        const { html, id, linkCount, originalLinks, pixelCount } =
+          await prepareTrackedBody({
+            html: originalHtml,
+            recipientCount,
+            recipients,
+            subject,
+            trackerHost: config.trackerHost,
+            mint: mintEmail,
+          })
         event.setHtmlBody(html)
         console.log('[mailfalcon] tracked send', {
           id,
           recipientCount,
+          pixelCount,
           linkCount,
           links: originalLinks,
         })

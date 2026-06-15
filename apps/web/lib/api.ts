@@ -110,6 +110,7 @@ export interface EmailDetail {
     type: 'open' | 'click'
     ts: number
     linkId: string | null
+    recipientId: string | null
     uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
     ipPrefix: string | null
     ipFull: string | null

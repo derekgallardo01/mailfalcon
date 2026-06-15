@@ -1,11 +1,28 @@
 import { clickUrl, pixelUrl } from '@mailfalcon/shared'
 
+export interface RecipientHandle {
+  address: string
+  name?: string
+}
+
 export interface PrepareResult {
   html: string
   id: string
   sig: string
   linkCount: number
   originalLinks: string[]
+  pixelCount: number
+}
+
+export interface MintRecipientInput {
+  hashedAddr: string
+  displayLabel?: string
+}
+
+export interface MintRecipientPixel {
+  recipientId: string
+  displayLabel: string | null
+  sig: string
 }
 
 export interface MintFn {
@@ -13,16 +30,15 @@ export interface MintFn {
     recipientCount: number
     links: string[]
     subject?: string
+    recipients?: MintRecipientInput[]
   }): Promise<{
     id: string
     sig: string
+    recipientPixels?: MintRecipientPixel[]
   }>
 }
 
-// http(s) URL pattern. Stops at whitespace and at trailing punctuation
-// that's almost never part of a URL (sentence-ending . , ; ! ? ) ' " etc.).
 const URL_REGEX = /https?:\/\/[^\s<>"']+[^\s<>"',.;!?)\]'`]/g
-
 const SKIP_PARENT_TAGS = new Set(['A', 'CODE', 'PRE', 'SCRIPT', 'STYLE'])
 
 function isInsideSkippedParent(node: Node): boolean {
@@ -35,10 +51,6 @@ function isInsideSkippedParent(node: Node): boolean {
   return false
 }
 
-// Walk text nodes and linkify any bare http(s) URLs we find. Gmail
-// usually auto-links URLs on space/newline, but not always — and a user
-// can paste a URL and hit Send before the linkify pass runs. Without
-// this step those URLs go out unrewritten.
 function linkifyTextNodes(root: Element): void {
   const doc = root.ownerDocument
   if (!doc) return
@@ -77,24 +89,52 @@ function linkifyTextNodes(root: Element): void {
   }
 }
 
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(input),
+  )
+  const bytes = new Uint8Array(buf)
+  let hex = ''
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i]!.toString(16).padStart(2, '0')
+  }
+  return hex
+}
+
+function makeLabel(r: RecipientHandle): string {
+  if (r.name && r.name.length > 0) return r.name
+  // Local-part is short and matches what Gmail itself shows.
+  const at = r.address.indexOf('@')
+  return at > 0 ? r.address.slice(0, at) : r.address
+}
+
+function makePixelImg(doc: Document, src: string): HTMLImageElement {
+  const img = doc.createElement('img')
+  img.setAttribute('src', src)
+  img.setAttribute('width', '1')
+  img.setAttribute('height', '1')
+  img.setAttribute('alt', '')
+  img.setAttribute('style', 'border:0;display:block;height:1px;width:1px;')
+  return img
+}
+
 export async function prepareTrackedBody(args: {
   html: string
   recipientCount: number
   subject?: string
+  recipients?: RecipientHandle[]
   trackerHost: string
   mint: MintFn
 }): Promise<PrepareResult> {
-  const { html, recipientCount, subject, trackerHost, mint } = args
+  const { html, recipientCount, subject, recipients, trackerHost, mint } = args
 
   const parser = new DOMParser()
   const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html')
   const body = doc.body
 
-  // 1. Linkify bare http(s) URLs in text nodes so they end up in the
-  //    rewrite pass below. Skips anchors/code blocks.
   linkifyTextNodes(body)
 
-  // 2. Collect every <a href="http(s)://…"> in document order.
   const linkRefs: Array<{ el: Element; originalUrl: string }> = []
   body.querySelectorAll('a[href]').forEach((a) => {
     const href = a.getAttribute('href') ?? ''
@@ -104,30 +144,44 @@ export async function prepareTrackedBody(args: {
 
   const originalLinks = linkRefs.map((r) => r.originalUrl)
 
-  const { id, sig } = await mint({
+  const recipientInputs: MintRecipientInput[] = []
+  if (recipients && recipients.length > 0) {
+    for (const r of recipients) {
+      const hashedAddr = await sha256Hex(r.address.toLowerCase())
+      recipientInputs.push({
+        hashedAddr,
+        displayLabel: makeLabel(r),
+      })
+    }
+  }
+
+  const { id, sig, recipientPixels } = await mint({
     recipientCount,
     links: originalLinks,
     subject,
+    ...(recipientInputs.length > 0 ? { recipients: recipientInputs } : {}),
   })
 
-  // 3. Replace each href with our /c/:id/:idx redirect; remember the
-  //    original on a data-* attr for debug.
   linkRefs.forEach(({ el, originalUrl }, idx) => {
     el.setAttribute('href', clickUrl(id, idx, sig, trackerHost))
     el.setAttribute('data-mfk-orig', originalUrl)
   })
 
-  // 4. Drop the 1×1 pixel at the end of body.
-  const img = doc.createElement('img')
-  img.setAttribute('src', pixelUrl(id, sig, trackerHost))
-  img.setAttribute('width', '1')
-  img.setAttribute('height', '1')
-  img.setAttribute('alt', '')
-  img.setAttribute(
-    'style',
-    'border:0;display:block;height:1px;width:1px;',
-  )
-  body.appendChild(img)
+  // Pixel placement: emit one per recipient if the server returned
+  // per-recipient sigs, else fall back to one shared pixel (legacy
+  // behavior so a partial rollout still works).
+  let pixelCount = 0
+  if (recipientPixels && recipientPixels.length > 0) {
+    for (const rp of recipientPixels) {
+      body.appendChild(
+        makePixelImg(doc, pixelUrl(id, rp.sig, trackerHost, rp.recipientId)),
+      )
+      pixelCount++
+    }
+  } else {
+    body.appendChild(makePixelImg(doc, pixelUrl(id, sig, trackerHost)))
+    pixelCount = 1
+  }
 
   return {
     html: body.innerHTML,
@@ -135,5 +189,6 @@ export async function prepareTrackedBody(args: {
     sig,
     linkCount: linkRefs.length,
     originalLinks,
+    pixelCount,
   }
 }

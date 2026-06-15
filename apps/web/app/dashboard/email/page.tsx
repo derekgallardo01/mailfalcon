@@ -103,6 +103,21 @@ function EmailDetailInner() {
     }
   }
 
+  // Map recipient ID → first non-bot open timestamp. Used to render the
+  // "opened by N of M" block and the per-event recipient badge.
+  const recipientLabels = new Map<string, string>()
+  data.recipients.forEach((r, idx) => {
+    recipientLabels.set(r.id, r.displayLabel ?? `Recipient ${idx + 1}`)
+  })
+
+  const openedRecipients = new Set<string>()
+  for (const ev of data.events) {
+    if (ev.type === 'open' && ev.recipientId && ev.uaClass !== 'bot') {
+      openedRecipients.add(ev.recipientId)
+    }
+  }
+  const totalRecipients = data.recipients.length
+
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
       <header className="flex items-center justify-between border-b border-falcon-200 pb-4">
@@ -132,6 +147,33 @@ function EmailDetailInner() {
         <StatCard label="Clicks" value={data.counts.clicks} />
         <StatCard label="Bot opens" value={data.counts.opens - data.counts.humanOpens} muted />
       </section>
+
+      {totalRecipients > 0 && (
+        <section className="mt-8">
+          <h2 className="text-xs font-medium uppercase tracking-wide text-falcon-500">
+            Recipients · {openedRecipients.size} of {totalRecipients} opened
+          </h2>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {data.recipients.map((r, idx) => {
+              const opened = openedRecipients.has(r.id)
+              const label = r.displayLabel ?? `Recipient ${idx + 1}`
+              return (
+                <li
+                  key={r.id}
+                  className={
+                    opened
+                      ? 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800'
+                      : 'rounded-full border border-falcon-200 bg-white px-3 py-1 text-xs text-falcon-500'
+                  }
+                >
+                  {opened ? '✓ ' : ''}
+                  {label}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="text-xs font-medium uppercase tracking-wide text-falcon-500">Links</h2>
@@ -184,6 +226,11 @@ function EmailDetailInner() {
                       ? ` · #${ev.linkId.split(':')[1]}`
                       : ''}
                   </span>
+                  {ev.recipientId && recipientLabels.has(ev.recipientId) && (
+                    <span className="rounded bg-falcon-100 px-2 py-0.5 text-xs font-medium text-falcon-700">
+                      {recipientLabels.get(ev.recipientId)}
+                    </span>
+                  )}
                   <span className="text-falcon-700" title={formatET(ev.ts)}>
                     {formatETShort(ev.ts)}
                   </span>

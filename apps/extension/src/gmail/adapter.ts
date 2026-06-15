@@ -1,7 +1,13 @@
+export interface RecipientHandle {
+  address: string
+  name?: string
+}
+
 export interface ComposeEvent {
   getHtmlBody(): string
   setHtmlBody(html: string): void
   getRecipientCount(): number
+  getRecipients(): RecipientHandle[]
   getSubject(): string
   isPrivacyMode(): boolean
   cancel(): void

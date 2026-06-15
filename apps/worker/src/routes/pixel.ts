@@ -44,9 +44,13 @@ pixelRouter.get('/:idWithExt', async (c) => {
   const idWithExt = c.req.param('idWithExt')
   const id = idWithExt.replace(/\.gif$/, '')
   const sig = c.req.query('s') ?? ''
+  const recipientId = c.req.query('r') ?? null
 
   const secret = getHmacSecret(c.env)
-  const valid = await verify(id, sig, secret, 12).catch(() => false)
+  // Per-recipient URL signs `${id}:${recipientId}`. Legacy URLs (no r=)
+  // sign just `${id}`. Reject if neither verifies.
+  const signedMessage = recipientId ? `${id}:${recipientId}` : id
+  const valid = await verify(signedMessage, sig, secret, 12).catch(() => false)
   if (!valid) return gif()
 
   // Per-IP throttle: 60 pixel hits per IP per minute. On exceed, still
@@ -76,7 +80,11 @@ pixelRouter.get('/:idWithExt', async (c) => {
   const country = geo.country ?? c.req.header('CF-IPCountry') ?? null
 
   const uaHash = await hashUa(ua)
-  const nonceKey = `nonce:${id}:${uaHash}`
+  // Scope the first-open nonce to the recipient so Alice's open doesn't
+  // mark Bob's as non-first.
+  const nonceKey = recipientId
+    ? `nonce:${id}:${recipientId}:${uaHash}`
+    : `nonce:${id}:${uaHash}`
   const seen = await c.env.KV.get(nonceKey)
   const isFirstOpen = seen ? 0 : 1
   if (!seen) {
@@ -89,7 +97,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
         .insert(events)
         .values({
           emailId: id,
-          recipientId: null,
+          recipientId,
           type: 'open',
           linkId: null,
           ts: Date.now(),
