@@ -93,8 +93,10 @@ export function AppHeader({ liveCount = 0 }: Props) {
       <div className="flex items-center gap-3">
         <Link href="/" className="flex items-center gap-2">
           <img
-            src="/icon.png"
+            src="/falcon.png"
             alt=""
+            width={28}
+            height={28}
             className="h-7 w-7 rounded"
             aria-hidden="true"
           />
