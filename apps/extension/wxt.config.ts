@@ -5,6 +5,7 @@ export default defineConfig({
     name: 'MailFalcon',
     description:
       'Email tracking for Gmail — opens, clicks, real-time notifications.',
+    homepage_url: 'https://app.mailfalcon.app',
     permissions: ['storage', 'notifications', 'alarms', 'scripting'],
     host_permissions: [
       'https://mail.google.com/*',
