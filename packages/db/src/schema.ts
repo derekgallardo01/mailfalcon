@@ -8,6 +8,11 @@ export const users = sqliteTable('users', {
     .notNull()
     .default('free'),
   stripeCustId: text('stripe_cust_id'),
+  // Daily digest opt-in. 1 = receive, 0 = opted out.
+  digestEnabled: integer('digest_enabled').notNull().default(1),
+  // YYYY-MM-DD (UTC) of the last digest we sent, prevents double-sends
+  // if cron retries.
+  digestLastSentDay: text('digest_last_sent_day'),
 })
 
 export const subscriptions = sqliteTable('subscriptions', {
@@ -25,6 +30,9 @@ export const trackedEmails = sqliteTable(
     id: text('id').primaryKey(),
     userId: text('user_id').notNull().references(() => users.id),
     subjectHash: text('subject_hash'),
+    // Plaintext subject (capped 500 chars) — visible to the sender and
+    // to admins. Privacy policy discloses storage. Old rows are NULL.
+    subject: text('subject'),
     threadId: text('thread_id'),
     messageId: text('message_id'),
     recipientCount: integer('recipient_count').notNull(),

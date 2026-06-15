@@ -128,6 +128,7 @@ adminRouter.get('/emails', async (c) => {
       id: trackedEmails.id,
       userId: trackedEmails.userId,
       userEmail: users.email,
+      subject: trackedEmails.subject,
       sentAt: trackedEmails.sentAt,
       recipientCount: trackedEmails.recipientCount,
       privacyMode: trackedEmails.privacyMode,
@@ -148,6 +149,7 @@ adminRouter.get('/emails', async (c) => {
       id: r.id,
       userId: r.userId,
       userEmail: r.userEmail,
+      subject: r.subject,
       sentAt: r.sentAt,
       recipientCount: r.recipientCount,
       privacyMode: r.privacyMode === 1,
@@ -178,6 +180,7 @@ adminRouter.get('/users/:id', async (c) => {
     db
       .select({
         id: trackedEmails.id,
+        subject: trackedEmails.subject,
         sentAt: trackedEmails.sentAt,
         recipientCount: trackedEmails.recipientCount,
         privacyMode: trackedEmails.privacyMode,
@@ -250,6 +253,7 @@ adminRouter.get('/users/:id', async (c) => {
     },
     emails: emailsList.map((r) => ({
       id: r.id,
+      subject: r.subject,
       sentAt: r.sentAt,
       recipientCount: r.recipientCount,
       privacyMode: r.privacyMode === 1,

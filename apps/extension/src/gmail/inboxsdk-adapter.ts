@@ -34,6 +34,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
         getToRecipients?: () => unknown[]
         getCcRecipients?: () => unknown[]
         getBccRecipients?: () => unknown[]
+        getSubject?: () => string
         send?: (opts?: { sendAndArchive?: boolean }) => void
       }
 
@@ -85,6 +86,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             const bcc = view.getBccRecipients?.() ?? []
             return to.length + cc.length + bcc.length
           },
+          getSubject: () => view.getSubject?.() ?? '',
           isPrivacyMode: () => privacyMode,
           cancel: () => sdkEvent.cancel(),
         }

@@ -42,5 +42,7 @@ vars = { ENVIRONMENT = "development", PUBLIC_WEB_URL = "http://localhost:3000" }
 #   STRIPE_WEBHOOK_SECRET
 #   STRIPE_PRICE_ID_PRO (or set as plain var once price is created)
 
-# [triggers]
-# crons = ["*/5 * * * *"]  # follow-up scanner (enable after follow-ups land)
+[triggers]
+# 22:00 UTC daily = 6pm Eastern. Runs sendDailyDigests() once a day per
+# user with digestEnabled=1. Idempotent via users.digest_last_sent_day.
+crons = ["0 22 * * *"]

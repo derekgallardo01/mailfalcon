@@ -17,6 +17,7 @@ import { checkAndIncrementUsage } from '../lib/usage'
 const mintSchema = z.object({
   recipientCount: z.number().int().min(0).max(500),
   links: z.array(z.string().url()).max(500).default([]),
+  subject: z.string().max(500).optional(),
 })
 
 const listQuerySchema = z.object({
@@ -76,6 +77,7 @@ emailsRouter.post('/', async (c) => {
       id,
       userId,
       subjectHash: null,
+      subject: parsed.data.subject ?? null,
       threadId: null,
       messageId: null,
       recipientCount: parsed.data.recipientCount,
@@ -113,6 +115,7 @@ emailsRouter.get('/', async (c) => {
   const rows = await db
     .select({
       id: trackedEmails.id,
+      subject: trackedEmails.subject,
       sentAt: trackedEmails.sentAt,
       recipientCount: trackedEmails.recipientCount,
       privacyMode: trackedEmails.privacyMode,
@@ -142,6 +145,7 @@ emailsRouter.get('/', async (c) => {
   return c.json({
     emails: page.map((r) => ({
       id: r.id,
+      subject: r.subject,
       sentAt: r.sentAt,
       recipientCount: r.recipientCount,
       privacyMode: r.privacyMode === 1,
@@ -210,6 +214,7 @@ emailsRouter.get('/:id', async (c) => {
   return c.json({
     email: {
       id: email.id,
+      subject: email.subject,
       sentAt: email.sentAt,
       recipientCount: email.recipientCount,
       privacyMode: email.privacyMode === 1,

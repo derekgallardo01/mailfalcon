@@ -206,6 +206,7 @@ export default function AdminPage() {
               <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
                 <tr>
                   <th className="px-4 py-2 text-left font-medium">Sender</th>
+                  <th className="px-4 py-2 text-left font-medium">Subject</th>
                   <th className="px-4 py-2 text-right font-medium">To</th>
                   <th className="px-4 py-2 text-right font-medium">Opens</th>
                   <th className="px-4 py-2 text-right font-medium">Clicks</th>
@@ -220,6 +221,9 @@ export default function AdminPage() {
                     onClick={() => router.push(`/dashboard/email?id=${encodeURIComponent(e.id)}`)}
                   >
                     <td className="px-4 py-3 text-falcon-700">{e.userEmail}</td>
+                    <td className="max-w-md truncate px-4 py-3 text-falcon-700">
+                      {e.subject || <span className="italic text-falcon-400">(no subject)</span>}
+                    </td>
                     <td className="px-4 py-3 text-right text-falcon-700">
                       {e.recipientCount}
                     </td>

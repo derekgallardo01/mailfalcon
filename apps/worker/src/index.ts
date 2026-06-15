@@ -102,4 +102,27 @@ app.route('/c', clickRouter)
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404))
 
-export default app
+import { sendDailyDigests } from './lib/digest'
+import { getDb } from './lib/db'
+
+export default {
+  fetch: app.fetch,
+  // Cron trigger: 22:00 UTC = 6pm Eastern. Runs the daily digest pass.
+  async scheduled(
+    event: ScheduledEvent,
+    env: Bindings,
+    ctx: ExecutionContext,
+  ): Promise<void> {
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const db = getDb(env.DB)
+          const result = await sendDailyDigests(db, env)
+          console.log('[mailfalcon] digest cron', event.cron, result)
+        } catch (err) {
+          console.error('[mailfalcon] digest cron failed:', err)
+        }
+      })(),
+    )
+  },
+}

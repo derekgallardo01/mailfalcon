@@ -5,6 +5,7 @@ import { config } from './config'
 export interface MintEmailRequest {
   recipientCount: number
   links: string[]
+  subject?: string
 }
 
 export interface MintEmailResponse {

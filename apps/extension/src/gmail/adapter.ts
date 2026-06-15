@@ -2,6 +2,7 @@ export interface ComposeEvent {
   getHtmlBody(): string
   setHtmlBody(html: string): void
   getRecipientCount(): number
+  getSubject(): string
   isPrivacyMode(): boolean
   cancel(): void
 }

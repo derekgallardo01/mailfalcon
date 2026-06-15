@@ -18,6 +18,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               MailFalcon
             </Link>
             <span className="mx-2">·</span>
+            <Link href="/settings" className="hover:text-falcon-700">
+              Settings
+            </Link>
+            <span className="mx-2">·</span>
             <Link href="/privacy" className="hover:text-falcon-700">
               Privacy policy
             </Link>

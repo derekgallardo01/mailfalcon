@@ -46,6 +46,7 @@ export async function logout(): Promise<void> {
 
 export interface EmailListItem {
   id: string
+  subject: string | null
   sentAt: number
   recipientCount: number
   privacyMode: boolean
@@ -73,6 +74,7 @@ export async function listEmails(cursor?: number): Promise<EmailListResponse> {
 export interface EmailDetail {
   email: {
     id: string
+    subject: string | null
     sentAt: number
     recipientCount: number
     privacyMode: boolean
@@ -124,6 +126,8 @@ export interface MeResponse {
   tier: 'free' | 'pro' | 'team' | 'admin'
   createdAt: number
   hasStripeCustomer: boolean
+  digestEnabled: boolean
+  digestLastSentDay: string | null
   usage: { used: number; limit: number }
 }
 
@@ -134,6 +138,18 @@ export async function getMe(): Promise<MeResponse> {
   if (res.status === 401) throw new Error('unauthorized')
   if (!res.ok) throw new Error(`me_failed:${res.status}`)
   return (await res.json()) as MeResponse
+}
+
+export async function updateMe(patch: {
+  digestEnabled?: boolean
+}): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/me`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(patch),
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`me_patch_failed:${res.status}`)
 }
 
 export async function startCheckout(): Promise<string> {
@@ -191,6 +207,7 @@ export interface AdminEmail {
   id: string
   userId: string
   userEmail: string
+  subject: string | null
   sentAt: number
   recipientCount: number
   privacyMode: boolean
@@ -244,6 +261,7 @@ export interface AdminUserDetail {
   }
   emails: Array<{
     id: string
+    subject: string | null
     sentAt: number
     recipientCount: number
     privacyMode: boolean

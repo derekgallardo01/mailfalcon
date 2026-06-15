@@ -25,11 +25,13 @@ export default defineContentScript({
 
       const recipientCount = event.getRecipientCount()
       const originalHtml = event.getHtmlBody()
+      const subject = event.getSubject().trim() || undefined
 
       try {
         const { html, id, linkCount, originalLinks } = await prepareTrackedBody({
           html: originalHtml,
           recipientCount,
+          subject,
           trackerHost: config.trackerHost,
           mint: mintEmail,
         })

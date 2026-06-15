@@ -45,9 +45,10 @@ export default function PrivacyPage() {
           </li>
         </ul>
         <p className="mt-3 leading-relaxed">
-          We do <strong>not</strong> store the subject line or body of your
-          emails. We do not store your recipients' email addresses — only a
-          count.
+          We store the <strong>subject line</strong> of tracked emails so you
+          and MailFalcon administrators can identify them in the dashboard.
+          We do <strong>not</strong> store the body. We do not store your
+          recipients' email addresses — only a count.
         </p>
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">
@@ -100,6 +101,17 @@ export default function PrivacyPage() {
           MailFalcon extension. When checked, no pixel is injected, no links
           are rewritten, and no record of the send is created on our servers.
           That email is, from our perspective, completely untracked.
+        </p>
+
+        <h2 className="mt-6 text-base font-semibold text-falcon-700">
+          Email we send to you
+        </h2>
+        <p className="mt-2 leading-relaxed">
+          We send one-time sign-in codes to your email address. If enabled
+          (default on, toggle in <a href="/settings" className="text-falcon-500 underline hover:text-falcon-700">Settings</a>), we send a daily summary
+          email at 6pm Eastern with that day's open/click counts and the
+          subjects of your most-engaged emails. Days without activity are
+          skipped. We do not include recipient addresses in the digest.
         </p>
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">

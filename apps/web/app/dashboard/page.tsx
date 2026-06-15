@@ -186,10 +186,11 @@ export default function DashboardPage() {
             <table className="w-full text-sm">
               <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
                 <tr>
-                  <th className="px-4 py-2 text-left font-medium">Sent</th>
+                  <th className="px-4 py-2 text-left font-medium">Subject</th>
                   <th className="px-4 py-2 text-right font-medium">To</th>
                   <th className="px-4 py-2 text-right font-medium">Opens</th>
                   <th className="px-4 py-2 text-right font-medium">Clicks</th>
+                  <th className="px-4 py-2 text-right font-medium">Sent</th>
                   <th className="px-4 py-2 text-right font-medium">Last event</th>
                 </tr>
               </thead>
@@ -201,8 +202,8 @@ export default function DashboardPage() {
                     onClick={() => router.push(`/dashboard/email?id=${e.id}`)}
                   >
                     <td className="px-4 py-3 text-falcon-700">
-                      <Link href={`/dashboard/email?id=${e.id}`} className="block">
-                        {formatRelative(e.sentAt)}
+                      <Link href={`/dashboard/email?id=${e.id}`} className="block max-w-md truncate">
+                        {e.subject || <span className="italic text-falcon-400">(no subject)</span>}
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-right text-falcon-700">
@@ -217,6 +218,9 @@ export default function DashboardPage() {
                       <span className={e.clickCount > 0 ? 'font-medium text-falcon-700' : 'text-falcon-400'}>
                         {e.clickCount}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-falcon-500">
+                      {formatRelative(e.sentAt)}
                     </td>
                     <td className="px-4 py-3 text-right text-falcon-500">
                       {e.lastEventAt ? formatRelative(e.lastEventAt) : '—'}

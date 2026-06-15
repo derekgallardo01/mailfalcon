@@ -9,7 +9,11 @@ export interface PrepareResult {
 }
 
 export interface MintFn {
-  (req: { recipientCount: number; links: string[] }): Promise<{
+  (req: {
+    recipientCount: number
+    links: string[]
+    subject?: string
+  }): Promise<{
     id: string
     sig: string
   }>
@@ -76,10 +80,11 @@ function linkifyTextNodes(root: Element): void {
 export async function prepareTrackedBody(args: {
   html: string
   recipientCount: number
+  subject?: string
   trackerHost: string
   mint: MintFn
 }): Promise<PrepareResult> {
-  const { html, recipientCount, trackerHost, mint } = args
+  const { html, recipientCount, subject, trackerHost, mint } = args
 
   const parser = new DOMParser()
   const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html')
@@ -102,6 +107,7 @@ export async function prepareTrackedBody(args: {
   const { id, sig } = await mint({
     recipientCount,
     links: originalLinks,
+    subject,
   })
 
   // 3. Replace each href with our /c/:id/:idx redirect; remember the

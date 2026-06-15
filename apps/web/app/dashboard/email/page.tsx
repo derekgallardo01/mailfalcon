@@ -110,8 +110,10 @@ function EmailDetailInner() {
           <Link href="/dashboard" className="text-xs text-falcon-500 hover:text-falcon-700">
             ← All emails
           </Link>
-          <h1 className="mt-1 text-xl font-semibold text-falcon-700">
-            Email {data.email.id.slice(0, 8)}…
+          <h1 className="mt-1 max-w-xl truncate text-xl font-semibold text-falcon-700">
+            {data.email.subject || (
+              <span className="italic text-falcon-400">(no subject)</span>
+            )}
           </h1>
           <p className="text-xs text-falcon-500" title={formatET(data.email.sentAt)}>
             Sent {formatRelative(data.email.sentAt)} · {data.email.recipientCount} recipient{data.email.recipientCount === 1 ? '' : 's'}

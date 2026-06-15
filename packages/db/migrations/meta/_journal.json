@@ -15,6 +15,13 @@
       "when": 1781480813876,
       "tag": "0001_faulty_hitman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781521880730,
+      "tag": "0002_cooing_iron_lad",
+      "breakpoints": true
     }
   ]
 }
