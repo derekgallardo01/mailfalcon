@@ -5,6 +5,7 @@ import {
   users,
 } from '@mailfalcon/db/schema'
 import type { DB } from './db'
+import { createLogger, errorMeta } from './logger'
 
 export interface DigestStats {
   emailsSent: number
@@ -249,6 +250,8 @@ interface DigestEnv {
   ENVIRONMENT: string
   PUBLIC_WEB_URL?: string
   RESEND_API_KEY?: string
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
 }
 
 export async function sendDailyDigests(db: DB, env: DigestEnv): Promise<{
@@ -319,7 +322,10 @@ export async function sendDailyDigests(db: DB, env: DigestEnv): Promise<{
         .run()
       sent++
     } catch (err) {
-      console.error('[mailfalcon] digest send failed for', u.email, err)
+      createLogger({ env }).error('digest_send_failed', {
+        recipient: u.email,
+        ...errorMeta(err),
+      })
       failed++
     }
   }

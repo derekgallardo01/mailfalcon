@@ -42,8 +42,6 @@ export function getJwtSecret(env: {
   ENVIRONMENT: string
 }): string {
   if (env.JWT_SECRET) return env.JWT_SECRET
-  if (env.ENVIRONMENT === 'development') {
-    return 'mailfalcon-dev-jwt-insecure'
-  }
-  throw new Error('JWT_SECRET is required in non-dev environments')
+  if (env.ENVIRONMENT === 'development') return 'mailfalcon-dev-jwt-insecure'
+  throw new Error('JWT_SECRET is required outside development')
 }

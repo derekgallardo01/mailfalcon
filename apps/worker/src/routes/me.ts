@@ -15,6 +15,7 @@ import {
 } from '@mailfalcon/db/schema'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
+import { createLogger, errorMeta } from '../lib/logger'
 import { sendDeleteCode } from '../lib/mailer'
 import { getUsage } from '../lib/usage'
 
@@ -23,6 +24,8 @@ type Bindings = {
   DB: D1Database
   KV: KVNamespace
   RESEND_API_KEY?: string
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
 }
 
 const patchSchema = z.object({
@@ -200,7 +203,10 @@ meRouter.post('/delete-request', async (c) => {
   try {
     await sendDeleteCode({ email: user.email, code, env: c.env })
   } catch (err) {
-    console.error('[mailfalcon] delete-code send failed:', err)
+    createLogger({
+      env: c.env,
+      waitUntil: (p) => c.executionCtx.waitUntil(p),
+    }).error('delete_code_send_failed', { email: user.email, ...errorMeta(err) })
   }
 
   return c.json({ ok: true })

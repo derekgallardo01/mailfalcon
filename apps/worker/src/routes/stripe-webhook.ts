@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import type Stripe from 'stripe'
 import { subscriptions, users } from '@mailfalcon/db/schema'
 import { getDb } from '../lib/db'
+import { createLogger, errorMeta } from '../lib/logger'
 import { getStripe, stripeCryptoProvider } from '../lib/stripe'
 
 type Bindings = {
@@ -10,6 +11,8 @@ type Bindings = {
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   DB: D1Database
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
 }
 
 export const stripeWebhookRouter = new Hono<{ Bindings: Bindings }>()
@@ -33,7 +36,10 @@ stripeWebhookRouter.post('/', async (c) => {
       stripeCryptoProvider,
     )
   } catch (err) {
-    console.error('[mailfalcon] stripe webhook sig check failed:', err)
+    createLogger({ env: c.env }).error(
+      'stripe_webhook_sig_check_failed',
+      errorMeta(err),
+    )
     return c.json({ error: 'invalid_signature' }, 400)
   }
 

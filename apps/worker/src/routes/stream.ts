@@ -3,12 +3,15 @@ import { and, asc, eq, gt } from 'drizzle-orm'
 import { events, trackedEmails } from '@mailfalcon/db/schema'
 import { getDb } from '../lib/db'
 import { getJwtSecret, verifyJwt } from '../lib/jwt'
+import { createLogger, errorMeta } from '../lib/logger'
 
 type Bindings = {
   ENVIRONMENT: string
   JWT_SECRET?: string
   DB: D1Database
   KV: KVNamespace
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
 }
 
 interface SessionRecord {
@@ -112,7 +115,10 @@ streamRouter.get('/', async (c) => {
               `event: error\ndata: ${JSON.stringify({ message: 'poll_failed' })}\n\n`,
             ),
           )
-          console.error('[mailfalcon] stream poll failed:', err)
+          createLogger({ env: c.env }).error(
+            'stream_poll_failed',
+            errorMeta(err),
+          )
         }
 
         await new Promise<void>((r) => setTimeout(r, POLL_MS))

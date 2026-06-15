@@ -5,6 +5,7 @@ import { users } from '@mailfalcon/db/schema'
 import { newTrackingId } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
 import { getJwtSecret, signJwt, verifyJwt } from '../lib/jwt'
+import { createLogger, errorMeta } from '../lib/logger'
 import { sendCode } from '../lib/mailer'
 
 const requestSchema = z.object({
@@ -20,6 +21,8 @@ type Bindings = {
   ENVIRONMENT: string
   JWT_SECRET?: string
   RESEND_API_KEY?: string
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
   DB: D1Database
   KV: KVNamespace
 }
@@ -62,7 +65,10 @@ authRouter.post('/request', async (c) => {
   try {
     await sendCode({ email, code, env: c.env })
   } catch (err) {
-    console.error('[mailfalcon] sendCode failed:', err)
+    createLogger({
+      env: c.env,
+      waitUntil: (p) => c.executionCtx.waitUntil(p),
+    }).error('send_code_failed', { email, ...errorMeta(err) })
   }
 
   return c.json({ ok: true })

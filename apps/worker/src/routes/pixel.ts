@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { events, trackedEmails } from '@mailfalcon/db/schema'
 import { verify } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
+import { createLogger, errorMeta } from '../lib/logger'
 import { fanoutPush } from '../lib/push-fanout'
 import { getHmacSecret } from '../lib/secrets'
 import { extractCfGeo, hashUa, parseUa, truncateIpV4 } from '../lib/ua'
@@ -15,6 +16,8 @@ type Bindings = {
   VAPID_PUBLIC_KEY?: string
   VAPID_PRIVATE_KEY_JWK?: string
   VAPID_SUBJECT?: string
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
 }
 
 const TRANSPARENT_GIF = new Uint8Array([
@@ -101,7 +104,10 @@ pixelRouter.get('/:idWithExt', async (c) => {
         .run()
       if (uaDetails.uaClass !== 'bot') {
         await fanoutPush(db, c.env, row.userId).catch((err) =>
-          console.warn('[mailfalcon] pixel fanout failed:', err),
+          createLogger({ env: c.env }).warn(
+            'pixel_fanout_failed',
+            errorMeta(err),
+          ),
         )
       }
     })(),

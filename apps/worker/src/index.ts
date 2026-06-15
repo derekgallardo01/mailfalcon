@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { adminMiddleware } from './lib/admin-middleware'
 import { authMiddleware, type Variables } from './lib/auth-middleware'
+import { createLogger, errorMeta } from './lib/logger'
 import { adminRouter } from './routes/admin'
 import { authRouter } from './routes/auth'
 import { billingRouter } from './routes/billing'
@@ -26,6 +27,8 @@ type Bindings = {
   VAPID_PUBLIC_KEY?: string
   VAPID_PRIVATE_KEY_JWK?: string
   VAPID_SUBJECT?: string
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
   DB: D1Database
   KV: KVNamespace
   ASSETS: R2Bucket
@@ -102,6 +105,19 @@ app.route('/c', clickRouter)
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404))
 
+app.onError((err, c) => {
+  const log = createLogger({
+    env: c.env,
+    waitUntil: (p) => c.executionCtx.waitUntil(p),
+  })
+  log.error('unhandled_error', {
+    path: c.req.path,
+    method: c.req.method,
+    ...errorMeta(err),
+  })
+  return c.json({ error: 'internal' }, 500)
+})
+
 import { sendAdminDigests } from './lib/admin-digest'
 import { sendDailyDigests } from './lib/digest'
 import { getDb } from './lib/db'
@@ -114,20 +130,21 @@ export default {
     env: Bindings,
     ctx: ExecutionContext,
   ): Promise<void> {
+    const log = createLogger({ env, waitUntil: (p) => ctx.waitUntil(p) })
     ctx.waitUntil(
       (async () => {
         const db = getDb(env.DB)
         try {
           const user = await sendDailyDigests(db, env)
-          console.log('[mailfalcon] user digest', event.cron, user)
+          log.info('cron_user_digest', { cron: event.cron, ...user })
         } catch (err) {
-          console.error('[mailfalcon] user digest failed:', err)
+          log.error('cron_user_digest_failed', errorMeta(err))
         }
         try {
           const admin = await sendAdminDigests(db, env)
-          console.log('[mailfalcon] admin digest', event.cron, admin)
+          log.info('cron_admin_digest', { cron: event.cron, ...admin })
         } catch (err) {
-          console.error('[mailfalcon] admin digest failed:', err)
+          log.error('cron_admin_digest_failed', errorMeta(err))
         }
       })(),
     )

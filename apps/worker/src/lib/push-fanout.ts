@@ -1,12 +1,16 @@
 import { eq } from 'drizzle-orm'
 import { notificationSubscriptions } from '@mailfalcon/db/schema'
 import type { DB } from './db'
+import { createLogger, errorMeta } from './logger'
 import { sendPushEmpty } from './web-push'
 
 interface PushEnv {
+  ENVIRONMENT: string
   VAPID_PUBLIC_KEY?: string
   VAPID_PRIVATE_KEY_JWK?: string
   VAPID_SUBJECT?: string
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
 }
 
 /**
@@ -52,7 +56,7 @@ export async function fanoutPush(
           pruned++
         }
       } catch (err) {
-        console.warn('[mailfalcon] push fanout error:', err)
+        createLogger({ env }).warn('push_fanout_error', errorMeta(err))
       }
     }),
   )

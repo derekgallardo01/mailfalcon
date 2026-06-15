@@ -5,11 +5,14 @@ import {
   users,
 } from '@mailfalcon/db/schema'
 import type { DB } from './db'
+import { createLogger, errorMeta } from './logger'
 
 interface AdminDigestEnv {
   ENVIRONMENT: string
   PUBLIC_WEB_URL?: string
   RESEND_API_KEY?: string
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
 }
 
 interface AdminStats {
@@ -378,7 +381,10 @@ export async function sendAdminDigests(
         })
         sent++
       } catch (err) {
-        console.error('[mailfalcon] admin digest send failed for', admin.email, err)
+        createLogger({ env }).error('admin_digest_send_failed', {
+          recipient: admin.email,
+          ...errorMeta(err),
+        })
         failed++
       }
     }),

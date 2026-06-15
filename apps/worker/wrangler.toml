@@ -34,13 +34,18 @@ bucket_name = "mailfalcon-assets"
 [env.dev]
 vars = { ENVIRONMENT = "development", PUBLIC_WEB_URL = "http://localhost:3000" }
 
-# Secrets — set with `wrangler secret put <NAME>`:
-#   HMAC_SECRET
-#   JWT_SECRET
-#   RESEND_API_KEY
-#   STRIPE_SECRET_KEY
-#   STRIPE_WEBHOOK_SECRET
-#   STRIPE_PRICE_ID_PRO (or set as plain var once price is created)
+# Secrets — set with `wrangler secret put <NAME>`. See docs/DEPLOY.md.
+#   HMAC_SECRET            required — signs pixel + click URLs
+#   JWT_SECRET             required — signs session tokens
+#   RESEND_API_KEY         required — sign-in + digest + delete-confirm email
+#   VAPID_PUBLIC_KEY       required — Web Push public key
+#   VAPID_PRIVATE_KEY_JWK  required — Web Push private key (JWK JSON)
+#   VAPID_SUBJECT          required — Web Push contact (mailto:…)
+#   STRIPE_SECRET_KEY      optional — billing checkout (returns 503 if unset)
+#   STRIPE_WEBHOOK_SECRET  optional — Stripe webhook signature
+#   STRIPE_PRICE_ID_PRO    optional — Pro tier price
+#   AXIOM_TOKEN            optional — error + warn forwarder (Cloudflare console fallback if unset)
+#   AXIOM_DATASET          optional — Axiom dataset name
 
 [triggers]
 # 22:00 UTC daily = 6pm Eastern. Runs sendDailyDigests() once a day per
