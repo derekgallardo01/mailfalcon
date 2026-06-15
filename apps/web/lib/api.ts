@@ -50,7 +50,10 @@ export interface EmailListItem {
   sentAt: number
   recipientCount: number
   privacyMode: boolean
+  /** Total opens, including Gmail's image proxy and other prefetchers. */
   openCount: number
+  /** Opens with uaClass != 'bot'. Use as the headline number. */
+  humanOpenCount: number
   clickCount: number
   lastEventAt: number | null
 }
@@ -411,6 +414,7 @@ export interface AdminEmail {
   recipientCount: number
   privacyMode: boolean
   opens: number
+  humanOpens: number
   clicks: number
 }
 

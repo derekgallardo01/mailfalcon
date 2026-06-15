@@ -183,9 +183,9 @@ function DashboardInner() {
 
   const stats = (() => {
     const sent = emails.length
-    const opens = emails.reduce((s, e) => s + e.openCount, 0)
+    const opens = emails.reduce((s, e) => s + e.humanOpenCount, 0)
     const clicks = emails.reduce((s, e) => s + e.clickCount, 0)
-    const opened = emails.filter((e) => e.openCount > 0).length
+    const opened = emails.filter((e) => e.humanOpenCount > 0).length
     const openRate = sent > 0 ? Math.round((opened / sent) * 100) : 0
     return { sent, opens, clicks, openRate }
   })()
@@ -219,7 +219,7 @@ function DashboardInner() {
       <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label={`Sent · ${dateScopeLabel}`} value={stats.sent} />
         <StatCard label="Opens" value={stats.opens} />
-        <StatCard label="Open rate" value={`${stats.openRate}%`} hint={`${emails.filter((e) => e.openCount > 0).length} of ${stats.sent}`} />
+        <StatCard label="Open rate" value={`${stats.openRate}%`} hint={`${emails.filter((e) => e.humanOpenCount > 0).length} of ${stats.sent}`} />
         <StatCard label="Clicks" value={stats.clicks} accent={stats.clicks > 0} />
       </section>
 
@@ -387,8 +387,9 @@ function DashboardInner() {
               </thead>
               <tbody className="divide-y divide-falcon-100">
                 {emails.map((e) => {
-                  const opened = e.openCount > 0
+                  const opened = e.humanOpenCount > 0
                   const clicked = e.clickCount > 0
+                  const botOpens = e.openCount - e.humanOpenCount
                   return (
                     <tr
                       key={e.id}
@@ -425,7 +426,14 @@ function DashboardInner() {
                       <td className="px-3 py-2.5 text-right tabular-nums text-falcon-500">
                         {e.recipientCount}
                       </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">
+                      <td
+                        className="px-3 py-2.5 text-right tabular-nums"
+                        title={
+                          botOpens > 0
+                            ? `${e.humanOpenCount} human, ${botOpens} bot (Gmail prefetch)`
+                            : undefined
+                        }
+                      >
                         <span
                           className={
                             opened
@@ -433,8 +441,13 @@ function DashboardInner() {
                               : 'text-falcon-300'
                           }
                         >
-                          {e.openCount}
+                          {e.humanOpenCount}
                         </span>
+                        {botOpens > 0 && (
+                          <span className="ml-1 text-[10px] text-falcon-300">
+                            +{botOpens} bot
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
                         <span

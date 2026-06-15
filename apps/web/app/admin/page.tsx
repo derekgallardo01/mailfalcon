@@ -349,12 +349,24 @@ export default function AdminPage() {
                         <td className="px-4 py-3 text-right text-falcon-700">
                           {e.recipientCount}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td
+                          className="px-4 py-3 text-right"
+                          title={
+                            e.opens - e.humanOpens > 0
+                              ? `${e.humanOpens} human, ${e.opens - e.humanOpens} bot (Gmail prefetch)`
+                              : undefined
+                          }
+                        >
                           <span
-                            className={e.opens > 0 ? 'font-medium text-falcon-700' : 'text-falcon-400'}
+                            className={e.humanOpens > 0 ? 'font-semibold text-emerald-700' : 'text-falcon-300'}
                           >
-                            {e.opens}
+                            {e.humanOpens}
                           </span>
+                          {e.opens - e.humanOpens > 0 && (
+                            <span className="ml-1 text-[10px] text-falcon-300">
+                              +{e.opens - e.humanOpens} bot
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <span

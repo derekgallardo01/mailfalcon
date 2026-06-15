@@ -206,6 +206,7 @@ emailsRouter.get('/', async (c) => {
 
   // Aggregate expressions reused for both SELECT and ORDER BY.
   const opensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`
+  const humanOpensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`
   const clicksExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`
 
   const filters = [eq(trackedEmails.userId, userId)]
@@ -259,6 +260,7 @@ emailsRouter.get('/', async (c) => {
       recipientCount: trackedEmails.recipientCount,
       privacyMode: trackedEmails.privacyMode,
       openCount: opensExpr,
+      humanOpenCount: humanOpensExpr,
       clickCount: clicksExpr,
       lastEventAt: sql<number | null>`MAX(${events.ts})`,
     })
@@ -287,6 +289,7 @@ emailsRouter.get('/', async (c) => {
       recipientCount: r.recipientCount,
       privacyMode: r.privacyMode === 1,
       openCount: Number(r.openCount),
+      humanOpenCount: Number(r.humanOpenCount),
       clickCount: Number(r.clickCount),
       lastEventAt: r.lastEventAt,
     })),

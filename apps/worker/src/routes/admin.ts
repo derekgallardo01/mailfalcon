@@ -134,6 +134,7 @@ adminRouter.get('/emails', async (c) => {
   const db = getDb(c.env.DB)
 
   const opensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`
+  const humanOpensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`
   const clicksExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`
 
   const filters = []
@@ -170,6 +171,7 @@ adminRouter.get('/emails', async (c) => {
       recipientCount: trackedEmails.recipientCount,
       privacyMode: trackedEmails.privacyMode,
       opens: opensExpr,
+      humanOpens: humanOpensExpr,
       clicks: clicksExpr,
     })
     .from(trackedEmails)
@@ -191,6 +193,7 @@ adminRouter.get('/emails', async (c) => {
       recipientCount: r.recipientCount,
       privacyMode: r.privacyMode === 1,
       opens: Number(r.opens),
+      humanOpens: Number(r.humanOpens),
       clicks: Number(r.clicks),
     })),
   })
