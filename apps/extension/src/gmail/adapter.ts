@@ -10,6 +10,8 @@ export interface ComposeEvent {
   getRecipients(): RecipientHandle[]
   getSubject(): string
   isPrivacyMode(): boolean
+  /** Null when no reminder was selected; number of days otherwise. */
+  getRemindAfterDays(): number | null
   cancel(): void
 }
 

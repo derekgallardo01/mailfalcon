@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { and, asc, desc, eq, gte, like, lte, sql } from 'drizzle-orm'
 import {
   events,
+  followUps,
   links,
   recipients,
   trackedEmails,
@@ -31,6 +32,9 @@ const mintSchema = z.object({
   // shared pixel (recipientId=null on every event) — keeps old
   // extension builds working.
   recipients: z.array(recipientInput).max(500).optional(),
+  // If set, the worker inserts a follow_ups row that the cron
+  // evaluator will fire as a reminder if no non-bot open by then.
+  remindAfterDays: z.number().int().min(1).max(60).optional(),
 })
 
 const sortSchema = z.enum([
@@ -101,6 +105,7 @@ emailsRouter.post('/', async (c) => {
   const id = newTrackingId()
   const hmacSalt = newSalt()
   const sig = await sign(id, secret, 12)
+  const sentAt = Date.now()
 
   const recipientRows = (parsed.data.recipients ?? []).map((r) => ({
     id: `${id}:r${Math.random().toString(36).slice(2, 10)}`,
@@ -108,6 +113,17 @@ emailsRouter.post('/', async (c) => {
     hashedAddr: r.hashedAddr,
     displayLabel: r.displayLabel ?? null,
   }))
+
+  const followupRow = parsed.data.remindAfterDays
+    ? {
+        id: `fu_${newTrackingId()}`,
+        userId,
+        emailId: id,
+        remindAt: sentAt + parsed.data.remindAfterDays * 86_400_000,
+        condition: 'no_open' as const,
+        fired: 0,
+      }
+    : null
 
   await db.batch([
     db.insert(trackedEmails).values({
@@ -118,7 +134,7 @@ emailsRouter.post('/', async (c) => {
       threadId: null,
       messageId: null,
       recipientCount: parsed.data.recipientCount,
-      sentAt: Date.now(),
+      sentAt,
       hmacSalt,
       privacyMode: 0,
     }),
@@ -131,6 +147,7 @@ emailsRouter.post('/', async (c) => {
       }),
     ),
     ...recipientRows.map((r) => db.insert(recipients).values(r)),
+    ...(followupRow ? [db.insert(followUps).values(followupRow)] : []),
   ])
 
   // For each recipient, sign `${id}:${recipientId}` so the per-recipient

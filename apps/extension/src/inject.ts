@@ -31,6 +31,7 @@ export interface MintFn {
     links: string[]
     subject?: string
     recipients?: MintRecipientInput[]
+    remindAfterDays?: number
   }): Promise<{
     id: string
     sig: string
@@ -124,10 +125,19 @@ export async function prepareTrackedBody(args: {
   recipientCount: number
   subject?: string
   recipients?: RecipientHandle[]
+  remindAfterDays?: number
   trackerHost: string
   mint: MintFn
 }): Promise<PrepareResult> {
-  const { html, recipientCount, subject, recipients, trackerHost, mint } = args
+  const {
+    html,
+    recipientCount,
+    subject,
+    recipients,
+    remindAfterDays,
+    trackerHost,
+    mint,
+  } = args
 
   const parser = new DOMParser()
   const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html')
@@ -160,6 +170,7 @@ export async function prepareTrackedBody(args: {
     links: originalLinks,
     subject,
     ...(recipientInputs.length > 0 ? { recipients: recipientInputs } : {}),
+    ...(remindAfterDays ? { remindAfterDays } : {}),
   })
 
   linkRefs.forEach(({ el, originalUrl }, idx) => {

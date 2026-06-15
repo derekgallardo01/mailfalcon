@@ -27,6 +27,7 @@ export default defineContentScript({
       const recipients = event.getRecipients()
       const originalHtml = event.getHtmlBody()
       const subject = event.getSubject().trim() || undefined
+      const remindAfterDays = event.getRemindAfterDays() ?? undefined
 
       try {
         const { html, id, linkCount, originalLinks, pixelCount } =
@@ -35,6 +36,7 @@ export default defineContentScript({
             recipientCount,
             recipients,
             subject,
+            ...(remindAfterDays !== undefined ? { remindAfterDays } : {}),
             trackerHost: config.trackerHost,
             mint: mintEmail,
           })
@@ -44,6 +46,7 @@ export default defineContentScript({
           recipientCount,
           pixelCount,
           linkCount,
+          remindAfterDays,
           links: originalLinks,
         })
       } catch (err) {

@@ -12,6 +12,7 @@ export interface MintEmailRequest {
   links: string[]
   subject?: string
   recipients?: RecipientInput[]
+  remindAfterDays?: number
 }
 
 export interface RecipientPixel {
@@ -102,4 +103,66 @@ export async function logout(): Promise<void> {
     method: 'POST',
     headers: { ...(await authHeader()) },
   }).catch(() => undefined)
+}
+
+export interface Template {
+  id: string
+  name: string
+  subject: string
+  bodyHtml: string
+  createdAt: number
+}
+
+const TEMPLATES_CACHE_KEY = 'mf.templatesCache'
+const TEMPLATES_CACHE_TTL_MS = 60 * 60 * 1000
+
+interface CachedTemplates {
+  fetchedAt: number
+  templates: Template[]
+}
+
+/**
+ * Templates the user manages on the web. Cached in chrome.storage for an
+ * hour so the popup is instant — refetched in the background after the
+ * TTL expires.
+ */
+export async function listTemplates(opts?: {
+  force?: boolean
+}): Promise<Template[]> {
+  if (!opts?.force && typeof chrome !== 'undefined' && chrome.storage?.local) {
+    try {
+      const stored = await chrome.storage.local.get(TEMPLATES_CACHE_KEY)
+      const cache = stored[TEMPLATES_CACHE_KEY] as CachedTemplates | undefined
+      if (cache && Date.now() - cache.fetchedAt < TEMPLATES_CACHE_TTL_MS) {
+        return cache.templates
+      }
+    } catch {
+      /* fall through to network */
+    }
+  }
+
+  const res = await fetch(`${config.apiHost}/v1/templates`, {
+    headers: { ...(await authHeader()) },
+  })
+  if (!res.ok) throw new Error(`templates_list_failed:${res.status}`)
+  const data = (await res.json()) as { templates: Template[] }
+
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    try {
+      await chrome.storage.local.set({
+        [TEMPLATES_CACHE_KEY]: {
+          fetchedAt: Date.now(),
+          templates: data.templates,
+        } satisfies CachedTemplates,
+      })
+    } catch {
+      /* ignore cache write failure */
+    }
+  }
+  return data.templates
+}
+
+export async function clearTemplatesCache(): Promise<void> {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return
+  await chrome.storage.local.remove(TEMPLATES_CACHE_KEY).catch(() => undefined)
 }
