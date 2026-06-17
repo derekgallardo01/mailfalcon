@@ -1,20 +1,20 @@
 import {
   clearPendingVerify,
-  clearSession,
   getPendingVerify,
   getSession,
   hasSeenOnboarding,
   markOnboardingSeen,
   resetOnboarding,
   setPendingVerify,
-  setSession,
 } from '../../src/auth-store'
-import { logout, requestCode, verifyCode } from '../../src/api'
+import { requestCode } from '../../src/api'
 import {
   cancel as cancelScheduled,
   listPending as listScheduled,
   type ScheduledSend,
 } from '../../src/scheduled'
+import { pendingSendCount, performSignOut } from '../../src/sign-out'
+import { verifyCodeWithCleanup } from '../../src/verify-flow'
 
 const root = document.getElementById('root')!
 
@@ -103,9 +103,14 @@ async function showSignedIn(email: string): Promise<void> {
   bind(frag, { email })
   render(frag)
   document.getElementById('logout-btn')?.addEventListener('click', async () => {
-    await logout()
-    await clearSession()
-    await clearPendingVerify()
+    const pending = await pendingSendCount()
+    if (pending > 0) {
+      const ok = confirm(
+        `${pending} scheduled send${pending === 1 ? '' : 's'} will be cancelled when you sign out. Continue?`,
+      )
+      if (!ok) return
+    }
+    await performSignOut()
     try {
       await chrome.runtime.sendMessage({ type: 'signed-out' })
     } catch {
@@ -160,8 +165,7 @@ async function showVerify(email: string): Promise<void> {
     const code = codeInput.value.trim()
     setMsg('verify-msg', 'Verifying…')
     try {
-      const result = await verifyCode(email, code)
-      await setSession({ token: result.token, email: result.email, userId: result.userId })
+      const result = await verifyCodeWithCleanup(email, code)
       await clearPendingVerify()
       try {
         await chrome.runtime.sendMessage({ type: 'signed-in' })

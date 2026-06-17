@@ -75,6 +75,28 @@ export async function listPending(): Promise<ScheduledSend[]> {
   return Object.values(all).sort((a, b) => a.scheduledAt - b.scheduledAt)
 }
 
+/**
+ * Cancel every queued scheduled send. Used during sign-out cleanup so
+ * sends queued under the prior account don't fire against a new
+ * session. Idempotent — safe to call when nothing is queued.
+ */
+export async function cancelAll(): Promise<void> {
+  if (typeof chrome === 'undefined' || !chrome.alarms || !chrome.storage?.local) {
+    return
+  }
+  try {
+    const alarms = await chrome.alarms.getAll()
+    await Promise.all(
+      alarms
+        .filter((a) => a.name.startsWith(ALARM_PREFIX))
+        .map((a) => chrome.alarms.clear(a.name)),
+    )
+  } catch {
+    /* swallow — best effort */
+  }
+  await chrome.storage.local.remove(STORAGE_KEY).catch(() => undefined)
+}
+
 export function alarmNameToId(alarmName: string): string | null {
   if (!alarmName.startsWith(ALARM_PREFIX)) return null
   return alarmName.slice(ALARM_PREFIX.length)

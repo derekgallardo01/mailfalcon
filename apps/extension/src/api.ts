@@ -145,6 +145,11 @@ export async function isTrackedThread(threadId: string): Promise<boolean> {
   }
 }
 
+export async function clearTrackedThreads(): Promise<void> {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return
+  await chrome.storage.local.remove(TRACKED_THREADS_KEY).catch(() => undefined)
+}
+
 export async function requestCode(email: string): Promise<void> {
   const res = await fetch(`${config.apiHost}/auth/request`, {
     method: 'POST',
