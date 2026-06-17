@@ -1,8 +1,9 @@
-import { and, desc, eq, gte, lte, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, lte, ne, sql } from 'drizzle-orm'
 import {
   events,
   followUps,
   notificationSubscriptions,
+  templates,
   trackedEmails,
   users,
 } from '@mailfalcon/db/schema'
@@ -15,6 +16,9 @@ interface AdminDigestEnv {
   RESEND_API_KEY?: string
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
+  STRIPE_SECRET_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
+  STRIPE_PRICE_ID_PRO?: string
 }
 
 interface AdminStats {
@@ -56,6 +60,36 @@ interface AdminStats {
     /** Follow-ups with fired=0 whose remindAt falls in the next 24 hours. */
     pendingFollowups: number
   }
+  /** Last-7-day cohort: users who signed up in that window, broken down
+   *  by whether they activated (sent at least once) or engaged
+   *  (sent ≥5 times). */
+  activation: {
+    signups: number
+    activated: number
+    engaged: number
+  }
+  /** Feature adoption signals computed for today only. */
+  features: {
+    followupsCreated: number
+    replies: number
+    templatesCreated: number
+    /** Percent of today's sends with privacy mode on (0–100). */
+    privacyModePct: number
+  }
+  /** Engagement quality signals. */
+  quality: {
+    /** Clicks divided by humanOpens × 100, rounded. Null when no human opens. */
+    ctr: number | null
+    /** Median minutes between sentAt and first non-bot open, today's emails only. */
+    medianTimeToOpenMinutes: number | null
+    /** botOpens / totalOpens × 100, rounded. Null when no opens today. */
+    botRatioPct: number | null
+  }
+  /** Emails of users whose first-ever tracked email was sent today. */
+  firstSendUsers: string[]
+  /** Human-readable alert strings to render in a top banner.
+   *  Empty array means no banner. */
+  alerts: string[]
 }
 
 function utcStartOfDay(ts: number): number {
@@ -76,7 +110,10 @@ function escape(s: string): string {
     .replaceAll('"', '&quot;')
 }
 
-export async function computeAdminStats(db: DB): Promise<AdminStats> {
+export async function computeAdminStats(
+  db: DB,
+  env?: AdminDigestEnv,
+): Promise<AdminStats> {
   const start = utcStartOfDay(Date.now())
   const sevenDaysAgo = start - 7 * 86_400_000
   const next24h = Date.now() + 86_400_000
@@ -94,6 +131,10 @@ export async function computeAdminStats(db: DB): Promise<AdminStats> {
     pushSubsRow,
     pendingFollowupsRow,
     topOpenedRow,
+    cohortRows,
+    featureRow,
+    timeToOpenRows,
+    firstSendRows,
   ] = await Promise.all([
     db
       .select({
@@ -226,6 +267,62 @@ export async function computeAdminStats(db: DB): Promise<AdminStats> {
       .orderBy(desc(sql`(SELECT COUNT(*) FROM ${events} WHERE ${events.emailId} = ${trackedEmails.id} AND ${events.type} = 'open' AND ${events.uaClass} != 'bot' AND ${events.ts} >= ${start})`))
       .limit(1)
       .get(),
+    // Activation cohort — users who signed up in the last 7d, with
+    // their lifetime tracked-email count. We classify in JS.
+    db
+      .select({
+        userId: users.id,
+        sends: sql<number>`(SELECT COUNT(*) FROM ${trackedEmails} WHERE ${trackedEmails.userId} = ${users.id})`,
+      })
+      .from(users)
+      .where(gte(users.createdAt, sevenDaysAgo))
+      .all(),
+    // Feature adoption counts: follow-ups created today (joined via the
+    // tracked email's sentAt), replies recorded today, templates created
+    // today, and the privacy-mode share of today's sends.
+    db
+      .select({
+        followupsCreated: sql<number>`(SELECT COUNT(*) FROM ${followUps} INNER JOIN ${trackedEmails} ON ${trackedEmails.id} = ${followUps.emailId} WHERE ${trackedEmails.sentAt} >= ${start})`,
+        replies: sql<number>`(SELECT COUNT(*) FROM ${events} WHERE ${events.type} = 'reply' AND ${events.ts} >= ${start})`,
+        templatesCreated: sql<number>`(SELECT COUNT(*) FROM ${templates} WHERE ${templates.createdAt} >= ${start})`,
+        privacySends: sql<number>`(SELECT COUNT(*) FROM ${trackedEmails} WHERE ${trackedEmails.sentAt} >= ${start} AND ${trackedEmails.privacyMode} = 1)`,
+        totalSends: sql<number>`(SELECT COUNT(*) FROM ${trackedEmails} WHERE ${trackedEmails.sentAt} >= ${start})`,
+      })
+      .from(users)
+      .limit(1)
+      .get(),
+    // Time-to-first-open: per email sent today, the min ts of a
+    // non-bot open. Computed in JS so we can median + skip emails with
+    // no opens yet.
+    db
+      .select({
+        sentAt: trackedEmails.sentAt,
+        firstOpenTs: sql<number | null>`MIN(${events.ts})`,
+      })
+      .from(trackedEmails)
+      .innerJoin(events, eq(events.emailId, trackedEmails.id))
+      .where(
+        and(
+          gte(trackedEmails.sentAt, start),
+          eq(events.type, 'open'),
+          ne(events.uaClass, 'bot'),
+        ),
+      )
+      .groupBy(trackedEmails.id)
+      .all(),
+    // First-send users today — users whose lifetime min(sentAt) is today.
+    db
+      .select({
+        email: users.email,
+        firstSend: sql<number>`MIN(${trackedEmails.sentAt})`,
+      })
+      .from(users)
+      .innerJoin(trackedEmails, eq(trackedEmails.userId, users.id))
+      .groupBy(users.id)
+      .having(sql`MIN(${trackedEmails.sentAt}) >= ${start}`)
+      .orderBy(asc(sql`MIN(${trackedEmails.sentAt})`))
+      .limit(10)
+      .all(),
   ])
 
   const deviceSplit = (() => {
@@ -250,6 +347,59 @@ export async function computeAdminStats(db: DB): Promise<AdminStats> {
           opens: topEmailOpens,
         }
       : null
+
+  const cohortSends = cohortRows.map((r) => Number(r.sends))
+  const activation = {
+    signups: cohortSends.length,
+    activated: cohortSends.filter((n) => n >= 1).length,
+    engaged: cohortSends.filter((n) => n >= 5).length,
+  }
+
+  const totalSends = Number(featureRow?.totalSends ?? 0)
+  const privacySends = Number(featureRow?.privacySends ?? 0)
+  const features = {
+    followupsCreated: Number(featureRow?.followupsCreated ?? 0),
+    replies: Number(featureRow?.replies ?? 0),
+    templatesCreated: Number(featureRow?.templatesCreated ?? 0),
+    privacyModePct:
+      totalSends > 0 ? Math.round((privacySends / totalSends) * 100) : 0,
+  }
+
+  const todayHumanOpens = Number(today?.humanOpens ?? 0)
+  const todayOpens = Number(today?.opens ?? 0)
+  const todayClicks = Number(today?.clicks ?? 0)
+  const deltas = timeToOpenRows
+    .map((r) => Number(r.firstOpenTs) - Number(r.sentAt))
+    .filter((d) => Number.isFinite(d) && d >= 0)
+    .sort((a, b) => a - b)
+  const medianMs = deltas.length === 0 ? null : deltas[Math.floor(deltas.length / 2)]!
+  const quality = {
+    ctr: todayHumanOpens > 0 ? Math.round((todayClicks / todayHumanOpens) * 100) : null,
+    medianTimeToOpenMinutes: medianMs === null ? null : Math.round(medianMs / 60_000),
+    botRatioPct:
+      todayOpens > 0
+        ? Math.round(((todayOpens - todayHumanOpens) / todayOpens) * 100)
+        : null,
+  }
+
+  const firstSendUsers = firstSendRows.map((r) => r.email)
+
+  const totalUserCount = Number(totals?.users ?? 0)
+  const pushSubsCount = Number(pushSubsRow?.n ?? 0)
+  const alerts: string[] = []
+  if (env && !env.STRIPE_SECRET_KEY) {
+    alerts.push('STRIPE_SECRET_KEY not set — Pro upgrade button returns 503.')
+  } else if (env && (!env.STRIPE_WEBHOOK_SECRET || !env.STRIPE_PRICE_ID_PRO)) {
+    alerts.push('Stripe partially configured — webhook or price ID missing.')
+  }
+  if (env && !env.AXIOM_TOKEN) {
+    alerts.push('AXIOM_TOKEN not set — errors going to wrangler tail only.')
+  }
+  if (totalUserCount > 0 && pushSubsCount > 3 * totalUserCount) {
+    alerts.push(
+      `${pushSubsCount} push subs across ${totalUserCount} user${totalUserCount === 1 ? '' : 's'} — notification_subscriptions table may need cleanup (no per-endpoint dedup).`,
+    )
+  }
 
   return {
     totals: {
@@ -293,6 +443,11 @@ export async function computeAdminStats(db: DB): Promise<AdminStats> {
       opens: Number(r.opens),
       clicks: Number(r.clicks),
     })),
+    activation,
+    features,
+    quality,
+    firstSendUsers,
+    alerts,
   }
 }
 
@@ -309,6 +464,29 @@ function tierColor(tier: string): { bg: string; fg: string } {
   if (tier === 'pro') return { bg: '#dcfce7', fg: '#166534' }
   if (tier === 'team') return { bg: '#dbeafe', fg: '#1e40af' }
   return { bg: '#e3e9f2', fg: '#264168' }
+}
+
+function funnelStep(
+  label: string,
+  value: number,
+  outOf: number | null,
+): string {
+  const pctText =
+    outOf !== null && outOf > 0
+      ? `<div style="font-size:11px;color:#6886b1;margin-top:3px;">${Math.round((value / outOf) * 100)}%</div>`
+      : ''
+  return `<td style="padding:14px 16px;background:#f5f7fa;border-radius:10px;width:33%;">
+    <div style="font-size:11px;color:#6886b1;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">${label}</div>
+    <div style="font-size:20px;font-weight:700;color:#0f1a2e;margin-top:4px;">${value}</div>
+    ${pctText}
+  </td>`
+}
+
+function featureCell(label: string, value: number | string): string {
+  return `<td style="padding:12px 10px;background:#f5f7fa;border-radius:10px;text-align:center;width:25%;">
+    <div style="font-size:18px;font-weight:700;color:#0f1a2e;line-height:1.1;">${value}</div>
+    <div style="font-size:10px;color:#6886b1;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-top:4px;">${label}</div>
+  </td>`
 }
 
 function trendCell(label: string, todayN: number, weekTotal: number): string {
@@ -430,6 +608,21 @@ function renderAdminHtml(args: { stats: AdminStats; webUrl: string }): string {
       <!-- Main card -->
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;background:#ffffff;border-radius:16px;border:1px solid #e3e9f2;overflow:hidden;">
 
+        ${
+          stats.alerts.length > 0
+            ? `<tr><td style="padding:0;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fffbeb;border-bottom:1px solid #fde68a;">
+                <tr><td style="padding:14px 32px;">
+                  <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.06em;">⚠ Needs attention</p>
+                  <ul style="margin:0;padding:0 0 0 18px;font-size:12px;color:#78350f;line-height:1.5;">
+                    ${stats.alerts.map((a) => `<li style="margin-top:2px;">${escape(a)}</li>`).join('')}
+                  </ul>
+                </td></tr>
+              </table>
+            </td></tr>`
+            : ''
+        }
+
         <!-- Header -->
         <tr><td style="padding:32px 32px 0;">
           <h1 style="margin:0;font-size:24px;font-weight:700;color:#0f1a2e;letter-spacing:-0.01em;">Platform daily report</h1>
@@ -516,6 +709,24 @@ function renderAdminHtml(args: { stats: AdminStats; webUrl: string }): string {
           </table>
         </td></tr>
 
+        <!-- Activation funnel (last 7 days) -->
+        <tr><td style="padding:24px 32px 0;">
+          <p style="margin:0 0 10px;font-size:11px;color:#9aaecd;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Activation funnel · last 7 days</p>
+          ${
+            stats.activation.signups === 0
+              ? `<p style="margin:0;padding:14px 16px;background:#f5f7fa;border-radius:10px;font-size:13px;color:#9aaecd;text-align:center;">No new signups in the last 7 days.</p>`
+              : `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              ${funnelStep('Signups', stats.activation.signups, null)}
+              <td style="width:8px;"></td>
+              ${funnelStep('Activated (≥1 send)', stats.activation.activated, stats.activation.signups)}
+              <td style="width:8px;"></td>
+              ${funnelStep('Engaged (≥5 sends)', stats.activation.engaged, stats.activation.signups)}
+            </tr>
+          </table>`
+          }
+        </td></tr>
+
         <!-- Engagement insights -->
         <tr><td style="padding:24px 32px 0;">
           <p style="margin:0 0 10px;font-size:11px;color:#9aaecd;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Engagement</p>
@@ -532,6 +743,16 @@ function renderAdminHtml(args: { stats: AdminStats; webUrl: string }): string {
                   </div>`
                   : `<p style="margin:0 0 14px;font-size:13px;color:#9aaecd;">No email opens yet today.</p>`
               }
+              <div style="margin-bottom:14px;">
+                <p style="margin:0 0 6px;font-size:10px;color:#6886b1;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Quality signals</p>
+                <p style="margin:0;font-size:12px;color:#264168;line-height:1.6;">
+                  <strong style="color:#0f1a2e;">CTR</strong> ${stats.quality.ctr === null ? '—' : `${stats.quality.ctr}%`}
+                  &nbsp;·&nbsp;
+                  <strong style="color:#0f1a2e;">Median time to open</strong> ${stats.quality.medianTimeToOpenMinutes === null ? '—' : `${stats.quality.medianTimeToOpenMinutes}m`}
+                  &nbsp;·&nbsp;
+                  <strong style="color:#0f1a2e;">Bot ratio</strong> ${stats.quality.botRatioPct === null ? '—' : `${stats.quality.botRatioPct}%`}
+                </p>
+              </div>
               ${
                 stats.engagement.topCountries.length > 0
                   ? `<div style="margin-bottom:14px;">
@@ -554,6 +775,40 @@ function renderAdminHtml(args: { stats: AdminStats; webUrl: string }): string {
             </td></tr>
           </table>
         </td></tr>
+
+        <!-- Feature adoption -->
+        <tr><td style="padding:24px 32px 0;">
+          <p style="margin:0 0 10px;font-size:11px;color:#9aaecd;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Feature adoption today</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              ${featureCell('Templates created', stats.features.templatesCreated)}
+              <td style="width:6px;"></td>
+              ${featureCell('Follow-ups scheduled', stats.features.followupsCreated)}
+              <td style="width:6px;"></td>
+              ${featureCell('Replies recorded', stats.features.replies)}
+              <td style="width:6px;"></td>
+              ${featureCell('Privacy %', `${stats.features.privacyModePct}%`)}
+            </tr>
+          </table>
+        </td></tr>
+
+        ${
+          stats.firstSendUsers.length > 0
+            ? `<tr><td style="padding:24px 32px 0;">
+              <p style="margin:0 0 10px;font-size:11px;color:#9aaecd;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">First-time senders today</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+                <tr><td style="padding:14px 16px;">
+                  <p style="margin:0;font-size:11px;color:#065f46;font-weight:600;">
+                    🎯 ${stats.firstSendUsers.length} user${stats.firstSendUsers.length === 1 ? '' : 's'} tracked their first email today
+                  </p>
+                  <p style="margin:6px 0 0;font-size:12px;color:#064e3b;word-break:break-word;">
+                    ${stats.firstSendUsers.map((e) => escape(e)).join(' · ')}
+                  </p>
+                </td></tr>
+              </table>
+            </td></tr>`
+            : ''
+        }
 
         <!-- Tier pills -->
         <tr><td style="padding:24px 32px 0;">
@@ -633,6 +888,9 @@ function renderAdminText(stats: AdminStats, webUrl: string): string {
   return [
     'MailFalcon · admin daily report',
     '',
+    stats.alerts.length > 0
+      ? 'Needs attention:\n' + stats.alerts.map((a) => `  - ${a}`).join('\n') + '\n'
+      : '',
     'Today:',
     `  New users: ${stats.today.newUsers}`,
     `  Active senders: ${stats.ops.dau}`,
@@ -645,15 +903,33 @@ function renderAdminText(stats: AdminStats, webUrl: string): string {
     `  Opens: ${trendLine(stats.today.humanOpens, stats.trend7d.humanOpens)}`,
     `  Clicks: ${trendLine(stats.today.clicks, stats.trend7d.clicks)}`,
     '',
+    'Activation funnel (last 7d):',
+    `  Signups: ${stats.activation.signups}`,
+    `  Activated (≥1 send): ${stats.activation.activated}`,
+    `  Engaged (≥5 sends): ${stats.activation.engaged}`,
+    '',
     'Engagement:',
     stats.engagement.topEmail
       ? `  Top opened: ${stats.engagement.topEmail.subject ?? '(no subject)'} — ${stats.engagement.topEmail.sender} (${stats.engagement.topEmail.opens} opens)`
       : '  Top opened: (no opens yet)',
+    `  CTR: ${stats.quality.ctr === null ? '—' : `${stats.quality.ctr}%`}`,
+    `  Median time to open: ${stats.quality.medianTimeToOpenMinutes === null ? '—' : `${stats.quality.medianTimeToOpenMinutes}m`}`,
+    `  Bot ratio: ${stats.quality.botRatioPct === null ? '—' : `${stats.quality.botRatioPct}%`}`,
     stats.engagement.topCountries.length > 0
       ? `  Top countries: ${stats.engagement.topCountries.map((c) => `${c.country} (${c.opens})`).join(', ')}`
       : '  Top countries: —',
     `  Devices: ${devLine}`,
     '',
+    'Feature adoption today:',
+    `  Templates created: ${stats.features.templatesCreated}`,
+    `  Follow-ups scheduled: ${stats.features.followupsCreated}`,
+    `  Replies recorded: ${stats.features.replies}`,
+    `  Privacy mode %: ${stats.features.privacyModePct}%`,
+    '',
+    stats.firstSendUsers.length > 0
+      ? `First-time senders today (${stats.firstSendUsers.length}):\n` +
+        stats.firstSendUsers.map((e) => `  - ${e}`).join('\n')
+      : '',
     'Operations:',
     `  Active push subs: ${stats.ops.pushSubs}`,
     `  Pending follow-ups (24h): ${stats.ops.pendingFollowups}`,
@@ -736,7 +1012,7 @@ export async function sendAdminDigests(
   }
 
   // Compute the platform stats ONCE — every admin gets the same snapshot.
-  const stats = await computeAdminStats(db)
+  const stats = await computeAdminStats(db, env)
   const html = renderAdminHtml({ stats, webUrl })
   const text = renderAdminText(stats, webUrl)
 
