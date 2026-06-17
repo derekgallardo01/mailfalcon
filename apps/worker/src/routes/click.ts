@@ -22,6 +22,11 @@ type Bindings = {
   AXIOM_DATASET?: string
 }
 
+// Mirror of the pixel handler's self-open guard: when a user clicks a
+// link in their own sent message immediately after sending (rare but
+// happens during testing), suppress the push notification.
+const SELF_CLICK_GUARD_MS = 30_000
+
 export const clickRouter = new Hono<{ Bindings: Bindings }>()
 
 clickRouter.get('/:id/:linkIdx', async (c) => {
@@ -52,12 +57,17 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
       .where(eq(links.id, linkId))
       .get(),
     db
-      .select({ userId: trackedEmails.userId })
+      .select({
+        userId: trackedEmails.userId,
+        sentAt: trackedEmails.sentAt,
+      })
       .from(trackedEmails)
       .where(eq(trackedEmails.id, id))
       .get(),
   ])
   if (!link || !email) return c.notFound()
+
+  const isSelfClickWindow = Date.now() - email.sentAt < SELF_CLICK_GUARD_MS
 
   // Per-IP throttle: 60 clicks per IP per minute. On exceed, still
   // redirect (so the user doesn't see a broken link), but skip the DB
@@ -107,7 +117,7 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
           isFirstOpen: 0,
         })
         .run()
-      if (uaDetails.uaClass !== 'bot') {
+      if (uaDetails.uaClass !== 'bot' && !isSelfClickWindow) {
         await fanoutPush(db, c.env, email.userId).catch((err) =>
           createLogger({ env: c.env }).warn(
             'click_fanout_failed',

@@ -22,6 +22,13 @@ type Bindings = {
   AXIOM_DATASET?: string
 }
 
+// Window where opens are treated as self-views: Gmail auto-renders the
+// Sent copy a few seconds after the user clicks Send, and the sender's
+// own browser fetches the pixel as a normal user-agent. Suppress push
+// notifications in this window so the sender doesn't get pinged about
+// their own message. The event is still recorded for the dashboard.
+const SELF_OPEN_GUARD_MS = 30_000
+
 const TRANSPARENT_GIF = new Uint8Array([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0,
   255, 255, 255, 33, 249, 4, 1, 0, 0, 0, 0, 44, 0, 0, 0, 0,
@@ -65,11 +72,17 @@ pixelRouter.get('/:idWithExt', async (c) => {
 
   const db = getDb(c.env.DB)
   const row = await db
-    .select({ id: trackedEmails.id, userId: trackedEmails.userId })
+    .select({
+      id: trackedEmails.id,
+      userId: trackedEmails.userId,
+      sentAt: trackedEmails.sentAt,
+    })
     .from(trackedEmails)
     .where(eq(trackedEmails.id, id))
     .get()
   if (!row) return gif()
+
+  const isSelfOpenWindow = Date.now() - row.sentAt < SELF_OPEN_GUARD_MS
 
   const ua = c.req.header('User-Agent') ?? ''
   const uaDetails = parseUa(ua)
@@ -122,7 +135,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
           isFirstOpen,
         })
         .run()
-      if (uaDetails.uaClass !== 'bot') {
+      if (uaDetails.uaClass !== 'bot' && !isSelfOpenWindow) {
         await fanoutPush(db, c.env, row.userId).catch((err) =>
           createLogger({ env: c.env }).warn(
             'pixel_fanout_failed',
