@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { and, desc, eq, gt } from 'drizzle-orm'
-import { events, trackedEmails } from '@mailfalcon/db/schema'
+import { events, recipients, trackedEmails } from '@mailfalcon/db/schema'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
 
@@ -36,10 +36,16 @@ eventsRouter.get('/recent', async (c) => {
       ts: events.ts,
       uaClass: events.uaClass,
       country: events.country,
+      city: events.city,
+      regionCode: events.regionCode,
+      deviceType: events.deviceType,
       isFirstOpen: events.isFirstOpen,
+      subject: trackedEmails.subject,
+      recipientLabel: recipients.displayLabel,
     })
     .from(events)
     .innerJoin(trackedEmails, eq(events.emailId, trackedEmails.id))
+    .leftJoin(recipients, eq(recipients.id, events.recipientId))
     .where(and(eq(trackedEmails.userId, userId), gt(events.ts, since)))
     .orderBy(desc(events.ts))
     .limit(20)

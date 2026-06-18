@@ -14,17 +14,60 @@ const PUSH_FETCH_KEY = 'mf.lastPushFetchTs'
 
 type Notif = { title: string; body: string }
 
+const TITLE_MAX_LEN = 80
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s
+  return s.slice(0, max - 1) + '…'
+}
+
+function formatLocation(ev: StreamEvent): string {
+  const parts: string[] = []
+  if (ev.city) parts.push(ev.city)
+  if (ev.regionCode) parts.push(ev.regionCode)
+  else if (ev.country) parts.push(ev.country)
+  return parts.join(', ')
+}
+
+function formatDevice(ev: StreamEvent): string {
+  if (ev.deviceType === 'mobile') return 'Mobile'
+  if (ev.deviceType === 'tablet') return 'Tablet'
+  if (ev.deviceType === 'desktop' || ev.uaClass === 'desktop') return 'Desktop'
+  return ''
+}
+
+function buildBody(ev: StreamEvent): string {
+  const loc = formatLocation(ev)
+  const dev = formatDevice(ev)
+  if (loc && dev) return `${loc} · ${dev}`
+  return loc || dev || ''
+}
+
 function notifFor(ev: StreamEvent): Notif {
-  if (ev.type === 'open') {
+  const subject = ev.subject?.trim() || '(no subject)'
+  const who = ev.recipientLabel?.trim() || 'Someone'
+
+  if (ev.type === 'reply') {
     return {
-      title: 'MailFalcon — email opened',
-      body: ev.isFirstOpen ? 'First open detected' : 'Opened again',
+      title: truncate(`${who} replied: ${subject}`, TITLE_MAX_LEN),
+      body: buildBody(ev) || 'New reply in your inbox',
     }
   }
-  return {
-    title: 'MailFalcon — link clicked',
-    body: 'A tracked link was clicked',
+  if (ev.type === 'click') {
+    return {
+      title: truncate(`${who} clicked: ${subject}`, TITLE_MAX_LEN),
+      body: buildBody(ev) || 'A tracked link was clicked',
+    }
   }
+  // open
+  return {
+    title: truncate(`${who} opened: ${subject}`, TITLE_MAX_LEN),
+    body: buildBody(ev) || (ev.isFirstOpen ? 'First open detected' : 'Opened again'),
+  }
+}
+
+function deepLink(emailId: string): string {
+  return `https://app.mailfalcon.app/dashboard/email?id=${encodeURIComponent(emailId)}`
 }
 
 export default defineBackground(() => {
@@ -66,6 +109,11 @@ export default defineBackground(() => {
       message: body,
       priority: 1,
     })
+    // Remember which email this notif belongs to so the click handler
+    // can deep-link to its detail page.
+    void chrome.storage.session
+      ?.set({ [`mf.notifLink:${NOTIF_PREFIX}${ev.id}`]: deepLink(ev.emailId) })
+      .catch(() => undefined)
   }
 
   // Push-delivered events MUST call self.registration.showNotification()
@@ -125,7 +173,7 @@ export default defineBackground(() => {
           body,
           icon: NOTIF_ICON_PATH,
           tag: `${NOTIF_PREFIX}${ev.id}`,
-          data: { url: 'https://app.mailfalcon.app/dashboard' },
+          data: { url: deepLink(ev.emailId) },
         })
       }
     }
@@ -197,10 +245,21 @@ export default defineBackground(() => {
   })
 
   // Legacy chrome.notifications click handler (still fires for SSE-driven
-  // notifications shown via chrome.notifications.create).
-  chrome.notifications.onClicked.addListener((notifId) => {
+  // notifications shown via chrome.notifications.create). Deep-link to
+  // the specific email if we recorded a URL for this notif id.
+  chrome.notifications.onClicked.addListener(async (notifId) => {
     if (!notifId.startsWith(NOTIF_PREFIX)) return
-    chrome.tabs.create({ url: 'https://app.mailfalcon.app/dashboard' })
+    const key = `mf.notifLink:${notifId}`
+    let url = 'https://app.mailfalcon.app/dashboard'
+    try {
+      const stored = await chrome.storage.session?.get(key)
+      const stashed = stored?.[key]
+      if (typeof stashed === 'string') url = stashed
+    } catch {
+      /* fall back to dashboard root */
+    }
+    void chrome.storage.session?.remove(key).catch(() => undefined)
+    chrome.tabs.create({ url })
     chrome.notifications.clear(notifId)
   })
 

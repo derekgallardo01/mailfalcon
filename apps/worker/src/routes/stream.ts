@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { and, asc, eq, gt } from 'drizzle-orm'
-import { events, trackedEmails } from '@mailfalcon/db/schema'
+import { events, recipients, trackedEmails } from '@mailfalcon/db/schema'
 import { getDb } from '../lib/db'
 import { getJwtSecret, verifyJwt } from '../lib/jwt'
 import { createLogger, errorMeta } from '../lib/logger'
@@ -98,10 +98,16 @@ streamRouter.get('/', async (c) => {
               ts: events.ts,
               uaClass: events.uaClass,
               country: events.country,
+              city: events.city,
+              regionCode: events.regionCode,
+              deviceType: events.deviceType,
               isFirstOpen: events.isFirstOpen,
+              subject: trackedEmails.subject,
+              recipientLabel: recipients.displayLabel,
             })
             .from(events)
             .innerJoin(trackedEmails, eq(events.emailId, trackedEmails.id))
+            .leftJoin(recipients, eq(recipients.id, events.recipientId))
             .where(
               and(
                 eq(trackedEmails.userId, userIdResolved),
@@ -122,6 +128,11 @@ streamRouter.get('/', async (c) => {
               uaClass: row.uaClass,
               country: row.country,
               isFirstOpen: row.isFirstOpen === 1,
+              subject: row.subject,
+              recipientLabel: row.recipientLabel,
+              city: row.city,
+              regionCode: row.regionCode,
+              deviceType: row.deviceType,
             }
             controller.enqueue(
               encoder.encode(`event: event\ndata: ${JSON.stringify(payload)}\n\n`),

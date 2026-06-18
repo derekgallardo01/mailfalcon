@@ -3,12 +3,18 @@ import { config } from './config'
 export interface StreamEvent {
   id: number
   emailId: string
-  type: 'open' | 'click'
+  type: 'open' | 'click' | 'reply'
   linkId: string | null
   ts: number
   uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
   country: string | null
   isFirstOpen: boolean
+  // Enriched fields for richer notifications; old workers omit these.
+  subject?: string | null
+  recipientLabel?: string | null
+  city?: string | null
+  regionCode?: string | null
+  deviceType?: string | null
 }
 
 export type EventHandler = (e: StreamEvent) => void
