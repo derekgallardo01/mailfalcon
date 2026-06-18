@@ -40,6 +40,7 @@ export async function fanoutPush(
   let sent = 0
   let pruned = 0
 
+  const now = Date.now()
   await Promise.all(
     subs.map(async (sub) => {
       try {
@@ -47,7 +48,17 @@ export async function fanoutPush(
           { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
           env,
         )
-        if (result.ok) sent++
+        if (result.ok) {
+          sent++
+          // Mark the endpoint as alive so the stale-sub cron leaves it
+          // alone. Fire-and-forget — push fan-out already runs inside
+          // c.executionCtx.waitUntil.
+          await db
+            .update(notificationSubscriptions)
+            .set({ lastSeenAt: now })
+            .where(eq(notificationSubscriptions.id, sub.id))
+            .run()
+        }
         if (result.gone) {
           await db
             .delete(notificationSubscriptions)

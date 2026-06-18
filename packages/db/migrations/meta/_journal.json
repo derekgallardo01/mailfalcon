@@ -29,6 +29,13 @@
       "when": 1781534215463,
       "tag": "0003_military_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1781738001670,
+      "tag": "0004_keen_roughhouse",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,2 @@
+ALTER TABLE `notification_subscriptions` ADD `last_seen_at` integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+UPDATE `notification_subscriptions` SET `last_seen_at` = `created_at` WHERE `last_seen_at` = 0;

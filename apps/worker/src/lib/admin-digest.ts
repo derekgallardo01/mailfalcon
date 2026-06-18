@@ -395,11 +395,11 @@ export async function computeAdminStats(
   if (env && !env.AXIOM_TOKEN) {
     alerts.push('AXIOM_TOKEN not set — errors going to wrangler tail only.')
   }
-  if (totalUserCount > 0 && pushSubsCount > 3 * totalUserCount) {
-    alerts.push(
-      `${pushSubsCount} push subs across ${totalUserCount} user${totalUserCount === 1 ? '' : 's'} — notification_subscriptions table may need cleanup (no per-endpoint dedup).`,
-    )
-  }
+  // Earlier sweeps flagged "push subs >> users" — the cron now reaps
+  // stale subscriptions after 30 days of no activity, so the alert is
+  // gone. Bring it back if a new anomaly appears.
+  void totalUserCount
+  void pushSubsCount
 
   return {
     totals: {

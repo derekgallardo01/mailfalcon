@@ -42,6 +42,7 @@ pushRouter.post('/subscribe', async (c) => {
   const userId = c.get('userId')
   const db = getDb(c.env.DB)
   const id = await sha256B64Url(parsed.data.endpoint)
+  const now = Date.now()
 
   await db
     .insert(notificationSubscriptions)
@@ -52,7 +53,8 @@ pushRouter.post('/subscribe', async (c) => {
       p256dh: parsed.data.p256dh,
       auth: parsed.data.auth,
       ua: parsed.data.ua ?? null,
-      createdAt: Date.now(),
+      createdAt: now,
+      lastSeenAt: now,
     })
     .onConflictDoUpdate({
       target: notificationSubscriptions.id,
@@ -61,6 +63,7 @@ pushRouter.post('/subscribe', async (c) => {
         p256dh: parsed.data.p256dh,
         auth: parsed.data.auth,
         ua: parsed.data.ua ?? null,
+        lastSeenAt: now,
       },
     })
     .run()

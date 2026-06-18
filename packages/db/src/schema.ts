@@ -145,6 +145,10 @@ export const notificationSubscriptions = sqliteTable(
     auth: text('auth').notNull(),
     ua: text('ua'),
     createdAt: integer('created_at').notNull(),
+    // Bumped on subscribe + on successful push delivery. Used by the
+    // cron sweep to delete subscriptions whose endpoint has rotated
+    // (Web Push providers re-issue endpoints; the old rows linger).
+    lastSeenAt: integer('last_seen_at').notNull().default(0),
   },
   (table) => ({
     userIdx: index('notification_subscriptions_user_idx').on(table.userId),

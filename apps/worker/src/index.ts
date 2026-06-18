@@ -125,6 +125,7 @@ app.onError((err, c) => {
 })
 
 import { sendAdminDigests } from './lib/admin-digest'
+import { cleanupStalePushSubs } from './lib/cron-cleanup'
 import { sendDailyDigests } from './lib/digest'
 import { getDb } from './lib/db'
 import { evaluateFollowups } from './lib/followups'
@@ -158,6 +159,12 @@ export default {
           log.info('cron_followups', { cron: event.cron, ...fu })
         } catch (err) {
           log.error('cron_followups_failed', errorMeta(err))
+        }
+        try {
+          const cleanup = await cleanupStalePushSubs(db, env)
+          log.info('cron_push_cleanup', { cron: event.cron, ...cleanup })
+        } catch (err) {
+          log.error('cron_push_cleanup_failed', errorMeta(err))
         }
       })(),
     )
