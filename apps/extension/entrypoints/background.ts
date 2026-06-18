@@ -1,4 +1,5 @@
 import { getSession } from '../src/auth-store'
+import { bumpBadge, clearBadge, initBadge } from '../src/badge'
 import { config } from '../src/config'
 import { dropPushSubscription, ensurePushSubscription } from '../src/push-client'
 import {
@@ -73,6 +74,8 @@ function deepLink(emailId: string): string {
 export default defineBackground(() => {
   console.log('[mailfalcon] background service worker started')
 
+  void initBadge()
+
   let client: StreamClient | null = null
 
   async function start(): Promise<void> {
@@ -114,6 +117,7 @@ export default defineBackground(() => {
     void chrome.storage.session
       ?.set({ [`mf.notifLink:${NOTIF_PREFIX}${ev.id}`]: deepLink(ev.emailId) })
       .catch(() => undefined)
+    void bumpBadge()
   }
 
   // Push-delivered events MUST call self.registration.showNotification()
@@ -175,6 +179,7 @@ export default defineBackground(() => {
           tag: `${NOTIF_PREFIX}${ev.id}`,
           data: { url: deepLink(ev.emailId) },
         })
+        await bumpBadge()
       }
     }
 
@@ -207,6 +212,18 @@ export default defineBackground(() => {
   })
   chrome.runtime.onInstalled.addListener(() => {
     void start()
+  })
+
+  // Reset the activity badge when the user actually views the dashboard.
+  chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
+    if (changeInfo.status !== 'loading' && changeInfo.status !== 'complete') {
+      return
+    }
+    const url = changeInfo.url
+    if (!url) return
+    if (url.startsWith('https://app.mailfalcon.app/dashboard')) {
+      void clearBadge()
+    }
   })
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

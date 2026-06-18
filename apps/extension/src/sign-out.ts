@@ -4,6 +4,7 @@ import {
   logout as serverLogout,
 } from './api'
 import { clearPendingVerify, clearSession } from './auth-store'
+import { clearBadge } from './badge'
 import { cancelAll as cancelAllScheduled, listPending } from './scheduled'
 
 /**
@@ -25,6 +26,7 @@ export async function performSignOut(): Promise<void> {
   await clearTemplatesCache().catch(() => undefined)
   await clearTrackedThreads().catch(() => undefined)
   await cancelAllScheduled().catch(() => undefined)
+  await clearBadge().catch(() => undefined)
 }
 
 /**
@@ -38,6 +40,7 @@ export async function clearLocalAccountState(): Promise<void> {
   await clearTemplatesCache().catch(() => undefined)
   await clearTrackedThreads().catch(() => undefined)
   await cancelAllScheduled().catch(() => undefined)
+  await clearBadge().catch(() => undefined)
 }
 
 /** How many scheduled sends are still queued — used by the popup to
