@@ -182,6 +182,9 @@ export interface MeResponse {
   hasStripeCustomer: boolean
   digestEnabled: boolean
   digestLastSentDay: string | null
+  quietStartMinute: number | null
+  quietEndMinute: number | null
+  quietTimezone: string | null
   usage: { used: number; limit: number }
 }
 
@@ -196,6 +199,9 @@ export async function getMe(): Promise<MeResponse> {
 
 export async function updateMe(patch: {
   digestEnabled?: boolean
+  quietStartMinute?: number | null
+  quietEndMinute?: number | null
+  quietTimezone?: string | null
 }): Promise<void> {
   const res = await fetch(`${config.apiHost}/v1/me`, {
     method: 'PATCH',

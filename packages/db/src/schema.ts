@@ -13,6 +13,13 @@ export const users = sqliteTable('users', {
   // YYYY-MM-DD (UTC) of the last digest we sent, prevents double-sends
   // if cron retries.
   digestLastSentDay: text('digest_last_sent_day'),
+  // Quiet hours: when the current time (in quietTimezone) falls inside
+  // [quietStartMinute, quietEndMinute) the push fan-out is skipped.
+  // Minutes since midnight (0–1439). Identical start/end disables.
+  // quietTimezone is an IANA name; null falls back to UTC.
+  quietStartMinute: integer('quiet_start_minute'),
+  quietEndMinute: integer('quiet_end_minute'),
+  quietTimezone: text('quiet_timezone'),
 })
 
 export const subscriptions = sqliteTable('subscriptions', {

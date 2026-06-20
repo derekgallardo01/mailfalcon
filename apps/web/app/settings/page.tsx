@@ -206,6 +206,8 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      <QuietHoursSection me={me} setMe={setMe} setSaved={setSaved} setError={setError} />
+
       <section className="mt-8">
         <h2 className="text-base font-semibold text-falcon-700">Account</h2>
         <div className="mt-4 rounded-lg border border-falcon-200 bg-white p-4">
@@ -337,5 +339,189 @@ export default function SettingsPage() {
         </div>
       </section>
     </main>
+  )
+}
+
+function minutesToHHMM(mins: number | null): string {
+  if (mins == null) return ''
+  const h = Math.floor(mins / 60)
+    .toString()
+    .padStart(2, '0')
+  const m = (mins % 60).toString().padStart(2, '0')
+  return `${h}:${m}`
+}
+
+function hhmmToMinutes(s: string): number | null {
+  if (!s) return null
+  const m = s.match(/^(\d{2}):(\d{2})$/)
+  if (!m) return null
+  const h = Number.parseInt(m[1]!, 10)
+  const mm = Number.parseInt(m[2]!, 10)
+  if (h > 23 || mm > 59) return null
+  return h * 60 + mm
+}
+
+const COMMON_TZS = [
+  'UTC',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Europe/London',
+  'Europe/Paris',
+  'Europe/Berlin',
+  'Asia/Tokyo',
+  'Asia/Singapore',
+  'Asia/Kolkata',
+  'Australia/Sydney',
+]
+
+function QuietHoursSection({
+  me,
+  setMe,
+  setSaved,
+  setError,
+}: {
+  me: MeResponse
+  setMe: (m: MeResponse) => void
+  setSaved: (b: boolean) => void
+  setError: (s: string | null) => void
+}) {
+  const browserTz =
+    typeof Intl !== 'undefined'
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : 'UTC'
+  const tzOptions = COMMON_TZS.includes(browserTz)
+    ? COMMON_TZS
+    : [browserTz, ...COMMON_TZS]
+
+  const [start, setStart] = useState(minutesToHHMM(me.quietStartMinute))
+  const [end, setEnd] = useState(minutesToHHMM(me.quietEndMinute))
+  const [tz, setTz] = useState(me.quietTimezone ?? browserTz)
+  const [saving, setSaving] = useState(false)
+
+  const isOn = me.quietStartMinute != null && me.quietEndMinute != null
+
+  async function save() {
+    setSaving(true)
+    setError(null)
+    const startMin = hhmmToMinutes(start)
+    const endMin = hhmmToMinutes(end)
+    try {
+      await updateMe({
+        quietStartMinute: startMin,
+        quietEndMinute: endMin,
+        quietTimezone: startMin != null && endMin != null ? tz : null,
+      })
+      setMe({
+        ...me,
+        quietStartMinute: startMin,
+        quietEndMinute: endMin,
+        quietTimezone: startMin != null && endMin != null ? tz : null,
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 1500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function disable() {
+    setStart('')
+    setEnd('')
+    setSaving(true)
+    try {
+      await updateMe({
+        quietStartMinute: null,
+        quietEndMinute: null,
+        quietTimezone: null,
+      })
+      setMe({
+        ...me,
+        quietStartMinute: null,
+        quietEndMinute: null,
+        quietTimezone: null,
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 1500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="mt-8">
+      <h2 className="text-base font-semibold text-falcon-700">Quiet hours</h2>
+      <div className="mt-4 rounded-lg border border-falcon-200 bg-white p-4">
+        <p className="text-sm text-falcon-500">
+          Skip push notifications during these hours. Events still record on
+          your dashboard — we just won't ping you.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <label className="block text-xs">
+            <span className="font-medium uppercase tracking-wide text-falcon-500">
+              From
+            </span>
+            <input
+              type="time"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className="mt-1 w-full rounded border border-falcon-200 px-2 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
+            />
+          </label>
+          <label className="block text-xs">
+            <span className="font-medium uppercase tracking-wide text-falcon-500">
+              To
+            </span>
+            <input
+              type="time"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              className="mt-1 w-full rounded border border-falcon-200 px-2 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
+            />
+          </label>
+          <label className="block text-xs">
+            <span className="font-medium uppercase tracking-wide text-falcon-500">
+              Timezone
+            </span>
+            <select
+              value={tz}
+              onChange={(e) => setTz(e.target.value)}
+              className="mt-1 w-full rounded border border-falcon-200 bg-white px-2 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
+            >
+              {tzOptions.map((t) => (
+                <option key={t} value={t}>
+                  {t === browserTz ? `${t} (browser)` : t}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="rounded bg-falcon-500 px-4 py-2 text-sm font-medium text-white hover:bg-falcon-600 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save quiet hours'}
+          </button>
+          {isOn && (
+            <button
+              type="button"
+              onClick={disable}
+              disabled={saving}
+              className="text-sm text-falcon-500 hover:text-falcon-700 disabled:opacity-50"
+            >
+              Disable
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
   )
 }

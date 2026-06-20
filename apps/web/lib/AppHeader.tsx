@@ -18,6 +18,14 @@ interface Props {
   liveCount?: number
 }
 
+function minutesToHHMM(mins: number): string {
+  const h = Math.floor(mins / 60)
+    .toString()
+    .padStart(2, '0')
+  const m = (mins % 60).toString().padStart(2, '0')
+  return `${h}:${m}`
+}
+
 export function AppHeader({ liveCount = 0 }: Props) {
   const router = useRouter()
   const pathname = usePathname() ?? '/dashboard'
@@ -115,6 +123,15 @@ export function AppHeader({ liveCount = 0 }: Props) {
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
             live · {liveCount} new
           </span>
+        )}
+        {me?.quietStartMinute != null && me?.quietEndMinute != null && (
+          <Link
+            href="/settings"
+            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-200"
+            title="Push notifications are muted during your quiet hours window. Click to manage."
+          >
+            🌙 Quiet {minutesToHHMM(me.quietStartMinute)}–{minutesToHHMM(me.quietEndMinute)}
+          </Link>
         )}
       </div>
 

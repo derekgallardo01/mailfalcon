@@ -31,6 +31,17 @@ type Bindings = {
 
 const patchSchema = z.object({
   digestEnabled: z.boolean().optional(),
+  quietStartMinute: z.number().int().min(0).max(1439).nullable().optional(),
+  quietEndMinute: z.number().int().min(0).max(1439).nullable().optional(),
+  quietTimezone: z
+    .string()
+    .max(60)
+    .nullable()
+    .optional()
+    .refine(
+      (v) => v == null || v === '' || /^[A-Za-z]+\/[A-Za-z_/-]+$|^UTC$/.test(v),
+      'invalid_tz',
+    ),
 })
 
 const deleteConfirmSchema = z.object({
@@ -63,6 +74,9 @@ meRouter.get('/', async (c) => {
       stripeCustId: users.stripeCustId,
       digestEnabled: users.digestEnabled,
       digestLastSentDay: users.digestLastSentDay,
+      quietStartMinute: users.quietStartMinute,
+      quietEndMinute: users.quietEndMinute,
+      quietTimezone: users.quietTimezone,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -79,6 +93,9 @@ meRouter.get('/', async (c) => {
     hasStripeCustomer: !!row.stripeCustId,
     digestEnabled: row.digestEnabled === 1,
     digestLastSentDay: row.digestLastSentDay,
+    quietStartMinute: row.quietStartMinute,
+    quietEndMinute: row.quietEndMinute,
+    quietTimezone: row.quietTimezone,
     usage,
   })
 })
@@ -93,6 +110,18 @@ meRouter.patch('/', async (c) => {
   const updates: Record<string, unknown> = {}
   if (parsed.data.digestEnabled !== undefined) {
     updates.digestEnabled = parsed.data.digestEnabled ? 1 : 0
+  }
+  if (parsed.data.quietStartMinute !== undefined) {
+    updates.quietStartMinute = parsed.data.quietStartMinute
+  }
+  if (parsed.data.quietEndMinute !== undefined) {
+    updates.quietEndMinute = parsed.data.quietEndMinute
+  }
+  if (parsed.data.quietTimezone !== undefined) {
+    updates.quietTimezone =
+      parsed.data.quietTimezone && parsed.data.quietTimezone.length > 0
+        ? parsed.data.quietTimezone
+        : null
   }
   if (Object.keys(updates).length === 0) return c.json({ ok: true })
 

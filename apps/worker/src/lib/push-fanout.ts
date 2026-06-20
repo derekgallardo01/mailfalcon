@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm'
-import { notificationSubscriptions } from '@mailfalcon/db/schema'
+import { notificationSubscriptions, users } from '@mailfalcon/db/schema'
 import type { DB } from './db'
 import { createLogger, errorMeta } from './logger'
+import { isInQuietHours } from './quiet-hours'
 import { sendPushEmpty } from './web-push'
 
 interface PushEnv {
@@ -23,7 +24,22 @@ export async function fanoutPush(
   db: DB,
   env: PushEnv,
   userId: string,
-): Promise<{ sent: number; pruned: number }> {
+): Promise<{ sent: number; pruned: number; suppressed?: 'quiet_hours' }> {
+  // Quiet hours: a single users-row read, then short-circuit if inside
+  // the window. Saves the subs query + every push round-trip.
+  const user = await db
+    .select({
+      quietStartMinute: users.quietStartMinute,
+      quietEndMinute: users.quietEndMinute,
+      quietTimezone: users.quietTimezone,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get()
+  if (user && isInQuietHours(user)) {
+    return { sent: 0, pruned: 0, suppressed: 'quiet_hours' }
+  }
+
   const subs = await db
     .select({
       id: notificationSubscriptions.id,
