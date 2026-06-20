@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { and, asc, eq, gt } from 'drizzle-orm'
-import { events, recipients, trackedEmails } from '@mailfalcon/db/schema'
+import { events, recipients, sessions, trackedEmails } from '@mailfalcon/db/schema'
 import { getDb } from '../lib/db'
 import { getJwtSecret, verifyJwt } from '../lib/jwt'
 import { createLogger, errorMeta } from '../lib/logger'
@@ -20,9 +20,6 @@ const STREAM_MAX_PER_USER = 3
 // the decrement never runs — KV reaps the stale counter.
 const STREAM_TTL_SEC = 120
 
-interface SessionRecord {
-  userId: string
-}
 
 export const streamRouter = new Hono<{ Bindings: Bindings }>()
 
@@ -36,10 +33,14 @@ streamRouter.get('/', async (c) => {
       const secret = getJwtSecret(c.env)
       const payload = await verifyJwt(token, secret)
       if (payload) {
-        const session = (await c.env.KV.get(
-          `session:${payload.jti}`,
-          'json',
-        )) as SessionRecord | null
+        const db = getDb(c.env.DB)
+        const session = await db
+          .select({ userId: sessions.userId })
+          .from(sessions)
+          .where(
+            and(eq(sessions.jti, payload.jti), gt(sessions.expiresAt, Date.now())),
+          )
+          .get()
         if (session) userId = payload.sub
       }
     } catch {

@@ -178,3 +178,36 @@ export const usageCounters = sqliteTable(
     pk: primaryKey({ columns: [table.userId, table.day] }),
   }),
 )
+
+/** Sign-in one-time codes. Moved off KV when the free-tier daily put
+ *  cap kept blocking sign-in. D1 has no daily-cap on writes. Rows are
+ *  deleted on successful verify; the cron sweeps anything past
+ *  expiresAt that didn't get deleted (e.g. user requested then never
+ *  verified). */
+export const verifyCodes = sqliteTable('verify_codes', {
+  email: text('email').primaryKey(),
+  code: text('code').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  /** Throttle marker — the earliest UTC ms a fresh code can be issued. */
+  cooldownUntil: integer('cooldown_until').notNull().default(0),
+  expiresAt: integer('expires_at').notNull(),
+})
+
+/** Active JWT sessions. Lives in D1 (was KV) so sign-in survives a
+ *  KV daily-put cap exhaustion. The jti is the JWT's unique id; the
+ *  auth middleware looks the row up on every request to enforce
+ *  revocation. */
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    jti: text('jti').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (table) => ({
+    byUser: index('sessions_user_idx').on(table.userId),
+  }),
+)

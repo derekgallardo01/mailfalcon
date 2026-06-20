@@ -1,4 +1,6 @@
 import type { MiddlewareHandler } from 'hono'
+import { and, eq, gt } from 'drizzle-orm'
+import { sessions } from '@mailfalcon/db/schema'
 import { getDb } from './db'
 import { ensureDevUser } from './dev-user'
 import { getJwtSecret, verifyJwt } from './jwt'
@@ -12,11 +14,6 @@ type Bindings = {
 
 export type Variables = {
   userId: string
-}
-
-interface SessionRecord {
-  userId: string
-  createdAt: number
 }
 
 export const authMiddleware: MiddlewareHandler<{
@@ -34,10 +31,14 @@ export const authMiddleware: MiddlewareHandler<{
     }
     const payload = await verifyJwt(token, secret)
     if (payload) {
-      const session = (await c.env.KV.get(
-        `session:${payload.jti}`,
-        'json',
-      )) as SessionRecord | null
+      const db = getDb(c.env.DB)
+      const session = await db
+        .select({ userId: sessions.userId })
+        .from(sessions)
+        .where(
+          and(eq(sessions.jti, payload.jti), gt(sessions.expiresAt, Date.now())),
+        )
+        .get()
       if (session) {
         c.set('userId', payload.sub)
         return next()

@@ -17,7 +17,6 @@ import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
 import { createLogger, errorMeta } from '../lib/logger'
 import { sendDeleteCode } from '../lib/mailer'
-import { sweepUserSessions } from '../lib/sessions'
 import { getUsage } from '../lib/usage'
 
 type Bindings = {
@@ -296,7 +295,8 @@ meRouter.delete('/', async (c) => {
     db.delete(users).where(eq(users.id, userId)),
   ])
 
-  const sweptSessions = await sweepUserSessions(c.env.KV, userId)
+  // sessions table cascades on user delete, so the rows above already
+  // killed every active JWT for this user.
   await c.env.KV.delete(`delete-confirm:${userId}`)
 
   return c.json({
@@ -304,6 +304,5 @@ meRouter.delete('/', async (c) => {
     stripeWarning: user.stripeCustId
       ? 'Cancel the Stripe subscription manually in the dashboard.'
       : null,
-    sessionsSwept: sweptSessions,
   })
 })

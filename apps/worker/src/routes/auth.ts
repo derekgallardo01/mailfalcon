@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
-import { users } from '@mailfalcon/db/schema'
+import { sessions, users, verifyCodes } from '@mailfalcon/db/schema'
 import { newTrackingId } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
 import { getClientIp } from '../lib/ip'
@@ -9,7 +9,6 @@ import { getJwtSecret, signJwt, verifyJwt } from '../lib/jwt'
 import { createLogger, errorMeta } from '../lib/logger'
 import { sendCode } from '../lib/mailer'
 import { rateLimit } from '../lib/rate-limit'
-import { addSession, removeSession } from '../lib/sessions'
 
 const requestSchema = z.object({
   email: z.string().email().max(254).transform((s) => s.toLowerCase()),
@@ -28,12 +27,6 @@ type Bindings = {
   AXIOM_DATASET?: string
   DB: D1Database
   KV: KVNamespace
-}
-
-interface StoredCode {
-  code: string
-  attempts: number
-  ts: number
 }
 
 function newSixDigitCode(): string {
@@ -62,41 +55,39 @@ authRouter.post('/request', async (c) => {
     return c.json({ error: 'rate_limited' }, 429, { 'Retry-After': '600' })
   }
 
-  // Per-email throttle: 1 code per 60s. Silent so we don't tip off the
-  // attacker whether the email exists. Throttle marker is best-effort —
-  // a KV outage on this put just means we might send a duplicate code
-  // within the window, which is fine.
-  const rlKey = `code-rl:${email}`
-  try {
-    const inFlight = await c.env.KV.get(rlKey)
-    if (inFlight) return c.json({ ok: true })
-  } catch {
-    /* read failed — fall through and send anyway */
-  }
-  try {
-    await c.env.KV.put(rlKey, '1', { expirationTtl: 60 })
-  } catch {
-    /* write capped — degrade to no throttle, still send the code */
+  // Per-email throttle (60s) and code storage both live in D1 now.
+  // KV's free-tier daily put cap was killing /auth/request; D1 has no
+  // such cap, and the row count here is tiny (one row per pending
+  // sign-in, max).
+  const db = getDb(c.env.DB)
+  const now = Date.now()
+  const existing = await db
+    .select()
+    .from(verifyCodes)
+    .where(eq(verifyCodes.email, email))
+    .get()
+
+  if (existing && existing.cooldownUntil > now) {
+    // Silently noop so we don't tip off whether the email exists.
+    return c.json({ ok: true })
   }
 
   const code = newSixDigitCode()
-  const stored: StoredCode = { code, attempts: 0, ts: Date.now() }
-  try {
-    await c.env.KV.put(`code:${email}`, JSON.stringify(stored), {
-      expirationTtl: 900,
+  const expiresAt = now + 15 * 60 * 1000
+  const cooldownUntil = now + 60 * 1000
+  await db
+    .insert(verifyCodes)
+    .values({
+      email,
+      code,
+      attempts: 0,
+      cooldownUntil,
+      expiresAt,
     })
-  } catch (err) {
-    // The code MUST be stored for verify to work. If this fails we
-    // can't authenticate the user — surface a clear error rather than
-    // silently sending a code that will never verify.
-    createLogger({
-      env: c.env,
-      waitUntil: (p) => c.executionCtx.waitUntil(p),
-    }).error('code_persist_failed', { email, ...errorMeta(err) })
-    return c.json({ error: 'service_unavailable' }, 503, {
-      'Retry-After': '60',
+    .onConflictDoUpdate({
+      target: verifyCodes.email,
+      set: { code, attempts: 0, cooldownUntil, expiresAt },
     })
-  }
 
   try {
     await sendCode({ email, code, env: c.env })
@@ -116,27 +107,36 @@ authRouter.post('/verify', async (c) => {
   if (!parsed.success) return c.json({ error: 'invalid' }, 400)
   const { email, code } = parsed.data
 
-  const key = `code:${email}`
-  const stored = (await c.env.KV.get(key, 'json')) as StoredCode | null
-  if (!stored) return c.json({ error: 'expired_or_unknown' }, 400)
+  const db = getDb(c.env.DB)
+  const stored = await db
+    .select()
+    .from(verifyCodes)
+    .where(eq(verifyCodes.email, email))
+    .get()
+
+  if (!stored || stored.expiresAt < Date.now()) {
+    if (stored) {
+      await db.delete(verifyCodes).where(eq(verifyCodes.email, email)).run()
+    }
+    return c.json({ error: 'expired_or_unknown' }, 400)
+  }
 
   if (stored.attempts >= 3) {
-    await c.env.KV.delete(key)
+    await db.delete(verifyCodes).where(eq(verifyCodes.email, email)).run()
     return c.json({ error: 'too_many_attempts' }, 429)
   }
 
   if (stored.code !== code) {
-    await c.env.KV.put(
-      key,
-      JSON.stringify({ ...stored, attempts: stored.attempts + 1 }),
-      { expirationTtl: 900 },
-    )
+    await db
+      .update(verifyCodes)
+      .set({ attempts: stored.attempts + 1 })
+      .where(eq(verifyCodes.email, email))
+      .run()
     return c.json({ error: 'wrong_code' }, 401)
   }
 
-  await c.env.KV.delete(key)
+  await db.delete(verifyCodes).where(eq(verifyCodes.email, email)).run()
 
-  const db = getDb(c.env.DB)
   let row = await db
     .select({ id: users.id })
     .from(users)
@@ -159,12 +159,12 @@ authRouter.post('/verify', async (c) => {
 
   const secret = getJwtSecret(c.env)
   const jti = newTrackingId()
-  await c.env.KV.put(
-    `session:${jti}`,
-    JSON.stringify({ userId: row.id, createdAt: Date.now() }),
-    { expirationTtl: 30 * 24 * 3600 },
-  )
-  await addSession(c.env.KV, row.id, jti)
+  const createdAt = Date.now()
+  const expiresAt = createdAt + 30 * 24 * 3600 * 1000
+  await db
+    .insert(sessions)
+    .values({ jti, userId: row.id, createdAt, expiresAt })
+    .run()
   const token = await signJwt({ sub: row.id, jti }, secret)
 
   return c.json({ token, userId: row.id, email })
@@ -177,8 +177,8 @@ authRouter.post('/logout', async (c) => {
     const secret = getJwtSecret(c.env)
     const payload = await verifyJwt(token, secret)
     if (payload) {
-      await c.env.KV.delete(`session:${payload.jti}`)
-      await removeSession(c.env.KV, payload.sub, payload.jti)
+      const db = getDb(c.env.DB)
+      await db.delete(sessions).where(eq(sessions.jti, payload.jti)).run()
     }
   }
   return c.json({ ok: true })
