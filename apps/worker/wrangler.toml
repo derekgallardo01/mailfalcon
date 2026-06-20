@@ -46,6 +46,7 @@ vars = { ENVIRONMENT = "development", PUBLIC_WEB_URL = "http://localhost:3000" }
 #   STRIPE_PRICE_ID_PRO    optional — Pro tier price
 #   GOOGLE_OAUTH_CLIENT_ID     optional — gmail.readonly spoof verification (returns 503 if unset)
 #   GOOGLE_OAUTH_CLIENT_SECRET optional — same; pairs with CLIENT_ID
+#   GOOGLE_OAUTH_REDIRECT_URI  optional — defaults to the pinned dev extension ID; swap to the CWS-assigned ID at publish time
 #   AXIOM_TOKEN            optional — error + warn forwarder (Cloudflare console fallback if unset)
 #   AXIOM_DATASET          optional — Axiom dataset name
 

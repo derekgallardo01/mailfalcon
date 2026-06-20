@@ -7,6 +7,11 @@ type Bindings = {
   ENVIRONMENT: string
   GOOGLE_OAUTH_CLIENT_ID?: string
   GOOGLE_OAUTH_CLIENT_SECRET?: string
+  /** Must match exactly the redirect URI registered on the Google
+   *  OAuth client. Driven by env so swapping to the CWS-assigned
+   *  extension ID at publish time is a `wrangler secret put`, no
+   *  code change. Falls back to the pinned dev extension ID if unset. */
+  GOOGLE_OAUTH_REDIRECT_URI?: string
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
 }
@@ -16,7 +21,8 @@ export const oauthRouter = new Hono<{
   Variables: Variables
 }>()
 
-const REDIRECT_URI = 'https://flimjkffmcjdmbppckejndmihbnflldm.chromiumapp.org/'
+const DEFAULT_REDIRECT_URI =
+  'https://flimjkffmcjdmbppckejndmihbnflldm.chromiumapp.org/'
 
 const exchangeSchema = z.object({
   code: z.string().min(1).max(2000),
@@ -51,7 +57,7 @@ oauthRouter.post('/google/exchange', async (c) => {
     client_secret: c.env.GOOGLE_OAUTH_CLIENT_SECRET,
     code_verifier: parsed.data.codeVerifier,
     grant_type: 'authorization_code',
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: c.env.GOOGLE_OAUTH_REDIRECT_URI ?? DEFAULT_REDIRECT_URI,
   })
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
