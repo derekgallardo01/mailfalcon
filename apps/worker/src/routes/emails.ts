@@ -303,6 +303,73 @@ emailsRouter.get('/', async (c) => {
  * the dashboard filter dropdown. Registered before /:id so the literal
  * path wins routing.
  */
+/**
+ * POST /v1/emails/lookup — batch lookup for the extension's Sent-folder
+ * indicator. Accepts up to 50 Gmail thread IDs; returns a map keyed by
+ * threadId with the tracking summary (id, humanOpens, clicks, replies)
+ * or null if the thread isn't tracked.
+ */
+const lookupSchema = z.object({
+  threadIds: z.array(z.string().min(1).max(200)).min(1).max(50),
+})
+
+emailsRouter.post('/lookup', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const parsed = lookupSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: 'invalid_body' }, 400)
+
+  const userId = c.get('userId')
+  const db = getDb(c.env.DB)
+  const rows = await db
+    .select({
+      id: trackedEmails.id,
+      threadId: trackedEmails.threadId,
+      humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`,
+      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
+      replies: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'reply' THEN 1 ELSE 0 END), 0)`,
+    })
+    .from(trackedEmails)
+    .leftJoin(events, eq(events.emailId, trackedEmails.id))
+    .where(
+      and(
+        eq(trackedEmails.userId, userId),
+        sql`${trackedEmails.threadId} IN (${sql.join(
+          parsed.data.threadIds.map((t) => sql`${t}`),
+          sql`, `,
+        )})`,
+      ),
+    )
+    .groupBy(trackedEmails.id)
+    .all()
+
+  const map: Record<string, {
+    id: string
+    humanOpens: number
+    clicks: number
+    replies: number
+  }> = {}
+  for (const r of rows) {
+    if (!r.threadId) continue
+    // Multiple tracked emails could share a threadId (the same user
+    // mailed twice in one thread). Keep the row with the most
+    // engagement so the chip shows the best signal.
+    const existing = map[r.threadId]
+    const total = Number(r.humanOpens) + Number(r.clicks) + Number(r.replies)
+    const existingTotal = existing
+      ? existing.humanOpens + existing.clicks + existing.replies
+      : -1
+    if (total > existingTotal) {
+      map[r.threadId] = {
+        id: r.id,
+        humanOpens: Number(r.humanOpens),
+        clicks: Number(r.clicks),
+        replies: Number(r.replies),
+      }
+    }
+  }
+  return c.json({ tracking: map })
+})
+
 emailsRouter.get('/tags', async (c) => {
   const userId = c.get('userId')
   const db = getDb(c.env.DB)

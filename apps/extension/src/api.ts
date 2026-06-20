@@ -95,6 +95,32 @@ export async function patchEmailIds(
   }
 }
 
+export interface TrackingSummary {
+  id: string
+  humanOpens: number
+  clicks: number
+  replies: number
+}
+
+/**
+ * Batch lookup of tracking summaries by Gmail thread ID. Used by the
+ * Sent-folder indicator to decorate each row with an open / click chip.
+ * Caller is responsible for batching (the server caps at 50/request).
+ */
+export async function lookupTrackingByThreads(
+  threadIds: string[],
+): Promise<Record<string, TrackingSummary>> {
+  if (threadIds.length === 0) return {}
+  const res = await fetch(`${config.apiHost}/v1/emails/lookup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify({ threadIds }),
+  })
+  if (!res.ok) throw new Error(`lookup failed: ${res.status}`)
+  const data = (await res.json()) as { tracking: Record<string, TrackingSummary> }
+  return data.tracking ?? {}
+}
+
 /**
  * Set the per-email notification mute state. Called from the SW when
  * the user clicks "Mute this email" on a notification button.

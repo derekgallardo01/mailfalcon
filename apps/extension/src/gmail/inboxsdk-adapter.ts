@@ -8,6 +8,7 @@ import type {
   RecipientHandle,
   ReplyCandidate,
 } from './adapter'
+import { lookupTrackingByThreads, type TrackingSummary } from '../api'
 import { presetToEpoch } from '../scheduled'
 
 interface SdkRecipient {
@@ -150,6 +151,18 @@ interface MessageView {
   getBodyElement?: () => HTMLElement | null
 }
 
+interface ThreadRowView {
+  getThreadID?: () => string | null
+  getThreadIDAsync?: () => Promise<string | null>
+  addLabel?: (opts: {
+    title: string
+    iconUrl?: string
+    foregroundColor?: string
+    backgroundColor?: string
+  }) => void
+  on?: (event: string, cb: () => void) => void
+}
+
 interface ThreadView {
   // Both deprecated in newer InboxSDK; we use Async at call sites.
   getThreadID?: () => string | null
@@ -178,9 +191,15 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
         registerThreadViewHandler: (cb: (view: ThreadView) => void) => void
         registerMessageViewHandler?: (cb: (view: MessageView) => void) => void
       }
+      Lists?: {
+        registerThreadRowViewHandler?: (
+          cb: (rowView: ThreadRowView) => void,
+        ) => void
+      }
     }
 
     this.attachReplyDetection(sdk.Conversations)
+    this.attachSentListIndicators(sdk.Lists)
 
     sdk.Compose.registerComposeViewHandler((rawView) => {
       const view = rawView as ComposeView
@@ -460,6 +479,108 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
     if (spec.subject.length > 0) view.setSubject?.(spec.subject)
     view.setBodyHTML?.(spec.bodyHtml)
     return view
+  }
+
+  private attachSentListIndicators(
+    lists: {
+      registerThreadRowViewHandler?: (
+        cb: (rowView: ThreadRowView) => void,
+      ) => void
+    } | undefined,
+  ): void {
+    if (!lists?.registerThreadRowViewHandler) return
+
+    // Cache live for 60s so re-renders of the same row (Gmail
+    // virtualizes the list while you scroll) don't re-fetch.
+    type CacheEntry = { summary: TrackingSummary | null; expiresAt: number }
+    const cache = new Map<string, CacheEntry>()
+    const CACHE_TTL_MS = 60_000
+
+    let pending: Map<string, ThreadRowView[]> = new Map()
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+    const FLUSH_DELAY_MS = 250
+
+    const decorate = (row: ThreadRowView, summary: TrackingSummary | null): void => {
+      if (!summary || !row.addLabel) return
+      const opens = summary.humanOpens
+      const clicks = summary.clicks
+      const replies = summary.replies
+      const total = opens + clicks + replies
+      const parts: string[] = []
+      if (opens > 0) parts.push(`${opens} open${opens === 1 ? '' : 's'}`)
+      if (clicks > 0) parts.push(`${clicks} click${clicks === 1 ? '' : 's'}`)
+      if (replies > 0) parts.push(`${replies} repl${replies === 1 ? 'y' : 'ies'}`)
+      const title = total === 0 ? '✓ tracked' : parts.join(' · ')
+      row.addLabel({
+        title,
+        foregroundColor: '#065f46',
+        backgroundColor: '#d1fae5',
+      })
+    }
+
+    const flush = (): void => {
+      flushTimer = null
+      const batch = pending
+      pending = new Map()
+      if (batch.size === 0) return
+
+      const threadIds = [...batch.keys()].slice(0, 50)
+      void lookupTrackingByThreads(threadIds)
+        .then((tracking) => {
+          const now = Date.now()
+          for (const threadId of threadIds) {
+            const summary = tracking[threadId] ?? null
+            cache.set(threadId, {
+              summary,
+              expiresAt: now + CACHE_TTL_MS,
+            })
+            const rows = batch.get(threadId) ?? []
+            for (const row of rows) decorate(row, summary)
+          }
+        })
+        .catch(() => {
+          // Best-effort. If the lookup fails the rows just don't get
+          // decorated — Gmail still works fine.
+        })
+    }
+
+    const schedule = (threadId: string, row: ThreadRowView): void => {
+      const list = pending.get(threadId) ?? []
+      list.push(row)
+      pending.set(threadId, list)
+      if (flushTimer == null) {
+        flushTimer = setTimeout(flush, FLUSH_DELAY_MS)
+      }
+    }
+
+    lists.registerThreadRowViewHandler((rowView) => {
+      // Only run inside the Sent folder. Heuristic via URL — InboxSDK
+      // doesn't expose a clean "is sent folder" predicate.
+      if (!/\/sent\b/.test(window.location.hash || window.location.pathname)) {
+        return
+      }
+
+      void (async () => {
+        let threadId: string | null = null
+        try {
+          if (rowView.getThreadIDAsync) {
+            threadId = await rowView.getThreadIDAsync()
+          } else {
+            threadId = rowView.getThreadID?.() ?? null
+          }
+        } catch {
+          threadId = null
+        }
+        if (!threadId) return
+
+        const cached = cache.get(threadId)
+        if (cached && cached.expiresAt > Date.now()) {
+          decorate(rowView, cached.summary)
+          return
+        }
+        schedule(threadId, rowView)
+      })()
+    })
   }
 
   private attachReplyDetection(
