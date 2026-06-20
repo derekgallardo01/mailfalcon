@@ -63,17 +63,40 @@ authRouter.post('/request', async (c) => {
   }
 
   // Per-email throttle: 1 code per 60s. Silent so we don't tip off the
-  // attacker whether the email exists.
+  // attacker whether the email exists. Throttle marker is best-effort —
+  // a KV outage on this put just means we might send a duplicate code
+  // within the window, which is fine.
   const rlKey = `code-rl:${email}`
-  const inFlight = await c.env.KV.get(rlKey)
-  if (inFlight) return c.json({ ok: true })
-  await c.env.KV.put(rlKey, '1', { expirationTtl: 60 })
+  try {
+    const inFlight = await c.env.KV.get(rlKey)
+    if (inFlight) return c.json({ ok: true })
+  } catch {
+    /* read failed — fall through and send anyway */
+  }
+  try {
+    await c.env.KV.put(rlKey, '1', { expirationTtl: 60 })
+  } catch {
+    /* write capped — degrade to no throttle, still send the code */
+  }
 
   const code = newSixDigitCode()
   const stored: StoredCode = { code, attempts: 0, ts: Date.now() }
-  await c.env.KV.put(`code:${email}`, JSON.stringify(stored), {
-    expirationTtl: 900,
-  })
+  try {
+    await c.env.KV.put(`code:${email}`, JSON.stringify(stored), {
+      expirationTtl: 900,
+    })
+  } catch (err) {
+    // The code MUST be stored for verify to work. If this fails we
+    // can't authenticate the user — surface a clear error rather than
+    // silently sending a code that will never verify.
+    createLogger({
+      env: c.env,
+      waitUntil: (p) => c.executionCtx.waitUntil(p),
+    }).error('code_persist_failed', { email, ...errorMeta(err) })
+    return c.json({ error: 'service_unavailable' }, 503, {
+      'Retry-After': '60',
+    })
+  }
 
   try {
     await sendCode({ email, code, env: c.env })

@@ -8,6 +8,10 @@ interface Bucket {
  * commits the new count if `allowed`. Eventually consistent: KV reads
  * can be ~60s stale globally, so for hard cost-control (billing) prefer
  * a Durable Object. For abuse hardening this is fine.
+ *
+ * Fails open: if KV read or write throws (free-tier daily write cap,
+ * binding outage, etc.), we let the request through. Better to under-
+ * throttle for a short window than to 500 the user's sign-in flow.
  */
 export async function rateLimit(
   kv: KVNamespace,
@@ -16,7 +20,12 @@ export async function rateLimit(
   windowSec: number,
 ): Promise<{ allowed: boolean; remaining: number }> {
   const now = Math.floor(Date.now() / 1000)
-  const existing = (await kv.get(key, 'json')) as Bucket | null
+  let existing: Bucket | null = null
+  try {
+    existing = (await kv.get(key, 'json')) as Bucket | null
+  } catch {
+    return { allowed: true, remaining: limit }
+  }
 
   let bucket: Bucket
   if (existing && now - existing.windowStart < windowSec) {
@@ -30,9 +39,15 @@ export async function rateLimit(
   }
 
   bucket.count++
-  await kv.put(key, JSON.stringify(bucket), {
-    expirationTtl: windowSec,
-  })
+  try {
+    await kv.put(key, JSON.stringify(bucket), {
+      expirationTtl: windowSec,
+    })
+  } catch {
+    // Write capped — return allowed but don't count this request. The
+    // window will reset naturally once KV recovers.
+    return { allowed: true, remaining: limit - bucket.count }
+  }
   return { allowed: true, remaining: limit - bucket.count }
 }
 
