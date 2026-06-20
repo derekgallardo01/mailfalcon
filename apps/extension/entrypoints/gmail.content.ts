@@ -39,19 +39,11 @@ export default defineContentScript({
     }
 
     // Per-message spoof decorator. Runs on every inbound message in
-    // any thread (read view) — not just tracked sends. Skips the user's
-    // own messages so opening your own Sent doesn't paint chips on
-    // your own sends.
+    // any thread the user reads, including self-mail (so the user can
+    // verify their own org signs correctly).
     adapter.onMessageDecorate(async (msg) => {
       try {
         if (!msg.viewElement || !msg.senderAddress) return
-        const session = await getSession().catch(() => null)
-        if (
-          session &&
-          msg.senderAddress.toLowerCase() === session.email.toLowerCase()
-        ) {
-          return
-        }
         const sender = parseSender({
           name: msg.senderName,
           address: msg.senderAddress,
@@ -94,8 +86,8 @@ export default defineContentScript({
 
         const combined = combineVerdicts(signals, authResponse.auth ?? null)
         renderSpoofChip(msg.viewElement, combined)
-      } catch (err) {
-        console.warn('[mailfalcon] spoof decorate failed:', err)
+      } catch {
+        /* decorate is best-effort; don't surface failures to user */
       }
     })
 

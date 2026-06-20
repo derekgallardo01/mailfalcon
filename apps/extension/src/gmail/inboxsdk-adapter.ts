@@ -151,6 +151,7 @@ interface MessageView {
   getSender?: () => { emailAddress?: string; name?: string } | null
   getBodyElement?: () => HTMLElement | null
   getViewElement?: () => HTMLElement | null
+  getElement?: () => HTMLElement | null
 }
 
 interface ThreadRowView {
@@ -169,6 +170,10 @@ interface ThreadView {
   // Both deprecated in newer InboxSDK; we use Async at call sites.
   getThreadID?: () => string | null
   getThreadIDAsync?: () => Promise<string | null>
+  /** Messages currently mounted in this thread view. Does NOT include
+   *  collapsed historical messages — getMessageViewsAll() for those. */
+  getMessageViews?: () => MessageView[]
+  getMessageViewsAll?: () => Promise<MessageView[]>
   on: (event: string, cb: (e: unknown) => void) => void
 }
 
@@ -622,10 +627,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       // a thread re-decorates after Gmail tears down the DOM.
       const decorated = new WeakSet<HTMLElement>()
 
-      threadView.on('messageAdded', (raw) => {
-        const view = (raw as { messageView?: MessageView }).messageView
-        if (!view) return
-
+      const processMessage = (view: MessageView, source: string): void => {
         void (async () => {
           const threadId = await threadIdPromise
           if (!threadId) return
@@ -638,11 +640,13 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           const sender = view.getSender?.() ?? null
           const senderAddress = sender?.emailAddress ?? null
           const senderName = sender?.name ?? null
-          const viewElement = view.getViewElement?.() ?? null
+          const viewElement =
+            view.getElement?.() ?? view.getViewElement?.() ?? null
 
           // Reply-detection path (tracked-thread only, deduped by
-          // messageId across the tab session).
-          if (!seen.has(messageId)) {
+          // messageId across the tab session). Only runs from the
+          // messageAdded event — initial-render messages are NOT replies.
+          if (source === 'messageAdded' && !seen.has(messageId)) {
             seen.add(messageId)
             const bodyText = (view.getBodyElement?.()?.textContent ?? '').slice(
               0,
@@ -662,9 +666,6 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             }
           }
 
-          // Decorate path (every thread, every message). Guarded by
-          // viewElement so we don't re-render the chip during Gmail's
-          // own internal re-layouts within the same DOM node.
           if (viewElement && !decorated.has(viewElement)) {
             decorated.add(viewElement)
             for (const handler of this.messageDecorateHandlers) {
@@ -682,6 +683,37 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             }
           }
         })()
+      }
+
+      // Existing messages on thread open. InboxSDK fires messageAdded
+      // only for NEW messages added during this thread session (e.g. a
+      // reply landing while open) — initial-render messages need a
+      // direct enumeration.
+      let initial: MessageView[] = []
+      try {
+        initial = threadView.getMessageViews?.() ?? []
+      } catch {
+        /* unsupported on this InboxSDK build */
+      }
+      for (const view of initial) {
+        processMessage(view, 'initial')
+      }
+
+      // Some InboxSDK versions only populate getMessageViews after a
+      // small delay — getMessageViewsAll is the resolved-promise variant.
+      if (initial.length === 0 && threadView.getMessageViewsAll) {
+        threadView
+          .getMessageViewsAll()
+          .then((all) => {
+            for (const view of all) processMessage(view, 'all')
+          })
+          .catch(() => undefined)
+      }
+
+      threadView.on('messageAdded', (raw) => {
+        const view = (raw as { messageView?: MessageView }).messageView
+        if (!view) return
+        processMessage(view, 'messageAdded')
       })
     })
   }
