@@ -46,3 +46,6 @@ coverage/
 
 # Generated assets (copy script runs on dev/build/postinstall)
 apps/extension/public/pageWorld.js
+
+# Local-only secrets (extension signing key, etc.)
+.local/
