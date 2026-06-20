@@ -1,4 +1,5 @@
 import {
+  getTrackedThreadDomain,
   isTrackedThread,
   mintEmail,
   patchEmailIds,
@@ -10,6 +11,14 @@ import { config } from '../src/config'
 import { InboxSdkGmailAdapter } from '../src/gmail/inboxsdk-adapter'
 import { prepareTrackedBody } from '../src/inject'
 import { schedule as scheduleSend, type ScheduledSend } from '../src/scheduled'
+import {
+  detectBrandImpersonation,
+  detectCrossDomainReply,
+  parseSender,
+  type HeuristicSignal,
+} from '../src/spoof/heuristics'
+import { renderSpoofChip } from '../src/spoof/chip-renderer'
+import { verdictFromHeuristics } from '../src/spoof/verdict'
 import { hasTemplateVars, substituteVars } from '../src/template-vars'
 
 const AUTOREPLY_RE = /^\s*(auto[ -]?reply|out of office|away|on vacation|vacation responder)/i
@@ -27,6 +36,46 @@ export default defineContentScript({
       console.error('[mailfalcon] InboxSDK load failed:', err)
       return
     }
+
+    // Per-message spoof decorator. Runs on every inbound message in
+    // any thread (read view) — not just tracked sends. Skips the user's
+    // own messages so opening your own Sent doesn't paint chips on
+    // your own sends.
+    adapter.onMessageDecorate(async (msg) => {
+      try {
+        if (!msg.viewElement || !msg.senderAddress) return
+        const session = await getSession().catch(() => null)
+        if (
+          session &&
+          msg.senderAddress.toLowerCase() === session.email.toLowerCase()
+        ) {
+          return
+        }
+        const sender = parseSender({
+          name: msg.senderName,
+          address: msg.senderAddress,
+        })
+        if (!sender) return
+        const signals: HeuristicSignal[] = []
+        const brandSignal = detectBrandImpersonation(sender)
+        if (brandSignal) signals.push(brandSignal)
+
+        const originalRecipientDomain = await getTrackedThreadDomain(msg.threadId)
+        if (originalRecipientDomain) {
+          const replySignal = detectCrossDomainReply(
+            sender.domain,
+            originalRecipientDomain,
+          )
+          if (replySignal) signals.push(replySignal)
+        }
+
+        const verdict = verdictFromHeuristics(signals)
+        if (verdict.level === 'none') return
+        renderSpoofChip(msg.viewElement, verdict)
+      } catch (err) {
+        console.warn('[mailfalcon] spoof decorate failed:', err)
+      }
+    })
 
     // Inbound message → "reply" event if it's on a thread we tracked.
     // Skip our own sends + auto-replies. Server dedupes via the
@@ -198,11 +247,13 @@ export default defineContentScript({
         // Patch the row so reply detection can correlate against it later
         // and add the threadId to the local "tracked threads" set so the
         // content-script listener fires for inbound messages on it.
+        const firstRecipientDomain =
+          recipients[0]?.address.split('@')[1]?.toLowerCase() ?? undefined
         event.onSent(({ messageId, threadId }) => {
           void patchEmailIds(result.id, { messageId, threadId }).catch((err) => {
             console.warn('[mailfalcon] patch ids failed:', err)
           })
-          void rememberTrackedThread(threadId)
+          void rememberTrackedThread(threadId, firstRecipientDomain)
         })
       } catch (err) {
         console.error('[mailfalcon] tracking failed, letting send proceed clean:', err)

@@ -4,6 +4,7 @@ import { config } from '../config'
 import type {
   ComposeEvent,
   GmailAdapter,
+  MessageDecorate,
   ProgrammaticCompose,
   RecipientHandle,
   ReplyCandidate,
@@ -147,8 +148,9 @@ const programmaticPassthrough = new WeakSet<object>()
 interface MessageView {
   getMessageID?: () => string
   getMessageIDAsync?: () => Promise<string>
-  getSender?: () => { emailAddress?: string } | null
+  getSender?: () => { emailAddress?: string; name?: string } | null
   getBodyElement?: () => HTMLElement | null
+  getViewElement?: () => HTMLElement | null
 }
 
 interface ThreadRowView {
@@ -174,6 +176,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
   private sdk: unknown = null
   private presendingHandlers: Array<(event: ComposeEvent) => Promise<void> | void> = []
   private incomingMessageHandlers: Array<(candidate: ReplyCandidate) => void> = []
+  private messageDecorateHandlers: Array<(msg: MessageDecorate) => void> = []
 
   async load(): Promise<void> {
     const load = (InboxSDK as unknown as {
@@ -446,6 +449,10 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
     this.incomingMessageHandlers.push(handler)
   }
 
+  onMessageDecorate(handler: (msg: MessageDecorate) => void): void {
+    this.messageDecorateHandlers.push(handler)
+  }
+
   async fireProgrammaticSend(spec: ProgrammaticCompose): Promise<void> {
     const view = await this.openProgrammaticCompose(spec)
     // Scheduled sends should run the FULL presend pipeline so they get
@@ -610,6 +617,11 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
         return threadView.getThreadID?.() ?? null
       })()
 
+      // Dedupe per-purpose: replies fire once per inbound message; the
+      // decorator fires once per (messageId, viewElement) so re-opening
+      // a thread re-decorates after Gmail tears down the DOM.
+      const decorated = new WeakSet<HTMLElement>()
+
       threadView.on('messageAdded', (raw) => {
         const view = (raw as { messageView?: MessageView }).messageView
         if (!view) return
@@ -621,26 +633,52 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           const messageId = view.getMessageIDAsync
             ? await view.getMessageIDAsync().catch(() => null)
             : view.getMessageID?.()
-          if (!messageId || seen.has(messageId)) return
-          seen.add(messageId)
+          if (!messageId) return
 
           const sender = view.getSender?.() ?? null
           const senderAddress = sender?.emailAddress ?? null
-          const bodyText = (view.getBodyElement?.()?.textContent ?? '').slice(
-            0,
-            400,
-          )
+          const senderName = sender?.name ?? null
+          const viewElement = view.getViewElement?.() ?? null
 
-          for (const handler of this.incomingMessageHandlers) {
-            try {
-              handler({
-                threadId,
-                gmailMessageId: messageId,
-                senderAddress,
-                bodyPreview: bodyText,
-              })
-            } catch {
-              /* ignore */
+          // Reply-detection path (tracked-thread only, deduped by
+          // messageId across the tab session).
+          if (!seen.has(messageId)) {
+            seen.add(messageId)
+            const bodyText = (view.getBodyElement?.()?.textContent ?? '').slice(
+              0,
+              400,
+            )
+            for (const handler of this.incomingMessageHandlers) {
+              try {
+                handler({
+                  threadId,
+                  gmailMessageId: messageId,
+                  senderAddress,
+                  bodyPreview: bodyText,
+                })
+              } catch {
+                /* ignore */
+              }
+            }
+          }
+
+          // Decorate path (every thread, every message). Guarded by
+          // viewElement so we don't re-render the chip during Gmail's
+          // own internal re-layouts within the same DOM node.
+          if (viewElement && !decorated.has(viewElement)) {
+            decorated.add(viewElement)
+            for (const handler of this.messageDecorateHandlers) {
+              try {
+                handler({
+                  threadId,
+                  messageId,
+                  senderName,
+                  senderAddress,
+                  viewElement,
+                })
+              } catch {
+                /* ignore */
+              }
             }
           }
         })()

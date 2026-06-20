@@ -44,12 +44,29 @@ export interface ReplyCandidate {
   bodyPreview: string
 }
 
+/** Fires for every inbound message rendered in any thread view. Used by
+ *  the spoof detector to attach per-message badges. Separate from
+ *  ReplyCandidate (which is tracked-thread-only). */
+export interface MessageDecorate {
+  threadId: string
+  messageId: string
+  senderName: string | null
+  senderAddress: string | null
+  /** The InboxSDK view element for this message — the chip renderer
+   *  finds the sender row inside it. */
+  viewElement: HTMLElement | null
+}
+
 export interface GmailAdapter {
   load(): Promise<void>
   onPresending(handler: (event: ComposeEvent) => Promise<void> | void): void
   /** Fires for every new message added to a thread view. The handler
    *  must decide whether the candidate is a tracked reply. */
   onIncomingMessage(handler: (candidate: ReplyCandidate) => void): void
+  /** Fires once per rendered message in any thread view. The handler
+   *  receives the message's sender + view element so it can attach
+   *  per-message UI (spoof chips, etc.). */
+  onMessageDecorate(handler: (msg: MessageDecorate) => void): void
   /** Open a brand-new compose populated with the given fields and send
    *  immediately. Used by scheduled-send dispatch. The send flows through
    *  the normal presend interception so it gets tracked + the row is

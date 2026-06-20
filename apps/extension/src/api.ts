@@ -159,20 +159,48 @@ export async function reportReply(
 }
 
 const TRACKED_THREADS_KEY = 'mf.trackedThreads'
+const TRACKED_THREAD_DOMAINS_KEY = 'mf.trackedThreadDomains'
 const MAX_TRACKED_THREADS = 500
 
 /**
  * Append a Gmail thread ID to the local "tracked threads" set so the
  * content script knows to fire reply events for inbound messages on it.
+ * Optionally store the original recipient domain so the spoof detector
+ * can flag replies that arrive from a different domain than the thread
+ * was started with.
  */
-export async function rememberTrackedThread(threadId: string): Promise<void> {
+export async function rememberTrackedThread(
+  threadId: string,
+  originalRecipientDomain?: string,
+): Promise<void> {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return
   try {
-    const stored = await chrome.storage.local.get(TRACKED_THREADS_KEY)
+    const stored = await chrome.storage.local.get([
+      TRACKED_THREADS_KEY,
+      TRACKED_THREAD_DOMAINS_KEY,
+    ])
     const list = (stored[TRACKED_THREADS_KEY] as string[] | undefined) ?? []
-    if (list.includes(threadId)) return
-    const next = [...list, threadId].slice(-MAX_TRACKED_THREADS)
-    await chrome.storage.local.set({ [TRACKED_THREADS_KEY]: next })
+    const domainsRaw = stored[TRACKED_THREAD_DOMAINS_KEY] as
+      | Record<string, string>
+      | undefined
+    const domains = { ...(domainsRaw ?? {}) }
+    const nextList = list.includes(threadId)
+      ? list
+      : [...list, threadId].slice(-MAX_TRACKED_THREADS)
+
+    if (originalRecipientDomain && originalRecipientDomain.length > 0) {
+      domains[threadId] = originalRecipientDomain.toLowerCase()
+    }
+    // Drop domain entries for thread IDs no longer in the rolling set.
+    const liveSet = new Set(nextList)
+    for (const k of Object.keys(domains)) {
+      if (!liveSet.has(k)) delete domains[k]
+    }
+
+    await chrome.storage.local.set({
+      [TRACKED_THREADS_KEY]: nextList,
+      [TRACKED_THREAD_DOMAINS_KEY]: domains,
+    })
   } catch {
     /* ignore */
   }
@@ -189,9 +217,29 @@ export async function isTrackedThread(threadId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Return the original recipient domain we recorded when the user sent
+ * the email that started this tracked thread, or null if unknown
+ * (untracked thread, or sent by an older extension build).
+ */
+export async function getTrackedThreadDomain(threadId: string): Promise<string | null> {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return null
+  try {
+    const stored = await chrome.storage.local.get(TRACKED_THREAD_DOMAINS_KEY)
+    const domains = stored[TRACKED_THREAD_DOMAINS_KEY] as
+      | Record<string, string>
+      | undefined
+    return domains?.[threadId] ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function clearTrackedThreads(): Promise<void> {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return
-  await chrome.storage.local.remove(TRACKED_THREADS_KEY).catch(() => undefined)
+  await chrome.storage.local
+    .remove([TRACKED_THREADS_KEY, TRACKED_THREAD_DOMAINS_KEY])
+    .catch(() => undefined)
 }
 
 export async function requestCode(email: string): Promise<void> {
