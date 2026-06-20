@@ -96,6 +96,24 @@ export async function patchEmailIds(
 }
 
 /**
+ * Set the per-email notification mute state. Called from the SW when
+ * the user clicks "Mute this email" on a notification button.
+ */
+export async function muteEmail(id: string, muted: boolean): Promise<void> {
+  const res = await fetch(
+    `${config.apiHost}/v1/emails/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+      body: JSON.stringify({ notificationsMuted: muted }),
+    },
+  )
+  if (!res.ok) {
+    throw new Error(`mute failed: ${res.status}`)
+  }
+}
+
+/**
  * Fire-and-forget — the extension calls this when InboxSDK reports a
  * new inbound message in a thread we've tracked. Server dedupes via
  * gmailMessageId so multiple Gmail tabs don't double-record.

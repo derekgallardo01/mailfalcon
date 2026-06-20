@@ -60,6 +60,7 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
       .select({
         userId: trackedEmails.userId,
         sentAt: trackedEmails.sentAt,
+        notificationsMuted: trackedEmails.notificationsMuted,
       })
       .from(trackedEmails)
       .where(eq(trackedEmails.id, id))
@@ -68,6 +69,7 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
   if (!link || !email) return c.notFound()
 
   const isSelfClickWindow = Date.now() - email.sentAt < SELF_CLICK_GUARD_MS
+  const muted = email.notificationsMuted === 1
 
   // Per-IP throttle: 60 clicks per IP per minute. On exceed, still
   // redirect (so the user doesn't see a broken link), but skip the DB
@@ -117,7 +119,7 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
           isFirstOpen: 0,
         })
         .run()
-      if (uaDetails.uaClass !== 'bot' && !isSelfClickWindow) {
+      if (uaDetails.uaClass !== 'bot' && !isSelfClickWindow && !muted) {
         await fanoutPush(db, c.env, email.userId).catch((err) =>
           createLogger({ env: c.env }).warn(
             'click_fanout_failed',

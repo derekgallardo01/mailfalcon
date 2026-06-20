@@ -35,7 +35,25 @@ function EmailDetailInner() {
   const [notesStatus, setNotesStatus] = useState<'idle' | 'saving' | 'saved'>(
     'idle',
   )
+  const [muteBusy, setMuteBusy] = useState(false)
   const esRef = useRef<EventSource | null>(null)
+
+  async function toggleMute() {
+    if (!data || !id) return
+    setMuteBusy(true)
+    const next = !data.email.notificationsMuted
+    try {
+      await patchEmailMeta(id, { notificationsMuted: next })
+      setData({
+        ...data,
+        email: { ...data.email, notificationsMuted: next },
+      })
+    } catch (err) {
+      if (err instanceof Error) setError(err.message)
+    } finally {
+      setMuteBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (data) setNotes(data.email.notes)
@@ -210,13 +228,33 @@ function EmailDetailInner() {
           <p className="text-xs text-falcon-500" title={formatET(data.email.sentAt)}>
             Sent {formatRelative(data.email.sentAt)} · {data.email.recipientCount} recipient{data.email.recipientCount === 1 ? '' : 's'}
             {data.email.privacyMode && ' · privacy mode'}
+            {data.email.notificationsMuted && ' · 🔕 muted'}
           </p>
         </div>
-        {liveCount > 0 && (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-            live · {liveCount} new
-          </span>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          {liveCount > 0 && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+              live · {liveCount} new
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={toggleMute}
+            disabled={muteBusy}
+            className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+              data.email.notificationsMuted
+                ? 'border-falcon-200 bg-white text-falcon-700 hover:bg-falcon-50'
+                : 'border-falcon-200 bg-white text-falcon-500 hover:bg-falcon-50 hover:text-falcon-700'
+            }`}
+            title={
+              data.email.notificationsMuted
+                ? 'Notifications for this email are muted. Click to unmute.'
+                : 'Mute push notifications for this email. Events still record on the dashboard.'
+            }
+          >
+            {data.email.notificationsMuted ? '🔔 Unmute' : '🔕 Mute notifications'}
+          </button>
+        </div>
       </header>
 
       <section className="mt-6 grid grid-cols-3 gap-4">

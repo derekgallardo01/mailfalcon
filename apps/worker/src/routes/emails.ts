@@ -53,6 +53,7 @@ const patchSchema = z.object({
   messageId: z.string().min(1).max(200).optional(),
   tags: z.array(tagSchema).max(10).optional(),
   notes: z.string().max(5000).optional(),
+  notificationsMuted: z.boolean().optional(),
 })
 
 const sortSchema = z.enum([
@@ -389,6 +390,7 @@ emailsRouter.get('/:id', async (c) => {
       recipientCount: email.recipientCount,
       privacyMode: email.privacyMode === 1,
       threadId: email.threadId,
+      notificationsMuted: email.notificationsMuted === 1,
       tags: ((): string[] => {
         try {
           const parsed = JSON.parse(email.tags) as unknown
@@ -477,6 +479,9 @@ emailsRouter.patch('/:id', async (c) => {
     updates.tags = JSON.stringify(dedup)
   }
   if (parsed.data.notes !== undefined) updates.notes = parsed.data.notes
+  if (parsed.data.notificationsMuted !== undefined) {
+    updates.notificationsMuted = parsed.data.notificationsMuted ? 1 : 0
+  }
   if (Object.keys(updates).length === 0) return c.json({ ok: true })
 
   const result = await db

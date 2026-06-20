@@ -1,0 +1,1 @@
+ALTER TABLE `tracked_emails` ADD `notifications_muted` integer DEFAULT 0 NOT NULL;

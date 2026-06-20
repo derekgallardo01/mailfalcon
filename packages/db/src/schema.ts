@@ -44,6 +44,9 @@ export const trackedEmails = sqliteTable(
     // 5000 chars. Both used by dashboard filters; nothing recipient-side.
     tags: text('tags').notNull().default('[]'),
     notes: text('notes').notNull().default(''),
+    // Per-email notification mute. When 1, opens / clicks / replies are
+    // still recorded for the dashboard but the push fan-out is skipped.
+    notificationsMuted: integer('notifications_muted').notNull().default(0),
   },
   (table) => ({
     userSentIdx: index('tracked_emails_user_sent_idx').on(table.userId, table.sentAt),

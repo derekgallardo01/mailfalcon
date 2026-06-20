@@ -1,3 +1,4 @@
+import { muteEmail } from '../src/api'
 import { getSession } from '../src/auth-store'
 import { bumpBadge, clearBadge, initBadge } from '../src/badge'
 import { config } from '../src/config'
@@ -105,17 +106,23 @@ export default defineBackground(() => {
     if (ev.uaClass === 'bot') return
 
     const { title, body } = notifFor(ev)
-    chrome.notifications.create(`${NOTIF_PREFIX}${ev.id}`, {
+    const notifId = `${NOTIF_PREFIX}${ev.id}`
+    chrome.notifications.create(notifId, {
       type: 'basic',
       iconUrl: chrome.runtime.getURL(NOTIF_ICON_PATH),
       title,
       message: body,
       priority: 1,
+      buttons: [{ title: 'Mute this email' }],
     })
     // Remember which email this notif belongs to so the click handler
-    // can deep-link to its detail page.
+    // can deep-link to its detail page AND the button handler can mute
+    // the right email.
     void chrome.storage.session
-      ?.set({ [`mf.notifLink:${NOTIF_PREFIX}${ev.id}`]: deepLink(ev.emailId) })
+      ?.set({
+        [`mf.notifLink:${notifId}`]: deepLink(ev.emailId),
+        [`mf.notifEmail:${notifId}`]: ev.emailId,
+      })
       .catch(() => undefined)
     void bumpBadge()
   }
@@ -259,6 +266,24 @@ export default defineBackground(() => {
       return false
     }
     return false
+  })
+
+  // "Mute this email" button on SSE-driven notifications. Looks up the
+  // emailId we stashed in session storage and PATCHes the email muted.
+  chrome.notifications.onButtonClicked.addListener(async (notifId, btnIdx) => {
+    if (!notifId.startsWith(NOTIF_PREFIX)) return
+    if (btnIdx !== 0) return
+    const key = `mf.notifEmail:${notifId}`
+    try {
+      const stored = await chrome.storage.session?.get(key)
+      const emailId = stored?.[key]
+      if (typeof emailId !== 'string') return
+      await muteEmail(emailId, true)
+    } catch (err) {
+      console.warn('[mailfalcon] mute via notification failed:', err)
+    } finally {
+      chrome.notifications.clear(notifId)
+    }
   })
 
   // Legacy chrome.notifications click handler (still fires for SSE-driven

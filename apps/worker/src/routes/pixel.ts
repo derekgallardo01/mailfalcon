@@ -76,6 +76,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
       id: trackedEmails.id,
       userId: trackedEmails.userId,
       sentAt: trackedEmails.sentAt,
+      notificationsMuted: trackedEmails.notificationsMuted,
     })
     .from(trackedEmails)
     .where(eq(trackedEmails.id, id))
@@ -83,6 +84,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
   if (!row) return gif()
 
   const isSelfOpenWindow = Date.now() - row.sentAt < SELF_OPEN_GUARD_MS
+  const muted = row.notificationsMuted === 1
 
   const ua = c.req.header('User-Agent') ?? ''
   const uaDetails = parseUa(ua)
@@ -135,7 +137,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
           isFirstOpen,
         })
         .run()
-      if (uaDetails.uaClass !== 'bot' && !isSelfOpenWindow) {
+      if (uaDetails.uaClass !== 'bot' && !isSelfOpenWindow && !muted) {
         await fanoutPush(db, c.env, row.userId).catch((err) =>
           createLogger({ env: c.env }).warn(
             'pixel_fanout_failed',

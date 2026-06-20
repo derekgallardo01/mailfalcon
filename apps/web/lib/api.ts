@@ -110,7 +110,7 @@ export async function listEmailTags(): Promise<string[]> {
 
 export async function patchEmailMeta(
   id: string,
-  patch: { tags?: string[]; notes?: string },
+  patch: { tags?: string[]; notes?: string; notificationsMuted?: boolean },
 ): Promise<void> {
   const res = await fetch(`${config.apiHost}/v1/emails/${encodeURIComponent(id)}`, {
     method: 'PATCH',
@@ -129,6 +129,7 @@ export interface EmailDetail {
     recipientCount: number
     privacyMode: boolean
     threadId: string | null
+    notificationsMuted: boolean
     tags: string[]
     notes: string
   }

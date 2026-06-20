@@ -60,7 +60,11 @@ repliesRouter.post('/', async (c) => {
   // tracked emails share a threadId (which can happen if the user
   // mailed twice in the same thread), pick the most recent.
   const email = await db
-    .select({ id: trackedEmails.id, userId: trackedEmails.userId })
+    .select({
+      id: trackedEmails.id,
+      userId: trackedEmails.userId,
+      notificationsMuted: trackedEmails.notificationsMuted,
+    })
     .from(trackedEmails)
     .where(
       and(
@@ -72,6 +76,7 @@ repliesRouter.post('/', async (c) => {
     .all()
   if (email.length === 0) return c.json({ error: 'no_tracked_thread' }, 404)
   const target = email[email.length - 1]!
+  const muted = target.notificationsMuted === 1
 
   await db
     .insert(events)
@@ -107,11 +112,13 @@ repliesRouter.post('/', async (c) => {
     c.env.KV.put(nonceKey, '1', { expirationTtl: 86_400 }),
   )
 
-  c.executionCtx.waitUntil(
-    fanoutPush(db, c.env, target.userId).catch((err) =>
-      createLogger({ env: c.env }).warn('reply_fanout_failed', errorMeta(err)),
-    ),
-  )
+  if (!muted) {
+    c.executionCtx.waitUntil(
+      fanoutPush(db, c.env, target.userId).catch((err) =>
+        createLogger({ env: c.env }).warn('reply_fanout_failed', errorMeta(err)),
+      ),
+    )
+  }
 
   return c.json({ ok: true, emailId: target.id })
 })
