@@ -9,6 +9,14 @@ import {
   get as getScheduled,
 } from '../src/scheduled'
 import { StreamClient, type StreamEvent } from '../src/stream-client'
+import { fetchAuthResults } from '../src/spoof/gmail-api'
+import {
+  clearTokens as clearGoogleTokens,
+  connectGoogle,
+  disconnectGoogle,
+  loadTokens as loadGoogleTokens,
+} from '../src/spoof/google-oauth'
+import { STORAGE_KEYS as SPOOF_KEYS } from '../src/spoof/oauth-config'
 
 const NOTIF_PREFIX = 'mf-event-'
 const NOTIF_ICON_PATH = 'icon/128.png'
@@ -252,6 +260,70 @@ export default defineBackground(() => {
         .catch(() => sendResponse({ session: null }))
       return true
     }
+    // Spoof: connect / disconnect / status / verify message protocol.
+    // The access token never leaves the SW — the content script only
+    // ever sees the parsed verdict.
+    if (msg.type === 'spoof-connect') {
+      void connectGoogle()
+        .then((tokens) =>
+          sendResponse({ ok: true, email: tokens.connectedEmail }),
+        )
+        .catch((err) => sendResponse({ ok: false, error: String(err?.message ?? err) }))
+      return true
+    }
+    if (msg.type === 'spoof-disconnect') {
+      void disconnectGoogle()
+        .then(() => sendResponse({ ok: true }))
+        .catch(() => sendResponse({ ok: true }))
+      return true
+    }
+    if (msg.type === 'spoof-status') {
+      void (async () => {
+        const tokens = await loadGoogleTokens()
+        const stored = await chrome.storage.local.get(SPOOF_KEYS.enabled)
+        sendResponse({
+          connected: !!tokens,
+          email: tokens?.connectedEmail ?? null,
+          enabled: stored[SPOOF_KEYS.enabled] !== false,
+        })
+      })()
+      return true
+    }
+    if (msg.type === 'spoof-set-enabled') {
+      const enabled = !!(msg as { enabled?: boolean }).enabled
+      void chrome.storage.local
+        .set({ [SPOOF_KEYS.enabled]: enabled })
+        .then(() => sendResponse({ ok: true }))
+        .catch(() => sendResponse({ ok: false }))
+      return true
+    }
+    if (msg.type === 'spoof-verify') {
+      const messageId = (msg as { messageId?: string }).messageId
+      if (!messageId) {
+        sendResponse({ status: 'no-id' })
+        return false
+      }
+      void (async () => {
+        const tokens = await loadGoogleTokens()
+        if (!tokens) {
+          sendResponse({ status: 'not-connected' })
+          return
+        }
+        const stored = await chrome.storage.local.get(SPOOF_KEYS.enabled)
+        if (stored[SPOOF_KEYS.enabled] === false) {
+          sendResponse({ status: 'disabled' })
+          return
+        }
+        const result = await fetchAuthResults(messageId)
+        if (result === undefined) {
+          sendResponse({ status: 'error' })
+          return
+        }
+        sendResponse({ status: 'ok', auth: result })
+      })()
+      return true
+    }
+
     if (msg.type === 'inboxsdk__injectPageWorld' && _sender.tab?.id != null) {
       const target: chrome.scripting.InjectionTarget = { tabId: _sender.tab.id }
       if (_sender.documentId) {

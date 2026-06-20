@@ -131,6 +131,89 @@ async function showSignedIn(email: string): Promise<void> {
     }
     void reload()
   }
+
+  void renderSpoofSection()
+}
+
+interface SpoofStatus {
+  connected: boolean
+  email: string | null
+  enabled: boolean
+}
+
+async function renderSpoofSection(): Promise<void> {
+  const statusEl = document.getElementById('spoof-status')
+  const controls = document.getElementById('spoof-controls')
+  if (!statusEl || !controls) return
+  controls.replaceChildren()
+
+  let s: SpoofStatus
+  try {
+    s = (await chrome.runtime.sendMessage({ type: 'spoof-status' })) as SpoofStatus
+  } catch {
+    statusEl.textContent = 'Background not ready.'
+    return
+  }
+
+  if (!s.connected) {
+    statusEl.textContent = 'Verify SPF / DKIM / DMARC on inbound mail by connecting your Gmail account (read-only headers).'
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.textContent = 'Connect Gmail'
+    btn.addEventListener('click', async () => {
+      setMsg('spoof-msg', 'Opening Google consent…')
+      try {
+        const res = (await chrome.runtime.sendMessage({ type: 'spoof-connect' })) as {
+          ok: boolean
+          email?: string | null
+          error?: string
+        }
+        if (!res.ok) throw new Error(res.error ?? 'connect_failed')
+        setMsg('spoof-msg', 'Connected.', 'ok')
+        await renderSpoofSection()
+      } catch (err) {
+        setMsg(
+          'spoof-msg',
+          err instanceof Error ? err.message : 'Connect failed',
+          'err',
+        )
+      }
+    })
+    controls.appendChild(btn)
+    return
+  }
+
+  statusEl.textContent = s.email
+    ? `Connected as ${s.email}.`
+    : 'Connected.'
+
+  const toggleLabel = document.createElement('label')
+  toggleLabel.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:12px;'
+  const toggle = document.createElement('input')
+  toggle.type = 'checkbox'
+  toggle.checked = s.enabled
+  toggle.addEventListener('change', async () => {
+    await chrome.runtime.sendMessage({
+      type: 'spoof-set-enabled',
+      enabled: toggle.checked,
+    })
+    setMsg('spoof-msg', toggle.checked ? 'Verification on.' : 'Verification off.', 'ok')
+  })
+  toggleLabel.appendChild(toggle)
+  toggleLabel.appendChild(document.createTextNode('Show verified chips'))
+  controls.appendChild(toggleLabel)
+
+  const disconnectBtn = document.createElement('button')
+  disconnectBtn.type = 'button'
+  disconnectBtn.className = 'link'
+  disconnectBtn.textContent = 'Disconnect'
+  disconnectBtn.addEventListener('click', async () => {
+    setMsg('spoof-msg', 'Revoking…')
+    await chrome.runtime.sendMessage({ type: 'spoof-disconnect' })
+    setMsg('spoof-msg', 'Disconnected.', 'ok')
+    await renderSpoofSection()
+  })
+  controls.appendChild(disconnectBtn)
 }
 
 async function showRequest(prefill = ''): Promise<void> {

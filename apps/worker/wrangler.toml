@@ -44,6 +44,8 @@ vars = { ENVIRONMENT = "development", PUBLIC_WEB_URL = "http://localhost:3000" }
 #   STRIPE_SECRET_KEY      optional — billing checkout (returns 503 if unset)
 #   STRIPE_WEBHOOK_SECRET  optional — Stripe webhook signature
 #   STRIPE_PRICE_ID_PRO    optional — Pro tier price
+#   GOOGLE_OAUTH_CLIENT_ID     optional — gmail.readonly spoof verification (returns 503 if unset)
+#   GOOGLE_OAUTH_CLIENT_SECRET optional — same; pairs with CLIENT_ID
 #   AXIOM_TOKEN            optional — error + warn forwarder (Cloudflare console fallback if unset)
 #   AXIOM_DATASET          optional — Axiom dataset name
 

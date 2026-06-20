@@ -11,6 +11,7 @@ import { emailsRouter } from './routes/emails'
 import { eventsRouter } from './routes/events'
 import { followupsRouter } from './routes/followups'
 import { meRouter } from './routes/me'
+import { oauthRouter } from './routes/oauth'
 import { pixelRouter } from './routes/pixel'
 import { pushRouter } from './routes/push'
 import { repliesRouter } from './routes/replies'
@@ -26,6 +27,8 @@ type Bindings = {
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE_ID_PRO?: string
+  GOOGLE_OAUTH_CLIENT_ID?: string
+  GOOGLE_OAUTH_CLIENT_SECRET?: string
   PUBLIC_WEB_URL?: string
   VAPID_PUBLIC_KEY?: string
   VAPID_PRIVATE_KEY_JWK?: string
@@ -94,6 +97,7 @@ app.route('/v1/followups', followupsRouter)
 app.route('/v1/replies', repliesRouter)
 app.route('/v1/push', pushRouter)
 app.route('/v1/billing', billingRouter)
+app.route('/v1/oauth', oauthRouter)
 
 app.use(
   '/stream',

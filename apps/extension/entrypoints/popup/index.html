@@ -21,7 +21,15 @@
         <p class="email" data-bind="email"></p>
         <a id="dashboard-link" href="https://app.mailfalcon.app/dashboard/" target="_blank" rel="noopener">Open dashboard ↗</a>
         <div id="scheduled-queue"></div>
-        <div class="row" style="margin-top:8px;">
+
+        <div id="spoof-section" style="margin-top:14px;padding-top:10px;border-top:1px solid #e3e9f2;">
+          <p class="muted" style="margin:0 0 6px 0;font-weight:600;">Sender authentication</p>
+          <p id="spoof-status" class="muted" style="margin:0 0 6px 0;font-size:11px;">Checking…</p>
+          <div id="spoof-controls" class="row" style="gap:6px;flex-wrap:wrap;"></div>
+          <p id="spoof-msg" class="msg" style="margin-top:6px;"></p>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
           <button id="replay-onboarding" type="button" class="link">Replay intro</button>
           <button id="logout-btn" type="button" class="link">Sign out</button>
         </div>

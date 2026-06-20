@@ -2,7 +2,11 @@ import type { SpoofVerdict } from './verdict'
 
 const MARKER_ATTR = 'data-mf-spoof'
 
-const STYLES: Record<'amber' | 'red', { bg: string; fg: string; border: string }> = {
+const STYLES: Record<
+  'green' | 'amber' | 'red',
+  { bg: string; fg: string; border: string }
+> = {
+  green: { bg: '#d1fae5', fg: '#065f46', border: '#a7f3d0' },
   amber: { bg: '#fef3c7', fg: '#92400e', border: '#fde68a' },
   red: { bg: '#fee2e2', fg: '#991b1b', border: '#fecaca' },
 }

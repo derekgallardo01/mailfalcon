@@ -11,6 +11,7 @@ import { config } from '../src/config'
 import { InboxSdkGmailAdapter } from '../src/gmail/inboxsdk-adapter'
 import { prepareTrackedBody } from '../src/inject'
 import { schedule as scheduleSend, type ScheduledSend } from '../src/scheduled'
+import type { AuthResults } from '../src/spoof/auth-results-parser'
 import {
   detectBrandImpersonation,
   detectCrossDomainReply,
@@ -18,7 +19,7 @@ import {
   type HeuristicSignal,
 } from '../src/spoof/heuristics'
 import { renderSpoofChip } from '../src/spoof/chip-renderer'
-import { verdictFromHeuristics } from '../src/spoof/verdict'
+import { combineVerdicts, verdictFromHeuristics } from '../src/spoof/verdict'
 import { hasTemplateVars, substituteVars } from '../src/template-vars'
 
 const AUTOREPLY_RE = /^\s*(auto[ -]?reply|out of office|away|on vacation|vacation responder)/i
@@ -69,9 +70,30 @@ export default defineContentScript({
           if (replySignal) signals.push(replySignal)
         }
 
-        const verdict = verdictFromHeuristics(signals)
-        if (verdict.level === 'none') return
-        renderSpoofChip(msg.viewElement, verdict)
+        // First-paint with heuristics-only — keeps the chip responsive
+        // while the Gmail API call is still in flight.
+        const heuristicVerdict = verdictFromHeuristics(signals)
+        if (heuristicVerdict.level !== 'none') {
+          renderSpoofChip(msg.viewElement, heuristicVerdict)
+        }
+
+        // Ask the SW for the authoritative SPF/DKIM/DMARC verdict. The
+        // SW returns { status, auth? } — no token ever crosses to the
+        // content script. status === 'not-connected' / 'disabled' means
+        // skip silently; 'ok' means we got Gmail's own result.
+        let authResponse: { status: string; auth?: AuthResults | null } | null = null
+        try {
+          authResponse = (await chrome.runtime.sendMessage({
+            type: 'spoof-verify',
+            messageId: msg.messageId,
+          })) as { status: string; auth?: AuthResults | null }
+        } catch {
+          authResponse = null
+        }
+        if (!authResponse || authResponse.status !== 'ok') return
+
+        const combined = combineVerdicts(signals, authResponse.auth ?? null)
+        renderSpoofChip(msg.viewElement, combined)
       } catch (err) {
         console.warn('[mailfalcon] spoof decorate failed:', err)
       }

@@ -11,10 +11,11 @@ export default defineConfig({
     // matching private key lives at .local/extension-key.pem and is
     // gitignored. CWS overrides this on the published build.
     key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApWuuwvsEWexo739A6cZd9EJhmMQIgxJx5U0rIKt2pCJzf8FPcwb+yTftC7DEvXpbC3v1fpD6Zi63qT3FDo0pKg+5huURm/bxlQz1AVtv4MhfMkPWqMBZ0t8Ds35r3J296Emll3pvx0Z0RR6G44wVAsEhr53zeSohatSuEU+BYE3Qk+v3xP87D9ZxM3+NKBfiVCPNTX28YkqgZyD2nF4YjVrX+g2gsAm9tONHKzUsg9VtYt6OpHDYRJrySlfgiksHqqEcq15QhawKEEiJx/RsVramAsThCFkEBfhKjivjiA9d9gI/o/LVPpSJita2N87aZ3dojvuoBep31shjJLhREQIDAQAB',
-    permissions: ['storage', 'notifications', 'alarms', 'scripting'],
+    permissions: ['storage', 'notifications', 'alarms', 'scripting', 'identity'],
     host_permissions: [
       'https://mail.google.com/*',
       'https://*.mailfalcon.app/*',
+      'https://gmail.googleapis.com/*',
     ],
     icons: {
       16: 'icon/16.png',
