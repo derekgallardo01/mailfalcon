@@ -1,4 +1,5 @@
 import { clickUrl, pixelUrl } from '@mailfalcon/shared'
+import { hasTemplateVars, substituteVars } from './template-vars'
 
 export interface RecipientHandle {
   address: string
@@ -247,9 +248,25 @@ export async function prepareTrackedBody(args: {
     ...(threadId ? { threadId } : {}),
   })
 
-  const buildVariant = (recipientId?: string, pixelSig?: string, clickSig?: string): string => {
+  // Template variable substitution happens here at presend, not at
+  // template-insertion time. Reason: mail-merge needs the raw template
+  // to substitute per-recipient. We keep {{name}}/{{first_name}}/
+  // {{company}} literal in the compose body, then resolve against the
+  // appropriate recipient just before tracking is applied.
+  const sourceHasVars = hasTemplateVars(linkifiedHtml)
+
+  const buildVariant = (
+    recipient: RecipientHandle | null,
+    recipientId?: string,
+    pixelSig?: string,
+    clickSig?: string,
+  ): string => {
+    const sourceHtml =
+      sourceHasVars && recipient
+        ? substituteVars(linkifiedHtml, recipient)
+        : linkifiedHtml
     const parser = new DOMParser()
-    const doc = parser.parseFromString(`<body>${linkifiedHtml}</body>`, 'text/html')
+    const doc = parser.parseFromString(`<body>${sourceHtml}</body>`, 'text/html')
     const variantBody = doc.body
     const variantLinks = collectLinks(variantBody)
     applyTracking(doc, variantBody, variantLinks, {
@@ -262,16 +279,17 @@ export async function prepareTrackedBody(args: {
     return variantBody.innerHTML
   }
 
-  // Mail-merge path: one body per recipient with per-recipient sigs.
+  // Mail-merge path: one body per recipient with per-recipient sigs
+  // AND per-recipient template-variable substitution.
   if (mailMerge && recipients && recipients.length > 1 && recipientPixels) {
     const variants = recipients.map((recipient, idx) => {
       const rp = recipientPixels[idx]
       if (!rp) {
-        return { recipient, html: buildVariant() }
+        return { recipient, html: buildVariant(recipient) }
       }
       return {
         recipient,
-        html: buildVariant(rp.recipientId, rp.sig, rp.clickSig),
+        html: buildVariant(recipient, rp.recipientId, rp.sig, rp.clickSig),
       }
     })
     return {
@@ -285,12 +303,13 @@ export async function prepareTrackedBody(args: {
   }
 
   // Single-recipient: use the recipient's own sigs so opens + clicks are
-  // attributed to them.
+  // attributed to them. Substitution runs against that one recipient.
   if (recipientPixels && recipientPixels.length === 1) {
     const rp = recipientPixels[0]!
+    const recipient = recipients?.[0] ?? null
     return {
       mode: 'single',
-      html: buildVariant(rp.recipientId, rp.sig, rp.clickSig),
+      html: buildVariant(recipient, rp.recipientId, rp.sig, rp.clickSig),
       id,
       linkCount: baseLinks.length,
       originalLinks,
@@ -300,9 +319,12 @@ export async function prepareTrackedBody(args: {
 
   // Multi-recipient shared-body (no mail-merge): one shared pixel, no
   // recipientId on events. Accurate counts, no per-recipient attribution.
+  // Substitute against the FIRST recipient so {{name}} still resolves
+  // for the typical "Hi Alice, +cc Bob" case.
+  const firstRecipient = recipients?.[0] ?? null
   return {
     mode: 'single',
-    html: buildVariant(),
+    html: buildVariant(firstRecipient),
     id,
     linkCount: baseLinks.length,
     originalLinks,

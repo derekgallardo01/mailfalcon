@@ -187,10 +187,26 @@ export default function TemplatesPage() {
               <textarea
                 value={bodyHtml}
                 onChange={(e) => setBodyHtml(e.target.value)}
-                placeholder="Hi {{name}}, just following up on…"
+                placeholder="Hi {{first_name}}, just following up on…"
                 rows={12}
                 className="mt-1 w-full rounded border border-falcon-200 px-3 py-2 font-mono text-xs focus:border-falcon-500 focus:outline-none"
               />
+              <p className="mt-2 text-[11px] text-falcon-500">
+                Variables resolved per recipient at send time:{' '}
+                <code className="rounded bg-falcon-50 px-1 py-0.5 font-mono text-[10px] text-falcon-700">
+                  {'{{name}}'}
+                </code>
+                {' · '}
+                <code className="rounded bg-falcon-50 px-1 py-0.5 font-mono text-[10px] text-falcon-700">
+                  {'{{first_name}}'}
+                </code>
+                {' · '}
+                <code className="rounded bg-falcon-50 px-1 py-0.5 font-mono text-[10px] text-falcon-700">
+                  {'{{company}}'}
+                </code>
+                . Mail-merge gives each recipient their own substitution; single
+                sends use the first recipient.
+              </p>
             </div>
 
             <div className="flex items-center gap-3 pt-2">

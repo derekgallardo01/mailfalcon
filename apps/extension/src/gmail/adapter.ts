@@ -6,6 +6,7 @@ export interface RecipientHandle {
 export interface ComposeEvent {
   getHtmlBody(): string
   setHtmlBody(html: string): void
+  setSubject(s: string): void
   getRecipientCount(): number
   getRecipients(): RecipientHandle[]
   getSubject(): string

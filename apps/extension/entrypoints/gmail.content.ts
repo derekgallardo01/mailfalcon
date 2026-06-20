@@ -10,6 +10,7 @@ import { config } from '../src/config'
 import { InboxSdkGmailAdapter } from '../src/gmail/inboxsdk-adapter'
 import { prepareTrackedBody } from '../src/inject'
 import { schedule as scheduleSend, type ScheduledSend } from '../src/scheduled'
+import { hasTemplateVars, substituteVars } from '../src/template-vars'
 
 const AUTOREPLY_RE = /^\s*(auto[ -]?reply|out of office|away|on vacation|vacation responder)/i
 
@@ -108,10 +109,23 @@ export default defineContentScript({
       const recipients = event.getRecipients()
       const originalHtml = event.getHtmlBody()
       const subjectStr = event.getSubject()
-      const subject = subjectStr.trim() || undefined
       const remindAfterDays = event.getRemindAfterDays() ?? undefined
       const presendThreadId = event.getThreadId() ?? undefined
       const mailMerge = event.isMailMerge() && recipientCount > 1
+
+      // For non-mail-merge sends, substitute subject variables against
+      // the first recipient before persisting (so the dashboard shows
+      // "Hi Alice" instead of "Hi {{name}}"). Mail-merge handles its
+      // per-variant subject substitution in the dispatch loop below.
+      const subjectForMint = (() => {
+        if (mailMerge) return subjectStr.trim() || undefined
+        const first = recipients[0]
+        if (first && hasTemplateVars(subjectStr)) {
+          return substituteVars(subjectStr, first).trim() || undefined
+        }
+        return subjectStr.trim() || undefined
+      })()
+      const subject = subjectForMint
 
       try {
         const result = await prepareTrackedBody({
@@ -136,13 +150,17 @@ export default defineContentScript({
             variants: result.variants.length,
             linkCount: result.linkCount,
           })
+          const subjectHasVars = hasTemplateVars(subjectStr)
           for (const variant of result.variants) {
             try {
+              const variantSubject = subjectHasVars
+                ? substituteVars(subjectStr, variant.recipient)
+                : subjectStr
               await adapter.dispatchPrebakedSend({
                 to: [variant.recipient.address],
                 cc: [],
                 bcc: [],
-                subject: subjectStr,
+                subject: variantSubject,
                 bodyHtml: variant.html,
               })
             } catch (err) {
@@ -161,6 +179,11 @@ export default defineContentScript({
         }
 
         event.setHtmlBody(result.html)
+        // Sync substituted subject back into Gmail's compose so the
+        // actual outbound subject matches what the dashboard stores.
+        if (subject && subject !== subjectStr) {
+          event.setSubject(subject)
+        }
         console.log('[mailfalcon] tracked send', {
           id: result.id,
           recipientCount,

@@ -289,6 +289,12 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             tplSelect.addEventListener('change', () => {
               const t = templates.find((x) => x.id === tplSelect.value)
               if (!t) return
+
+              // Leave {{name}} / {{first_name}} / {{company}} LITERAL
+              // here — prepareTrackedBody substitutes at presend so
+              // each mail-merge variant gets its own value. For
+              // single-recipient sends the substitution still happens,
+              // just at send time.
               if (t.subject && (!view.getSubject?.() || view.getSubject?.().length === 0)) {
                 view.setSubject?.(t.subject)
               }
@@ -360,6 +366,9 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           getHtmlBody: () => view.getHTMLContent?.() ?? '',
           setHtmlBody: (html) => {
             view.setBodyHTML?.(html)
+          },
+          setSubject: (s) => {
+            view.setSubject?.(s)
           },
           getRecipientCount: () => {
             const to = view.getToRecipients?.() ?? []
