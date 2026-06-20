@@ -1,11 +1,14 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Variables } from '../lib/auth-middleware'
+import { createLogger } from '../lib/logger'
 
 type Bindings = {
   ENVIRONMENT: string
   GOOGLE_OAUTH_CLIENT_ID?: string
   GOOGLE_OAUTH_CLIENT_SECRET?: string
+  AXIOM_TOKEN?: string
+  AXIOM_DATASET?: string
 }
 
 export const oauthRouter = new Hono<{
@@ -56,11 +59,25 @@ oauthRouter.post('/google/exchange', async (c) => {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
   })
+  const log = createLogger({
+    env: c.env,
+    waitUntil: (p) => c.executionCtx.waitUntil(p),
+  })
   if (!res.ok) {
     const text = await res.text()
+    log.warn('google_exchange_failed', {
+      userId: c.get('userId'),
+      status: res.status,
+      detail: text.slice(0, 200),
+    })
     return c.json({ error: 'google_exchange_failed', detail: text }, 502)
   }
   const data = (await res.json()) as GoogleTokenResponse
+  log.info('google_exchange_ok', {
+    userId: c.get('userId'),
+    hasRefresh: !!data.refresh_token,
+    scope: data.scope ?? null,
+  })
   return c.json({
     accessToken: data.access_token,
     refreshToken: data.refresh_token ?? null,
@@ -95,6 +112,15 @@ oauthRouter.post('/google/refresh', async (c) => {
   })
   if (!res.ok) {
     const text = await res.text()
+    const log = createLogger({
+      env: c.env,
+      waitUntil: (p) => c.executionCtx.waitUntil(p),
+    })
+    log.warn('google_refresh_failed', {
+      userId: c.get('userId'),
+      status: res.status,
+      detail: text.slice(0, 200),
+    })
     // Most common failure mode is "invalid_grant" — the refresh token
     // was revoked by the user. Surface a distinct code so the extension
     // can prompt for re-consent rather than retry.

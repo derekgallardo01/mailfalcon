@@ -73,7 +73,9 @@ export const BRANDS: ReadonlyArray<BrandEntry> = [
   { keyword: 'apple', domains: ['apple.com', 'icloud.com'] },
   { keyword: 'google', domains: ['google.com', 'gmail.com', 'youtube.com'] },
   { keyword: 'amazon', domains: ['amazon.com', 'amazon.co.uk'] },
-  { keyword: 'meta', domains: ['meta.com', 'facebook.com', 'instagram.com'] },
+  // 'meta' as a standalone keyword is too generic ("meta description",
+  // "Metabase", etc.) — rely on facebook/instagram/whatsapp to catch
+  // brand impersonation of Meta properties.
   { keyword: 'facebook', domains: ['facebook.com', 'meta.com'] },
   { keyword: 'instagram', domains: ['instagram.com', 'meta.com'] },
   { keyword: 'whatsapp', domains: ['whatsapp.com', 'meta.com'] },

@@ -251,9 +251,8 @@ meRouter.post('/delete-request', async (c) => {
  *     (no cascade FK defined)
  *   - users row last
  *
- * KV sessions are swept via the sessions-by-user index maintained on
- * auth/verify and auth/logout — every session:{jti} the user has is
- * deleted so a stolen JWT can't outlive the account.
+ * Sessions live in D1 with a FK ON DELETE CASCADE on user_id — the
+ * users row delete in the batch below kills every active JWT.
  *
  * Stripe subscription cancellation is NOT performed here. If the user
  * has a stripeCustId, the response surfaces a warning so the operator
