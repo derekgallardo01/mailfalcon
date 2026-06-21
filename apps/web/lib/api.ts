@@ -531,3 +531,85 @@ export const admin = {
   },
   events: () => adminGet<{ events: AdminEvent[] }>('/events'),
 }
+
+export interface ContactListItem {
+  hashedAddr: string
+  displayLabel: string | null
+  sends: number
+  humanOpens: number
+  clicks: number
+  replies: number
+  lastEventAt: number | null
+  firstSeenAt: number
+}
+
+export type ContactSort =
+  | 'lastSeen-desc'
+  | 'sends-desc'
+  | 'opens-desc'
+  | 'replyRate-desc'
+
+export interface ContactListResponse {
+  contacts: ContactListItem[]
+  nextCursor: number | null
+}
+
+export async function listContacts(opts: {
+  cursor?: number
+  limit?: number
+  q?: string
+  sort?: ContactSort
+}): Promise<ContactListResponse> {
+  const qs = new URLSearchParams()
+  if (opts.cursor) qs.set('cursor', String(opts.cursor))
+  if (opts.limit) qs.set('limit', String(opts.limit))
+  if (opts.q && opts.q.length > 0) qs.set('q', opts.q)
+  if (opts.sort) qs.set('sort', opts.sort)
+  const suffix = qs.toString() ? `?${qs}` : ''
+  const res = await fetch(`${config.apiHost}/v1/contacts${suffix}`, {
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) throw new Error(`contacts_list_failed:${res.status}`)
+  return (await res.json()) as ContactListResponse
+}
+
+export interface ContactDetail {
+  contact: {
+    hashedAddr: string
+    displayLabel: string | null
+    sends: number
+    humanOpens: number
+    clicks: number
+    replies: number
+    lastEventAt: number | null
+    firstSeenAt: number
+    avgTimeToFirstOpenMs: number | null
+  }
+  emails: Array<{
+    id: string
+    subject: string | null
+    sentAt: number
+    humanOpens: number
+    clicks: number
+    hasReply: boolean
+  }>
+  events: Array<{
+    type: 'open' | 'click' | 'reply'
+    ts: number
+    emailId: string
+    subject: string | null
+    uaClass: 'desktop' | 'mobile' | 'bot' | 'unknown'
+    city: string | null
+    country: string | null
+    regionCode: string | null
+  }>
+}
+
+export async function getContact(hashedAddr: string): Promise<ContactDetail> {
+  const res = await fetch(
+    `${config.apiHost}/v1/contacts/${encodeURIComponent(hashedAddr)}`,
+    { headers: { ...authHeader() } },
+  )
+  if (!res.ok) throw new Error(`contact_get_failed:${res.status}`)
+  return (await res.json()) as ContactDetail
+}

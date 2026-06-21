@@ -81,7 +81,13 @@ export function AppHeader({ liveCount = 0 }: Props) {
       : null
 
   const navLink = (href: string, label: string) => {
-    const active = pathname === href || pathname.startsWith(`${href}/`)
+    // Dashboard root highlights for /dashboard + /dashboard/email but
+    // NOT /dashboard/contacts — contacts has its own entry, and we don't
+    // want both highlighted at once.
+    const isDashboardRoot = href === '/dashboard'
+    const active = isDashboardRoot
+      ? pathname === href || pathname.startsWith('/dashboard/email')
+      : pathname === href || pathname.startsWith(`${href}/`)
     return (
       <Link
         href={href}
@@ -137,6 +143,7 @@ export function AppHeader({ liveCount = 0 }: Props) {
 
       <nav className="flex flex-wrap items-center gap-1">
         {navLink('/dashboard', 'Dashboard')}
+        {navLink('/dashboard/contacts', 'Contacts')}
         {navLink('/templates', 'Templates')}
         {navLink('/settings', 'Settings')}
         {isAdmin && navLink('/admin', 'Admin')}

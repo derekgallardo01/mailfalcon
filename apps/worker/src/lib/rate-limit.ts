@@ -54,17 +54,26 @@ export async function rateLimit(
 /**
  * Simple atomic incr/decr for tracking concurrent counts (e.g. SSE
  * connections per user). No window — caller is responsible for
- * decrement on disconnect.
+ * decrement on disconnect. Fails open like rateLimit().
  */
 export async function concurrentInc(
   kv: KVNamespace,
   key: string,
   ttlSec: number,
 ): Promise<number> {
-  const raw = await kv.get(key)
+  let raw: string | null = null
+  try {
+    raw = await kv.get(key)
+  } catch {
+    return 1
+  }
   const cur = raw ? Number.parseInt(raw, 10) : 0
   const next = cur + 1
-  await kv.put(key, String(next), { expirationTtl: ttlSec })
+  try {
+    await kv.put(key, String(next), { expirationTtl: ttlSec })
+  } catch {
+    // Write capped — return optimistic count so caller proceeds.
+  }
   return next
 }
 
@@ -73,12 +82,21 @@ export async function concurrentDec(
   key: string,
   ttlSec: number,
 ): Promise<void> {
-  const raw = await kv.get(key)
+  let raw: string | null = null
+  try {
+    raw = await kv.get(key)
+  } catch {
+    return
+  }
   const cur = raw ? Number.parseInt(raw, 10) : 0
   const next = Math.max(0, cur - 1)
-  if (next === 0) {
-    await kv.delete(key)
-  } else {
-    await kv.put(key, String(next), { expirationTtl: ttlSec })
+  try {
+    if (next === 0) {
+      await kv.delete(key)
+    } else {
+      await kv.put(key, String(next), { expirationTtl: ttlSec })
+    }
+  } catch {
+    /* fail open */
   }
 }

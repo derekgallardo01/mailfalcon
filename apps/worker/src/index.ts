@@ -7,6 +7,7 @@ import { adminRouter } from './routes/admin'
 import { authRouter } from './routes/auth'
 import { billingRouter } from './routes/billing'
 import { clickRouter } from './routes/click'
+import { contactsRouter } from './routes/contacts'
 import { emailsRouter } from './routes/emails'
 import { eventsRouter } from './routes/events'
 import { followupsRouter } from './routes/followups'
@@ -91,6 +92,7 @@ app.use('/v1/admin/*', adminMiddleware)
 app.route('/v1/me', meRouter)
 app.route('/v1/admin', adminRouter)
 app.route('/v1/emails', emailsRouter)
+app.route('/v1/contacts', contactsRouter)
 app.route('/v1/events', eventsRouter)
 app.route('/v1/templates', templatesRouter)
 app.route('/v1/followups', followupsRouter)
