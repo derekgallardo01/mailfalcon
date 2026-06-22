@@ -150,6 +150,9 @@ describe('detectCrossDomainReply', () => {
 
   it('lowercases inputs', () => {
     const s = detectCrossDomainReply('NEWCORP.COM', 'ACME.COM')
-    expect(s?.senderDomain).toBe('newcorp.com')
+    expect(s?.kind).toBe('cross_domain_reply')
+    if (s?.kind === 'cross_domain_reply') {
+      expect(s.senderDomain).toBe('newcorp.com')
+    }
   })
 })
