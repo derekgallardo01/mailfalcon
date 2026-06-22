@@ -277,6 +277,27 @@ export async function logout(): Promise<void> {
   }).catch(() => undefined)
 }
 
+/**
+ * Best-effort install + activity ping. Server is throttled to 1 write
+ * per user per 30 minutes, so calling this on every SW restart is
+ * fine — most pings will be a no-op write at the DB level.
+ */
+export async function pingExtension(
+  version: string,
+  installId: string,
+): Promise<void> {
+  const session = await loadSession()
+  if (!session) return
+  await fetch(`${config.apiHost}/v1/extension/ping`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.token}`,
+    },
+    body: JSON.stringify({ version, installId }),
+  }).catch(() => undefined)
+}
+
 export interface Template {
   id: string
   name: string

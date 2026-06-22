@@ -85,7 +85,7 @@ function AdminUserInner() {
     )
   }
 
-  const { user, totals, emails, events } = data
+  const { user, totals, emails, events, workspaces, templates, contactsEngaged, subscription } = data
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -114,6 +114,81 @@ function AdminUserInner() {
           value={totals.opens - totals.humanOpens}
           muted
         />
+      </section>
+
+      <section className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="rounded-lg border border-falcon-200 bg-white p-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-falcon-500">
+            Account
+          </p>
+          <dl className="mt-3 space-y-2 text-sm">
+            <Row label="Status" value={<span className="capitalize">{user.status.replace('_', ' ')}</span>} />
+            <Row label="Installed" value={user.installedAt ? formatRelative(user.installedAt) : '—'} />
+            <Row label="First send" value={user.firstSendAt ? formatRelative(user.firstSendAt) : '—'} />
+            <Row label="Last seen" value={user.lastSeenAt ? formatRelative(user.lastSeenAt) : '—'} />
+            <Row label="Version" value={user.extensionVersion ?? '—'} />
+            <Row
+              label="Install id"
+              value={
+                user.extensionInstallId ? (
+                  <span className="font-mono text-[11px]">{user.extensionInstallId.slice(0, 8)}…</span>
+                ) : (
+                  '—'
+                )
+              }
+            />
+            <Row
+              label="Stripe customer"
+              value={
+                user.stripeCustId ? (
+                  <span className="font-mono text-[11px]">{user.stripeCustId.slice(0, 14)}…</span>
+                ) : (
+                  '—'
+                )
+              }
+            />
+          </dl>
+        </div>
+        <div className="rounded-lg border border-falcon-200 bg-white p-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-falcon-500">
+            Feature adoption
+          </p>
+          <dl className="mt-3 space-y-2 text-sm">
+            <Row
+              label="Templates"
+              value={`${templates.personal} personal · ${templates.workspace} workspace`}
+            />
+            <Row label="Workspaces" value={`${workspaces.length}`} />
+            <Row label="Contacts engaged" value={contactsEngaged} />
+            <Row
+              label="Subscription"
+              value={
+                subscription
+                  ? `${subscription.tier} · ${subscription.status}`
+                  : 'Free'
+              }
+            />
+            {subscription && (
+              <Row
+                label="Next renewal"
+                value={new Date(subscription.currentPeriodEnd).toLocaleDateString()}
+              />
+            )}
+          </dl>
+          {workspaces.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {workspaces.map((w) => (
+                <span
+                  key={w.id}
+                  className="rounded-full bg-falcon-100 px-2 py-0.5 text-[11px] font-medium text-falcon-700"
+                  title={`${w.role} · ${w.memberCount} member${w.memberCount === 1 ? '' : 's'}${w.isPersonal ? ' · personal' : ''}`}
+                >
+                  {w.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="mt-8">
@@ -286,6 +361,21 @@ function StatCard({
       <p className="text-xs uppercase tracking-wide text-falcon-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-falcon-700">{value.toLocaleString()}</p>
       {hint && <p className="text-xs text-falcon-500">{hint}</p>}
+    </div>
+  )
+}
+
+function Row({
+  label,
+  value,
+}: {
+  label: string
+  value: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <dt className="text-falcon-500">{label}</dt>
+      <dd className="text-right text-falcon-700">{value}</dd>
     </div>
   )
 }

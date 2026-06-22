@@ -4,9 +4,12 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
   type MeResponse,
+  type SubscriptionInfo,
   confirmAccountDeletion,
   exportMe,
   getMe,
+  getSubscription,
+  openBillingPortal,
   requestAccountDeletion,
   startCheckout,
   updateMe,
@@ -233,6 +236,8 @@ export default function SettingsPage() {
           </dl>
         </div>
       </section>
+
+      <SubscriptionPanel />
 
       <div className="mt-6 text-xs text-falcon-500">
         {saving && 'Saving…'}
@@ -522,6 +527,105 @@ function QuietHoursSection({
           )}
         </div>
       </div>
+    </section>
+  )
+}
+
+function SubscriptionPanel() {
+  const [sub, setSub] = useState<SubscriptionInfo | null | undefined>(undefined)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    void getSubscription()
+      .then(setSub)
+      .catch(() => setSub(null))
+  }, [])
+
+  async function manage() {
+    setBusy(true)
+    try {
+      const url = await openBillingPortal()
+      window.location.assign(url)
+    } catch {
+      setBusy(false)
+    }
+  }
+
+  async function upgrade(tier: 'pro' | 'team') {
+    setBusy(true)
+    try {
+      const url = await startCheckout(tier)
+      window.location.assign(url)
+    } catch {
+      setBusy(false)
+    }
+  }
+
+  if (sub === undefined) return null
+
+  if (!sub) {
+    return (
+      <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+        <h2 className="text-base font-semibold text-falcon-700">Subscription</h2>
+        <p className="mt-1 text-sm text-falcon-500">
+          You're on the free plan — 10 tracked emails per day, no digest, no
+          mail-merge.
+        </p>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => upgrade('pro')}
+            disabled={busy}
+            className="rounded bg-falcon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:opacity-50"
+          >
+            Upgrade to Pro ($10/mo)
+          </button>
+          <button
+            type="button"
+            onClick={() => upgrade('team')}
+            disabled={busy}
+            className="rounded border border-falcon-300 bg-white px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+          >
+            Team ($25/mo)
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  const renewISO = new Date(sub.currentPeriodEnd).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+
+  return (
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-falcon-700">Subscription</h2>
+      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <dt className="text-falcon-500">Plan</dt>
+          <dd className="font-semibold capitalize text-falcon-700">{sub.tier}</dd>
+        </div>
+        <div>
+          <dt className="text-falcon-500">Status</dt>
+          <dd className="capitalize text-falcon-700">{sub.status}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-falcon-500">
+            {sub.status === 'canceled' ? 'Ends' : 'Next renewal'}
+          </dt>
+          <dd className="text-falcon-700">{renewISO}</dd>
+        </div>
+      </dl>
+      <button
+        type="button"
+        onClick={manage}
+        disabled={busy}
+        className="mt-4 rounded border border-falcon-300 bg-white px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+      >
+        Manage billing in Stripe
+      </button>
     </section>
   )
 }

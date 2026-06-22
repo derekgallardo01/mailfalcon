@@ -10,6 +10,7 @@ import { clickRouter } from './routes/click'
 import { contactsRouter } from './routes/contacts'
 import { emailsRouter } from './routes/emails'
 import { eventsRouter } from './routes/events'
+import { extensionRouter } from './routes/extension'
 import { followupsRouter } from './routes/followups'
 import { meRouter } from './routes/me'
 import { oauthRouter } from './routes/oauth'
@@ -141,6 +142,7 @@ app.route('/v1/push', pushRouter)
 app.route('/v1/billing', billingRouter)
 app.route('/v1/oauth', oauthRouter)
 app.route('/v1/workspaces', workspacesRouter)
+app.route('/v1/extension', extensionRouter)
 
 app.use(
   '/stream',

@@ -2,8 +2,13 @@ import { Hono } from 'hono'
 import { and, asc, desc, eq, gt, gte, like, lte, or, sql } from 'drizzle-orm'
 import {
   events,
+  recipients,
+  subscriptions,
+  templates,
   trackedEmails,
   users,
+  workspaceMembers,
+  workspaces,
 } from '@mailfalcon/db/schema'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
@@ -27,8 +32,9 @@ function todayStart(): number {
 adminRouter.get('/stats', async (c) => {
   const db = getDb(c.env.DB)
   const start = todayStart()
+  const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000
 
-  const [totals, byTier, today] = await Promise.all([
+  const [totals, byTier, today, telemetry] = await Promise.all([
     db
       .select({
         users: sql<number>`COUNT(DISTINCT ${users.id})`,
@@ -50,6 +56,15 @@ adminRouter.get('/stats', async (c) => {
         newUsers: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.createdAt} >= ${start})`,
         emailsSent: sql<number>`(SELECT COUNT(*) FROM ${trackedEmails} WHERE ${trackedEmails.sentAt} >= ${start})`,
         eventsLogged: sql<number>`(SELECT COUNT(*) FROM ${events} WHERE ${events.ts} >= ${start})`,
+      })
+      .from(users)
+      .limit(1)
+      .get(),
+    db
+      .select({
+        installed: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.installedAt} IS NOT NULL AND ${users.firstSendAt} IS NULL)`,
+        activated: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.firstSendAt} IS NOT NULL)`,
+        active7d: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.lastSeenAt} >= ${sevenDaysAgo})`,
       })
       .from(users)
       .limit(1)
@@ -76,12 +91,34 @@ adminRouter.get('/stats', async (c) => {
       emailsSent: Number(today?.emailsSent ?? 0),
       eventsLogged: Number(today?.eventsLogged ?? 0),
     },
+    telemetry: {
+      installedNeverSent: Number(telemetry?.installed ?? 0),
+      activated: Number(telemetry?.activated ?? 0),
+      active7d: Number(telemetry?.active7d ?? 0),
+    },
   })
 })
+
+const ACTIVE_WINDOW_MS = 30 * 24 * 3600 * 1000
+
+/** Cohort of the user based on telemetry. Used by the admin UI to
+ *  surface "installed but never sent" etc. */
+function userStatus(args: {
+  installedAt: number | null
+  firstSendAt: number | null
+  lastSeenAt: number | null
+}): 'never_installed' | 'installed' | 'activated' | 'active' | 'dormant' {
+  const now = Date.now()
+  if (args.lastSeenAt && now - args.lastSeenAt < ACTIVE_WINDOW_MS) return 'active'
+  if (args.firstSendAt) return args.lastSeenAt ? 'dormant' : 'activated'
+  if (args.installedAt) return 'installed'
+  return 'never_installed'
+}
 
 adminRouter.get('/users', async (c) => {
   const cursor = Number(c.req.query('cursor') ?? '')
   const limit = Math.min(Number(c.req.query('limit') ?? '50'), 200)
+  const statusFilter = c.req.query('status') ?? ''
   const db = getDb(c.env.DB)
 
   const rows = await db
@@ -90,8 +127,14 @@ adminRouter.get('/users', async (c) => {
       email: users.email,
       tier: users.tier,
       createdAt: users.createdAt,
+      installedAt: users.installedAt,
+      firstSendAt: users.firstSendAt,
+      lastSeenAt: users.lastSeenAt,
+      extensionVersion: users.extensionVersion,
       emailCount: sql<number>`COALESCE(COUNT(DISTINCT ${trackedEmails.id}), 0)`,
       lastEmailAt: sql<number | null>`MAX(${trackedEmails.sentAt})`,
+      workspaceCount: sql<number>`(SELECT COUNT(*) FROM ${workspaceMembers} WHERE ${workspaceMembers.userId} = ${users.id})`,
+      templateCount: sql<number>`(SELECT COUNT(*) FROM ${templates} WHERE ${templates.userId} = ${users.id})`,
     })
     .from(users)
     .leftJoin(trackedEmails, eq(trackedEmails.userId, users.id))
@@ -101,19 +144,37 @@ adminRouter.get('/users', async (c) => {
     .limit(limit + 1)
     .all()
 
-  const hasMore = rows.length > limit
-  const page = hasMore ? rows.slice(0, limit) : rows
+  const enriched = rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    tier: r.tier,
+    createdAt: r.createdAt,
+    installedAt: r.installedAt,
+    firstSendAt: r.firstSendAt,
+    lastSeenAt: r.lastSeenAt,
+    extensionVersion: r.extensionVersion,
+    emailCount: Number(r.emailCount),
+    lastEmailAt: r.lastEmailAt,
+    workspaceCount: Number(r.workspaceCount),
+    templateCount: Number(r.templateCount),
+    status: userStatus({
+      installedAt: r.installedAt,
+      firstSendAt: r.firstSendAt,
+      lastSeenAt: r.lastSeenAt,
+    }),
+  }))
+
+  // Status filter is applied post-aggregate (rather than in SQL) to
+  // keep the query simple — page sizes are bounded so it's fine.
+  const filtered = statusFilter
+    ? enriched.filter((u) => u.status === statusFilter)
+    : enriched
+  const hasMore = filtered.length > limit
+  const page = hasMore ? filtered.slice(0, limit) : filtered
   const nextCursor = hasMore ? page[page.length - 1]!.createdAt : null
 
   return c.json({
-    users: page.map((r) => ({
-      id: r.id,
-      email: r.email,
-      tier: r.tier,
-      createdAt: r.createdAt,
-      emailCount: Number(r.emailCount),
-      lastEmailAt: r.lastEmailAt,
-    })),
+    users: page,
     nextCursor,
   })
 })
@@ -210,11 +271,79 @@ adminRouter.get('/users/:id', async (c) => {
       tier: users.tier,
       createdAt: users.createdAt,
       stripeCustId: users.stripeCustId,
+      installedAt: users.installedAt,
+      firstSendAt: users.firstSendAt,
+      lastSeenAt: users.lastSeenAt,
+      extensionVersion: users.extensionVersion,
+      extensionInstallId: users.extensionInstallId,
     })
     .from(users)
     .where(eq(users.id, id))
     .get()
   if (!user) return c.json({ error: 'not_found' }, 404)
+
+  // Workspaces this user is in (incl. role + size).
+  const ws = await db
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      role: workspaceMembers.role,
+      isPersonal: workspaces.isPersonal,
+      memberCount: sql<number>`(SELECT COUNT(*) FROM ${workspaceMembers} wm WHERE wm.workspace_id = ${workspaces.id})`,
+    })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(eq(workspaceMembers.userId, id))
+    .all()
+
+  // Templates: personal vs workspace + 5 most recent.
+  const [templateCounts, recentTemplates] = await Promise.all([
+    db
+      .select({
+        personal: sql<number>`SUM(CASE WHEN ${templates.workspaceId} IS NULL THEN 1 ELSE 0 END)`,
+        workspace: sql<number>`SUM(CASE WHEN ${templates.workspaceId} IS NOT NULL THEN 1 ELSE 0 END)`,
+      })
+      .from(templates)
+      .where(eq(templates.userId, id))
+      .get(),
+    db
+      .select({
+        id: templates.id,
+        name: templates.name,
+        createdAt: templates.createdAt,
+        workspaceId: templates.workspaceId,
+      })
+      .from(templates)
+      .where(eq(templates.userId, id))
+      .orderBy(desc(templates.createdAt))
+      .limit(5)
+      .all(),
+  ])
+
+  // Distinct contacts engaged (mailed by this user at some point).
+  const contactsEngaged = await db
+    .select({
+      n: sql<number>`COUNT(DISTINCT ${recipients.hashedAddr})`,
+    })
+    .from(recipients)
+    .innerJoin(trackedEmails, eq(trackedEmails.id, recipients.emailId))
+    .where(eq(trackedEmails.userId, id))
+    .get()
+
+  // Most recent subscription row (if any).
+  const subscription = await db
+    .select({
+      id: subscriptions.id,
+      stripeSubId: subscriptions.stripeSubId,
+      status: subscriptions.status,
+      currentPeriodEnd: subscriptions.currentPeriodEnd,
+      tier: subscriptions.tier,
+    })
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, id))
+    .orderBy(desc(subscriptions.currentPeriodEnd))
+    .limit(1)
+    .get()
 
   const [emailsList, eventsList, totals] = await Promise.all([
     db
@@ -284,6 +413,11 @@ adminRouter.get('/users/:id', async (c) => {
     user: {
       ...user,
       hasStripeCustomer: !!user.stripeCustId,
+      status: userStatus({
+        installedAt: user.installedAt,
+        firstSendAt: user.firstSendAt,
+        lastSeenAt: user.lastSeenAt,
+      }),
     },
     totals: {
       emails: Number(totals?.emails ?? 0),
@@ -291,6 +425,33 @@ adminRouter.get('/users/:id', async (c) => {
       humanOpens: Number(totals?.humanOpens ?? 0),
       clicks: Number(totals?.clicks ?? 0),
     },
+    workspaces: ws.map((w) => ({
+      id: w.id,
+      name: w.name,
+      role: w.role,
+      isPersonal: w.isPersonal === 1,
+      memberCount: Number(w.memberCount),
+    })),
+    templates: {
+      personal: Number(templateCounts?.personal ?? 0),
+      workspace: Number(templateCounts?.workspace ?? 0),
+      recent: recentTemplates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        createdAt: t.createdAt,
+        workspaceId: t.workspaceId,
+      })),
+    },
+    contactsEngaged: Number(contactsEngaged?.n ?? 0),
+    subscription: subscription
+      ? {
+          id: subscription.id,
+          stripeSubId: subscription.stripeSubId,
+          status: subscription.status,
+          currentPeriodEnd: subscription.currentPeriodEnd,
+          tier: subscription.tier,
+        }
+      : null,
     emails: emailsList.map((r) => ({
       id: r.id,
       subject: r.subject,

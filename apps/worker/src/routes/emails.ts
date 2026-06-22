@@ -172,6 +172,12 @@ emailsRouter.post('/', async (c) => {
     ),
     ...recipientRows.map((r) => db.insert(recipients).values(r)),
     ...(followupRow ? [db.insert(followUps).values(followupRow)] : []),
+    // Activation timestamp — captured the first time a user mints a
+    // tracked email. COALESCE keeps it stable across subsequent sends.
+    db
+      .update(users)
+      .set({ firstSendAt: sql`COALESCE(${users.firstSendAt}, ${sentAt})` })
+      .where(eq(users.id, userId)),
   ])
 
   // For each recipient, two signatures: one for the pixel URL and one

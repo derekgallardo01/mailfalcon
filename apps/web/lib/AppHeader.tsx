@@ -51,9 +51,12 @@ export function AppHeader({ liveCount = 0 }: Props) {
     router.replace('/sign-in')
   }
 
-  async function handleUpgrade() {
+  const [showTierPicker, setShowTierPicker] = useState(false)
+
+  async function handleUpgrade(tier: 'pro' | 'team') {
+    setShowTierPicker(false)
     try {
-      const url = await startCheckout()
+      const url = await startCheckout(tier)
       window.location.assign(url)
     } catch {
       /* surfaced elsewhere; header swallows */
@@ -155,13 +158,48 @@ export function AppHeader({ liveCount = 0 }: Props) {
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {isFree && (
-          <button
-            type="button"
-            onClick={handleUpgrade}
-            className="rounded bg-falcon-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-falcon-600"
-          >
-            Upgrade
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowTierPicker((v) => !v)}
+              className="rounded bg-falcon-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-falcon-600"
+            >
+              Upgrade ▾
+            </button>
+            {showTierPicker && (
+              <div
+                className="absolute right-0 top-full z-30 mt-1 w-72 rounded-md border border-falcon-200 bg-white p-3 shadow-lg"
+                onMouseLeave={() => setShowTierPicker(false)}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleUpgrade('pro')}
+                  className="w-full rounded-md border border-falcon-200 px-3 py-2 text-left hover:bg-falcon-50"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-falcon-700">Pro</span>
+                    <span className="text-xs font-medium text-falcon-500">$10/mo</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-falcon-500">
+                    Unlimited tracking, digest, scheduled sends, mail-merge.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpgrade('team')}
+                  className="mt-2 w-full rounded-md border border-falcon-200 px-3 py-2 text-left hover:bg-falcon-50"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-falcon-700">Team</span>
+                    <span className="text-xs font-medium text-falcon-500">$25/mo</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-falcon-500">
+                    Everything in Pro plus shared workspace, team analytics, inherited tier for members.
+                  </p>
+                </button>
+              </div>
+            )}
+          </div>
         )}
         {me && !isFree && !isAdmin && me.hasStripeCustomer && (
           <button

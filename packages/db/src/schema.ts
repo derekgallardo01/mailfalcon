@@ -26,6 +26,17 @@ export const users = sqliteTable('users', {
   // column is added — once the migration completes, every user has a
   // non-null value.
   activeWorkspaceId: text('active_workspace_id'),
+  // Extension-install + activity telemetry. installedAt = first
+  // /v1/extension/ping. firstSendAt = first tracked-email mint
+  // (backfilled for existing users from MIN(tracked_emails.sent_at)).
+  // lastSeenAt updates on every ping (throttled to 30min). version +
+  // installId are the most-recent ping's payload — installId is a per-
+  // device UUID so admin can spot reinstall-vs-continuous-use.
+  installedAt: integer('installed_at'),
+  firstSendAt: integer('first_send_at'),
+  lastSeenAt: integer('last_seen_at'),
+  extensionVersion: text('extension_version'),
+  extensionInstallId: text('extension_install_id'),
 })
 
 export const subscriptions = sqliteTable('subscriptions', {

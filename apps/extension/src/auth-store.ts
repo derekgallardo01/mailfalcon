@@ -3,8 +3,38 @@ const EMAIL_KEY = 'mf.email'
 const USER_ID_KEY = 'mf.userId'
 const PENDING_KEY = 'mf.pendingVerify'
 const ONBOARDING_KEY = 'mf.seenOnboarding'
+const INSTALL_ID_KEY = 'mf.installId'
 
 const PENDING_TTL_MS = 15 * 60 * 1000
+
+function randomInstallId(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    // Fallback for runtimes without randomUUID (very old browsers) —
+    // 16 random bytes, base16 with dashes shaped like a UUID v4.
+    const buf = new Uint8Array(16)
+    crypto.getRandomValues(buf)
+    const hex = Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('')
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  }
+}
+
+/** Returns the device-scoped install id, generating + persisting one
+ *  on first call. Used as a stable identifier for admin telemetry —
+ *  survives sign-out but resets on extension reinstall (since
+ *  chrome.storage.local is wiped on uninstall). */
+export async function ensureInstallId(): Promise<string> {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) {
+    return randomInstallId()
+  }
+  const stored = await chrome.storage.local.get(INSTALL_ID_KEY)
+  const existing = stored[INSTALL_ID_KEY] as string | undefined
+  if (existing) return existing
+  const fresh = randomInstallId()
+  await chrome.storage.local.set({ [INSTALL_ID_KEY]: fresh })
+  return fresh
+}
 
 export interface Session {
   token: string

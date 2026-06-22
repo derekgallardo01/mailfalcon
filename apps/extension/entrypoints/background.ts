@@ -1,5 +1,5 @@
-import { muteEmail } from '../src/api'
-import { getSession } from '../src/auth-store'
+import { muteEmail, pingExtension } from '../src/api'
+import { ensureInstallId, getSession } from '../src/auth-store'
 import { bumpBadge, clearBadge, initBadge } from '../src/badge'
 import { config } from '../src/config'
 import { dropPushSubscription, ensurePushSubscription } from '../src/push-client'
@@ -222,11 +222,31 @@ export default defineBackground(() => {
     },
   )
 
+  /**
+   * Best-effort telemetry ping. Server is throttled so calling this on
+   * every SW restart + once a day is fine — most calls become a D1
+   * no-op write.
+   */
+  async function ping(): Promise<void> {
+    try {
+      const installId = await ensureInstallId()
+      const version = chrome.runtime.getManifest().version
+      await pingExtension(version, installId)
+    } catch {
+      /* never let telemetry break the SW */
+    }
+  }
+
   chrome.runtime.onStartup.addListener(() => {
     void start()
+    void ping()
   })
   chrome.runtime.onInstalled.addListener(() => {
     void start()
+    void ping()
+    // Daily heartbeat for long-running sessions where the SW doesn't
+    // restart for days.
+    void chrome.alarms.create('mf-ping', { periodInMinutes: 24 * 60 })
   })
 
   // Reset the activity badge when the user actually views the dashboard.
@@ -381,6 +401,13 @@ export default defineBackground(() => {
   // its content script to fire the programmatic compose. If no Gmail
   // tab is open, snooze the alarm by 1 hour.
   chrome.alarms.onAlarm.addListener((alarm) => {
+    // Daily telemetry heartbeat (registered in onInstalled). Updates
+    // lastSeenAt server-side for long-running sessions where the SW
+    // never restarts.
+    if (alarm.name === 'mf-ping') {
+      void ping()
+      return
+    }
     const id = alarmNameToId(alarm.name)
     if (!id) return
     void (async () => {

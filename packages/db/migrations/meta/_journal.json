@@ -71,6 +71,13 @@
       "when": 1782085795138,
       "tag": "0009_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1782172800000,
+      "tag": "0010_user_telemetry",
+      "breakpoints": true
     }
   ]
 }

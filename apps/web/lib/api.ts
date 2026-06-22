@@ -413,10 +413,11 @@ export async function confirmAccountDeletion(
   return (await res.json()) as DeleteAccountResponse
 }
 
-export async function startCheckout(): Promise<string> {
+export async function startCheckout(tier: 'pro' | 'team' = 'pro'): Promise<string> {
   const res = await fetch(`${config.apiHost}/v1/billing/checkout`, {
     method: 'POST',
-    headers: { ...authHeader() },
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ tier }),
   })
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string }
@@ -424,6 +425,23 @@ export async function startCheckout(): Promise<string> {
   }
   const data = (await res.json()) as { url: string }
   return data.url
+}
+
+export interface SubscriptionInfo {
+  id: string
+  stripeSubId: string
+  status: string
+  currentPeriodEnd: number
+  tier: 'pro' | 'team'
+}
+
+export async function getSubscription(): Promise<SubscriptionInfo | null> {
+  const res = await fetch(`${config.apiHost}/v1/billing/subscription`, {
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) return null
+  const data = (await res.json()) as { subscription: SubscriptionInfo | null }
+  return data.subscription
 }
 
 export interface Template {
@@ -560,15 +578,29 @@ export interface AdminStats {
   totals: { users: number; emails: number; events: number }
   usersByTier: Record<string, number>
   today: { newUsers: number; emailsSent: number; eventsLogged: number }
+  telemetry: {
+    installedNeverSent: number
+    activated: number
+    active7d: number
+  }
 }
+
+export type UserStatus = 'never_installed' | 'installed' | 'activated' | 'active' | 'dormant'
 
 export interface AdminUser {
   id: string
   email: string
   tier: 'free' | 'pro' | 'team' | 'admin'
   createdAt: number
+  installedAt: number | null
+  firstSendAt: number | null
+  lastSeenAt: number | null
+  extensionVersion: string | null
   emailCount: number
   lastEmailAt: number | null
+  workspaceCount: number
+  templateCount: number
+  status: UserStatus
 }
 
 export interface AdminEmail {
@@ -621,6 +653,12 @@ export interface AdminUserDetail {
     createdAt: number
     stripeCustId: string | null
     hasStripeCustomer: boolean
+    installedAt: number | null
+    firstSendAt: number | null
+    lastSeenAt: number | null
+    extensionVersion: string | null
+    extensionInstallId: string | null
+    status: UserStatus
   }
   totals: {
     emails: number
@@ -628,6 +666,25 @@ export interface AdminUserDetail {
     humanOpens: number
     clicks: number
   }
+  workspaces: Array<{
+    id: string
+    name: string
+    role: 'owner' | 'member'
+    isPersonal: boolean
+    memberCount: number
+  }>
+  templates: {
+    personal: number
+    workspace: number
+    recent: Array<{
+      id: string
+      name: string
+      createdAt: number
+      workspaceId: string | null
+    }>
+  }
+  contactsEngaged: number
+  subscription: SubscriptionInfo | null
   emails: Array<{
     id: string
     subject: string | null
@@ -676,7 +733,10 @@ export interface AdminEmailQueryParams {
 
 export const admin = {
   stats: () => adminGet<AdminStats>('/stats'),
-  users: () => adminGet<{ users: AdminUser[]; nextCursor: number | null }>('/users'),
+  users: (status?: UserStatus) =>
+    adminGet<{ users: AdminUser[]; nextCursor: number | null }>(
+      status ? `/users?status=${encodeURIComponent(status)}` : '/users',
+    ),
   userDetail: (id: string) => adminGet<AdminUserDetail>(`/users/${encodeURIComponent(id)}`),
   emails: (params: AdminEmailQueryParams = {}) => {
     const qs = new URLSearchParams()

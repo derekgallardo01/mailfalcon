@@ -10,9 +10,29 @@ type Bindings = {
   ENVIRONMENT: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
+  STRIPE_PRICE_ID_PRO?: string
+  STRIPE_PRICE_ID_TEAM?: string
   DB: D1Database
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
+}
+
+/** Look at the price id on the subscription's first line item against
+ *  our two configured tier prices. Falls back to 'pro' if it can't
+ *  decide (e.g. legacy subscriptions before STRIPE_PRICE_ID_TEAM was
+ *  introduced). */
+function subscriptionTier(
+  sub: Stripe.Subscription,
+  env: { STRIPE_PRICE_ID_PRO?: string; STRIPE_PRICE_ID_TEAM?: string },
+): 'pro' | 'team' {
+  const priceId = sub.items?.data?.[0]?.price?.id
+  if (priceId && env.STRIPE_PRICE_ID_TEAM && priceId === env.STRIPE_PRICE_ID_TEAM) {
+    return 'team'
+  }
+  // Metadata fallback — checkout sets tier in subscription_data.metadata.
+  const meta = (sub.metadata?.tier as string | undefined) ?? null
+  if (meta === 'team') return 'team'
+  return 'pro'
 }
 
 export const stripeWebhookRouter = new Hono<{ Bindings: Bindings }>()
@@ -51,6 +71,10 @@ stripeWebhookRouter.post('/', async (c) => {
       const userId = session.client_reference_id
       const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
       if (userId && customerId) {
+        // Tier here is provisional — the subsequent
+        // customer.subscription.created event carries the actual price
+        // and will overwrite to 'pro' or 'team'. Default to 'pro' so a
+        // user lands on a paid tier instantly without waiting.
         await db
           .update(users)
           .set({ stripeCustId: customerId, tier: 'pro' })
@@ -64,7 +88,9 @@ stripeWebhookRouter.post('/', async (c) => {
       const sub = event.data.object
       const userId = (sub.metadata?.userId as string | undefined) ?? null
       const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
-      const tier = sub.status === 'active' || sub.status === 'trialing' ? 'pro' : 'free'
+      const isActive = sub.status === 'active' || sub.status === 'trialing'
+      const priceTier = subscriptionTier(sub, c.env)
+      const userTier = isActive ? priceTier : 'free'
 
       // Stripe moved current_period_end between API versions; check both.
       const subAny = sub as unknown as {
@@ -78,13 +104,13 @@ stripeWebhookRouter.post('/', async (c) => {
       if (userId) {
         await db
           .update(users)
-          .set({ stripeCustId: customerId, tier })
+          .set({ stripeCustId: customerId, tier: userTier })
           .where(eq(users.id, userId))
           .run()
       } else {
         await db
           .update(users)
-          .set({ tier })
+          .set({ tier: userTier })
           .where(eq(users.stripeCustId, customerId))
           .run()
       }
@@ -97,13 +123,14 @@ stripeWebhookRouter.post('/', async (c) => {
           stripeSubId: sub.id,
           status: sub.status,
           currentPeriodEnd,
-          tier: 'pro',
+          tier: priceTier,
         })
         .onConflictDoUpdate({
           target: subscriptions.id,
           set: {
             status: sub.status,
             currentPeriodEnd,
+            tier: priceTier,
           },
         })
         .run()
@@ -122,6 +149,33 @@ stripeWebhookRouter.post('/', async (c) => {
         .set({ status: 'canceled' })
         .where(eq(subscriptions.stripeSubId, sub.id))
         .run()
+      break
+    }
+    case 'invoice.payment_failed': {
+      // Payment failed (card declined, expired, etc.). Stripe will retry
+      // automatically per the customer's retry settings; if it ultimately
+      // fails the subscription ends up canceled/unpaid. We immediately
+      // drop tier to 'free' so paid features stop working until the user
+      // updates their payment method. The next subscription.updated event
+      // will swing tier back if the retry succeeds.
+      const invoice = event.data.object as Stripe.Invoice & {
+        customer?: string | Stripe.Customer | null
+      }
+      const customerId =
+        typeof invoice.customer === 'string'
+          ? invoice.customer
+          : invoice.customer?.id
+      if (customerId) {
+        await db
+          .update(users)
+          .set({ tier: 'free' })
+          .where(eq(users.stripeCustId, customerId))
+          .run()
+        createLogger({ env: c.env }).warn('invoice_payment_failed', {
+          customerId,
+          invoiceId: invoice.id,
+        })
+      }
       break
     }
     default:
