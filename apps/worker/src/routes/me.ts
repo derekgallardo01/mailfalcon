@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import {
   events,
   followUps,
@@ -12,6 +12,8 @@ import {
   trackedEmails,
   usageCounters,
   users,
+  workspaceMembers,
+  workspaces,
 } from '@mailfalcon/db/schema'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
@@ -63,6 +65,8 @@ export const meRouter = new Hono<{
 
 meRouter.get('/', async (c) => {
   const userId = c.get('userId')
+  const activeWorkspaceId = c.get('workspaceId')
+  const activeWorkspaceRole = c.get('workspaceRole')
   const db = getDb(c.env.DB)
   const row = await db
     .select({
@@ -82,11 +86,45 @@ meRouter.get('/', async (c) => {
     .get()
   if (!row) return c.json({ error: 'not_found' }, 404)
 
+  // Workspaces this caller is in, with name + role + member count.
+  const workspaceRows = await db
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      ownerId: workspaces.ownerId,
+      isPersonal: workspaces.isPersonal,
+      role: workspaceMembers.role,
+      memberCount: sql<number>`(SELECT COUNT(*) FROM workspace_members wm WHERE wm.workspace_id = ${workspaces.id})`,
+    })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(eq(workspaceMembers.userId, userId))
+    .all()
+
+  const activeWorkspace = workspaceRows.find((w) => w.id === activeWorkspaceId)
+  const activeWorkspaceName = activeWorkspace?.name ?? 'Personal'
+
+  // Tier inheritance: if the active workspace is owned by someone else
+  // and that owner has a stronger tier, the caller inherits it. This
+  // lets a workspace owner pay for a team-tier subscription and have
+  // every member act with team-tier privileges.
+  let effectiveTier: string = row.tier
+  if (activeWorkspace && activeWorkspace.ownerId !== userId) {
+    const owner = await db
+      .select({ tier: users.tier })
+      .from(users)
+      .where(eq(users.id, activeWorkspace.ownerId))
+      .get()
+    if (owner && tierRank(owner.tier) > tierRank(row.tier)) {
+      effectiveTier = owner.tier
+    }
+  }
+
   const usage = await getUsage(c.env.KV, userId)
   return c.json({
     id: row.id,
     email: row.email,
-    tier: row.tier,
+    tier: effectiveTier,
     createdAt: row.createdAt,
     stripeCustId: row.stripeCustId,
     hasStripeCustomer: !!row.stripeCustId,
@@ -96,8 +134,35 @@ meRouter.get('/', async (c) => {
     quietEndMinute: row.quietEndMinute,
     quietTimezone: row.quietTimezone,
     usage,
+    activeWorkspaceId,
+    activeWorkspaceName,
+    activeWorkspaceRole,
+    workspaces: workspaceRows.map((w) => ({
+      id: w.id,
+      name: w.name,
+      role: w.role,
+      isPersonal: w.isPersonal === 1,
+      memberCount: Number(w.memberCount),
+    })),
   })
 })
+
+/** Strict ranking — admin > team > pro > free > anything-else. Used to
+ *  decide whether the workspace owner's tier raises a member's. */
+function tierRank(tier: string): number {
+  switch (tier) {
+    case 'admin':
+      return 4
+    case 'team':
+      return 3
+    case 'pro':
+      return 2
+    case 'free':
+      return 1
+    default:
+      return 0
+  }
+}
 
 meRouter.patch('/', async (c) => {
   const body = await c.req.json().catch(() => null)

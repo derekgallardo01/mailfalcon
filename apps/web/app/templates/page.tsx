@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { type Template, templates } from '../../lib/api'
+import { type MeResponse, type Template, getMe, templates } from '../../lib/api'
 import { AppHeader } from '../../lib/AppHeader'
 import { clearSession, getSession } from '../../lib/auth-store'
 import { formatRelative } from '../../lib/format'
@@ -10,6 +10,7 @@ import { formatRelative } from '../../lib/format'
 export default function TemplatesPage() {
   const router = useRouter()
   const [list, setList] = useState<Template[]>([])
+  const [me, setMe] = useState<MeResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -17,6 +18,7 @@ export default function TemplatesPage() {
   const [name, setName] = useState('')
   const [subject, setSubject] = useState('')
   const [bodyHtml, setBodyHtml] = useState('')
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   function refresh() {
@@ -40,7 +42,9 @@ export default function TemplatesPage() {
       router.replace('/sign-in')
       return
     }
-    refresh().finally(() => setLoading(false))
+    Promise.all([refresh(), getMe().then(setMe).catch(() => undefined)]).finally(() =>
+      setLoading(false),
+    )
   }, [router])
 
   function startNew() {
@@ -48,6 +52,7 @@ export default function TemplatesPage() {
     setName('')
     setSubject('')
     setBodyHtml('')
+    setWorkspaceId(null)
     setError(null)
   }
 
@@ -56,6 +61,7 @@ export default function TemplatesPage() {
     setName(t.name)
     setSubject(t.subject)
     setBodyHtml(t.bodyHtml)
+    setWorkspaceId(t.workspaceId)
     setError(null)
   }
 
@@ -68,9 +74,9 @@ export default function TemplatesPage() {
     setError(null)
     try {
       if (selectedId) {
-        await templates.update(selectedId, { name, subject, bodyHtml })
+        await templates.update(selectedId, { name, subject, bodyHtml, workspaceId })
       } else {
-        const id = await templates.create({ name, subject, bodyHtml })
+        const id = await templates.create({ name, subject, bodyHtml, workspaceId })
         setSelectedId(id)
       }
       await refresh()
@@ -145,7 +151,17 @@ export default function TemplatesPage() {
                         : 'border-falcon-200 bg-white text-falcon-700 hover:bg-falcon-50'
                     }`}
                   >
-                    <span className="font-medium">{t.name}</span>
+                    <span className="flex w-full items-center gap-1.5">
+                      <span className="font-medium">{t.name}</span>
+                      {t.scope === 'workspace' && (
+                        <span
+                          className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700"
+                          title={`Shared with ${t.workspaceName ?? 'workspace'}`}
+                        >
+                          team
+                        </span>
+                      )}
+                    </span>
                     <span className="text-xs text-falcon-500">
                       {formatRelative(t.createdAt)}
                     </span>
@@ -208,6 +224,31 @@ export default function TemplatesPage() {
                 sends use the first recipient.
               </p>
             </div>
+
+            {me && me.workspaces.length > 1 && (
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wide text-falcon-500">
+                  Share with
+                </label>
+                <select
+                  value={workspaceId ?? ''}
+                  onChange={(e) => setWorkspaceId(e.target.value || null)}
+                  className="mt-1 rounded border border-falcon-200 px-3 py-2 text-sm"
+                >
+                  <option value="">Personal (just me)</option>
+                  {me.workspaces
+                    .filter((w) => !w.isPersonal)
+                    .map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name} (team)
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-1 text-[11px] text-falcon-500">
+                  Personal templates are only visible to you. Workspace templates appear in every member's compose picker.
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center gap-3 pt-2">
               <button

@@ -85,6 +85,8 @@ function DashboardInner() {
   const urlSort = (searchParams.get('sort') as EmailSort | null) ?? 'sentAt-desc'
   const urlDate = (searchParams.get('date') as DatePreset | null) ?? 'all'
   const urlTag = searchParams.get('tag') ?? ''
+  const urlScope =
+    (searchParams.get('scope') as 'personal' | 'workspace' | null) ?? 'personal'
   const [qInput, setQInput] = useState(urlQ)
   const [tagOptions, setTagOptions] = useState<string[]>([])
 
@@ -125,6 +127,7 @@ function DashboardInner() {
         sort: urlSort,
         from: presetToFrom(urlDate),
         limit: 100,
+        scope: urlScope,
         ...(urlTag ? { tag: urlTag } : {}),
       })
         .then((res) => setEmails(res.emails))
@@ -165,7 +168,7 @@ function DashboardInner() {
       esRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, urlQ, urlSort, urlDate, urlTag])
+  }, [router, urlQ, urlSort, urlDate, urlTag, urlScope])
 
   async function handleUpgrade() {
     try {
@@ -274,6 +277,24 @@ function DashboardInner() {
             </button>
           ))}
         </div>
+        {me && me.workspaces.some((w) => !w.isPersonal && w.id === me.activeWorkspaceId) && (
+          <div className="inline-flex overflow-hidden rounded border border-falcon-200 bg-white text-xs">
+            <button
+              type="button"
+              onClick={() => updateParams({ scope: '' })}
+              className={`px-3 py-1.5 ${urlScope === 'personal' ? 'bg-falcon-100 font-medium text-falcon-700' : 'text-falcon-500 hover:bg-falcon-50'}`}
+            >
+              Personal
+            </button>
+            <button
+              type="button"
+              onClick={() => updateParams({ scope: 'workspace' })}
+              className={`border-l border-falcon-200 px-3 py-1.5 ${urlScope === 'workspace' ? 'bg-falcon-100 font-medium text-falcon-700' : 'text-falcon-500 hover:bg-falcon-50'}`}
+            >
+              Team
+            </button>
+          </div>
+        )}
         {tagOptions.length > 0 && (
           <select
             value={urlTag}

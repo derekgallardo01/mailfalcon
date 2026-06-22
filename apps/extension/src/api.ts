@@ -283,6 +283,10 @@ export interface Template {
   subject: string
   bodyHtml: string
   createdAt: number
+  scope: 'personal' | 'workspace'
+  workspaceId: string | null
+  workspaceName: string | null
+  creatorUserId: string
 }
 
 const TEMPLATES_CACHE_KEY = 'mf.templatesCache'

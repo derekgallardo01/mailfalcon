@@ -20,6 +20,12 @@ export const users = sqliteTable('users', {
   quietStartMinute: integer('quiet_start_minute'),
   quietEndMinute: integer('quiet_end_minute'),
   quietTimezone: text('quiet_timezone'),
+  // The workspace whose context this user is currently acting in.
+  // Defaults to their personal workspace; updated when they switch.
+  // Nullable only because the bootstrap migration runs after the
+  // column is added — once the migration completes, every user has a
+  // non-null value.
+  activeWorkspaceId: text('active_workspace_id'),
 })
 
 export const subscriptions = sqliteTable('subscriptions', {
@@ -130,6 +136,11 @@ export const templates = sqliteTable('templates', {
   subject: text('subject').notNull(),
   bodyHtml: text('body_html').notNull(),
   createdAt: integer('created_at').notNull(),
+  // Workspace scope. Null = personal (only the creator sees it). Set =
+  // shared with every member of that workspace. The workspace owner
+  // can edit any shared template; non-owners can edit only ones they
+  // created.
+  workspaceId: text('workspace_id'),
 })
 
 export const followUps = sqliteTable('follow_ups', {
@@ -209,5 +220,72 @@ export const sessions = sqliteTable(
   },
   (table) => ({
     byUser: index('sessions_user_idx').on(table.userId),
+  }),
+)
+
+/** A shared container that owns templates and (optionally) gives the
+ *  workspace owner aggregate visibility into team activity. Every user
+ *  has at least one workspace — the auto-bootstrapped `is_personal=1`
+ *  one created at signup. Additional workspaces are user-created and
+ *  used for team collaboration. */
+export const workspaces = sqliteTable(
+  'workspaces',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    ownerId: text('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 1 = auto-bootstrapped personal workspace (un-deletable).
+     *  0 = user-created shared workspace. */
+    isPersonal: integer('is_personal').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => ({
+    ownerIdx: index('workspaces_owner_idx').on(table.ownerId),
+  }),
+)
+
+/** Membership relation: which users belong to which workspaces. */
+export const workspaceMembers = sqliteTable(
+  'workspace_members',
+  {
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role', { enum: ['owner', 'member'] }).notNull(),
+    joinedAt: integer('joined_at').notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.workspaceId, table.userId] }),
+    byUser: index('workspace_members_user_idx').on(table.userId),
+  }),
+)
+
+/** Pending invites — one row per invite token. The `id` IS the token
+ *  (URL-safe, generated server-side). When the invitee signs in and
+ *  hits POST /accept, we validate the token's email matches their
+ *  session email, insert the member row, and mark accepted_at. */
+export const workspaceInvites = sqliteTable(
+  'workspace_invites',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    invitedBy: text('invited_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer('created_at').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+    /** Null = pending. Set on successful accept. */
+    acceptedAt: integer('accepted_at'),
+  },
+  (table) => ({
+    emailIdx: index('workspace_invites_email_idx').on(table.email),
   }),
 )

@@ -56,6 +56,7 @@ export interface EmailListItem {
   humanOpenCount: number
   clickCount: number
   lastEventAt: number | null
+  senderUserId: string
 }
 
 export interface EmailListResponse {
@@ -77,6 +78,7 @@ export interface EmailQueryParams {
   cursor?: number
   limit?: number
   tag?: string
+  scope?: 'personal' | 'workspace'
 }
 
 export async function listEmails(
@@ -90,6 +92,7 @@ export async function listEmails(
   if (params.from !== undefined) url.searchParams.set('from', String(params.from))
   if (params.to !== undefined) url.searchParams.set('to', String(params.to))
   if (params.tag) url.searchParams.set('tag', params.tag)
+  if (params.scope) url.searchParams.set('scope', params.scope)
   const res = await fetch(url, {
     headers: { ...authHeader() },
   })
@@ -186,6 +189,156 @@ export interface MeResponse {
   quietEndMinute: number | null
   quietTimezone: string | null
   usage: { used: number; limit: number }
+  activeWorkspaceId: string
+  activeWorkspaceName: string
+  activeWorkspaceRole: 'owner' | 'member'
+  workspaces: Array<{
+    id: string
+    name: string
+    role: 'owner' | 'member'
+    isPersonal: boolean
+    memberCount: number
+  }>
+}
+
+export interface WorkspaceMember {
+  userId: string
+  email: string
+  role: 'owner' | 'member'
+  joinedAt: number
+}
+
+export interface WorkspaceInviteListItem {
+  id: string
+  email: string
+  createdAt: number
+  expiresAt: number
+}
+
+export async function listWorkspaces(): Promise<{
+  workspaces: MeResponse['workspaces']
+}> {
+  const res = await fetch(`${config.apiHost}/v1/workspaces`, {
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) throw new Error(`workspaces_list_failed:${res.status}`)
+  return (await res.json()) as { workspaces: MeResponse['workspaces'] }
+}
+
+export async function createWorkspace(name: string): Promise<{ id: string; name: string }> {
+  const res = await fetch(`${config.apiHost}/v1/workspaces`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `workspace_create_failed:${res.status}`)
+  }
+  return (await res.json()) as { id: string; name: string }
+}
+
+export async function renameWorkspace(id: string, name: string): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/workspaces/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) throw new Error(`workspace_rename_failed:${res.status}`)
+}
+
+export async function deleteWorkspace(id: string): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/workspaces/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) throw new Error(`workspace_delete_failed:${res.status}`)
+}
+
+export async function listWorkspaceMembers(id: string): Promise<{
+  members: WorkspaceMember[]
+  pendingInvites: WorkspaceInviteListItem[]
+}> {
+  const res = await fetch(
+    `${config.apiHost}/v1/workspaces/${encodeURIComponent(id)}/members`,
+    { headers: { ...authHeader() } },
+  )
+  if (!res.ok) throw new Error(`workspace_members_failed:${res.status}`)
+  return (await res.json()) as {
+    members: WorkspaceMember[]
+    pendingInvites: WorkspaceInviteListItem[]
+  }
+}
+
+export async function removeWorkspaceMember(
+  workspaceId: string,
+  memberId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${config.apiHost}/v1/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(memberId)}`,
+    { method: 'DELETE', headers: { ...authHeader() } },
+  )
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `workspace_remove_failed:${res.status}`)
+  }
+}
+
+export async function inviteToWorkspace(
+  workspaceId: string,
+  email: string,
+): Promise<void> {
+  const res = await fetch(
+    `${config.apiHost}/v1/workspaces/${encodeURIComponent(workspaceId)}/invites`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ email }),
+    },
+  )
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `workspace_invite_failed:${res.status}`)
+  }
+}
+
+export async function switchWorkspace(id: string): Promise<void> {
+  const res = await fetch(
+    `${config.apiHost}/v1/workspaces/${encodeURIComponent(id)}/switch`,
+    { method: 'POST', headers: { ...authHeader() } },
+  )
+  if (!res.ok) throw new Error(`workspace_switch_failed:${res.status}`)
+}
+
+export async function previewInvite(token: string): Promise<{
+  workspaceName: string
+  inviterEmail: string
+  inviteEmail: string
+}> {
+  const res = await fetch(
+    `${config.apiHost}/workspace-invites/${encodeURIComponent(token)}`,
+  )
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `preview_failed:${res.status}`)
+  }
+  return (await res.json()) as {
+    workspaceName: string
+    inviterEmail: string
+    inviteEmail: string
+  }
+}
+
+export async function acceptInvite(token: string): Promise<{ workspaceId: string }> {
+  const res = await fetch(
+    `${config.apiHost}/v1/workspaces/invites/${encodeURIComponent(token)}/accept`,
+    { method: 'POST', headers: { ...authHeader() } },
+  )
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `accept_failed:${res.status}`)
+  }
+  return (await res.json()) as { workspaceId: string }
 }
 
 export async function getMe(): Promise<MeResponse> {
@@ -279,12 +432,18 @@ export interface Template {
   subject: string
   bodyHtml: string
   createdAt: number
+  scope: 'personal' | 'workspace'
+  workspaceId: string | null
+  workspaceName: string | null
+  creatorUserId: string
 }
 
 export interface TemplateInput {
   name: string
   subject: string
   bodyHtml: string
+  /** null/omitted = personal. Set = share with that workspace. */
+  workspaceId?: string | null
 }
 
 export const templates = {
@@ -559,12 +718,14 @@ export async function listContacts(opts: {
   limit?: number
   q?: string
   sort?: ContactSort
+  scope?: 'personal' | 'workspace'
 }): Promise<ContactListResponse> {
   const qs = new URLSearchParams()
   if (opts.cursor) qs.set('cursor', String(opts.cursor))
   if (opts.limit) qs.set('limit', String(opts.limit))
   if (opts.q && opts.q.length > 0) qs.set('q', opts.q)
   if (opts.sort) qs.set('sort', opts.sort)
+  if (opts.scope) qs.set('scope', opts.scope)
   const suffix = qs.toString() ? `?${qs}` : ''
   const res = await fetch(`${config.apiHost}/v1/contacts${suffix}`, {
     headers: { ...authHeader() },

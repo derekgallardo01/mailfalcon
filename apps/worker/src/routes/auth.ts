@@ -9,6 +9,7 @@ import { getJwtSecret, signJwt, verifyJwt } from '../lib/jwt'
 import { createLogger, errorMeta } from '../lib/logger'
 import { sendCode } from '../lib/mailer'
 import { rateLimit } from '../lib/rate-limit'
+import { ensurePersonalWorkspace } from '../lib/workspace'
 
 const requestSchema = z.object({
   email: z.string().email().max(254).transform((s) => s.toLowerCase()),
@@ -145,15 +146,19 @@ authRouter.post('/verify', async (c) => {
 
   if (!row) {
     const id = newTrackingId()
+    const createdAt = Date.now()
     await db
       .insert(users)
       .values({
         id,
         email,
-        createdAt: Date.now(),
+        createdAt,
         tier: 'free',
       })
       .run()
+    // Bootstrap a personal workspace + owner membership so every
+    // request from this user always has a valid active workspace.
+    await ensurePersonalWorkspace(db, id, createdAt)
     row = { id }
   }
 

@@ -64,6 +64,13 @@
       "when": 1781993071810,
       "tag": "0008_sessions_d1",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1782085795138,
+      "tag": "0009_workspaces",
+      "breakpoints": true
     }
   ]
 }

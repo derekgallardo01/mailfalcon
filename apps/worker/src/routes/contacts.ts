@@ -26,6 +26,9 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   q: z.string().max(100).optional(),
   sort: sortSchema.default('lastSeen-desc'),
+  /** 'workspace' rolls up across every member of the caller's active
+   *  workspace; 'personal' (default) is sender-private. */
+  scope: z.enum(['personal', 'workspace']).default('personal'),
 })
 
 export const contactsRouter = new Hono<{
@@ -45,10 +48,12 @@ contactsRouter.get('/', async (c) => {
     limit: c.req.query('limit'),
     q: c.req.query('q'),
     sort: c.req.query('sort'),
+    scope: c.req.query('scope'),
   })
   if (!q.success) return c.json({ error: 'invalid_query' }, 400)
 
   const userId = c.get('userId')
+  const workspaceId = c.get('workspaceId')
   const db = getDb(c.env.DB)
 
   // Build the per-contact aggregate. The triple-join (tracked_emails →
@@ -61,18 +66,33 @@ contactsRouter.get('/', async (c) => {
   const lastEventAtExpr = sql<number | null>`MAX(${events.ts})`
   const firstSeenAtExpr = sql<number>`MIN(${trackedEmails.sentAt})`
   // Most recent non-null displayLabel for this hash — picks the label
-  // from the latest send. Note: subquery would be cleaner, but D1's
-  // SQLite supports this aggregate form too.
-  const displayLabelExpr = sql<string | null>`(
-    SELECT r.display_label FROM recipients r
-    INNER JOIN tracked_emails t ON t.id = r.email_id
-    WHERE r.hashed_addr = ${recipients.hashedAddr}
-      AND t.user_id = ${userId}
-      AND r.display_label IS NOT NULL
-    ORDER BY t.sent_at DESC LIMIT 1
-  )`
+  // from the latest send. Scope-aware so the workspace view uses any
+  // label across the team's sends.
+  const displayLabelExpr =
+    q.data.scope === 'workspace'
+      ? sql<string | null>`(
+          SELECT r.display_label FROM recipients r
+          INNER JOIN tracked_emails t ON t.id = r.email_id
+          WHERE r.hashed_addr = ${recipients.hashedAddr}
+            AND t.user_id IN (SELECT user_id FROM workspace_members WHERE workspace_id = ${workspaceId})
+            AND r.display_label IS NOT NULL
+          ORDER BY t.sent_at DESC LIMIT 1
+        )`
+      : sql<string | null>`(
+          SELECT r.display_label FROM recipients r
+          INNER JOIN tracked_emails t ON t.id = r.email_id
+          WHERE r.hashed_addr = ${recipients.hashedAddr}
+            AND t.user_id = ${userId}
+            AND r.display_label IS NOT NULL
+          ORDER BY t.sent_at DESC LIMIT 1
+        )`
 
-  const filters = [eq(trackedEmails.userId, userId)]
+  const filters =
+    q.data.scope === 'workspace'
+      ? [
+          sql`${trackedEmails.userId} IN (SELECT user_id FROM workspace_members WHERE workspace_id = ${workspaceId})`,
+        ]
+      : [eq(trackedEmails.userId, userId)]
   if (q.data.q && q.data.q.trim().length > 0) {
     const pattern = `%${sqlLikeEscape(q.data.q.trim())}%`
     filters.push(like(recipients.displayLabel, pattern))

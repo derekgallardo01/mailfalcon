@@ -71,6 +71,10 @@ const listQuerySchema = z.object({
   from: z.coerce.number().int().nonnegative().optional(),
   to: z.coerce.number().int().nonnegative().optional(),
   tag: z.string().max(30).optional(),
+  /** When 'workspace', aggregates across every member of the caller's
+   *  active workspace. Workspace owners + members both see the team
+   *  view in v1 (per plan; we can tighten to owner-only later). */
+  scope: z.enum(['personal', 'workspace']).default('personal'),
 })
 
 // SQLite's LIKE uses % and _ as wildcards. Escape them so user input is
@@ -199,6 +203,7 @@ emailsRouter.get('/', async (c) => {
     from: c.req.query('from'),
     to: c.req.query('to'),
     tag: c.req.query('tag'),
+    scope: c.req.query('scope'),
   })
   if (!q.success) return c.json({ error: 'invalid_query' }, 400)
 
@@ -210,7 +215,13 @@ emailsRouter.get('/', async (c) => {
   const humanOpensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`
   const clicksExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`
 
-  const filters = [eq(trackedEmails.userId, userId)]
+  // For team scope, swap `userId = ?` for `userId IN (... members ...)`.
+  const filters =
+    q.data.scope === 'workspace'
+      ? [
+          sql`${trackedEmails.userId} IN (SELECT user_id FROM workspace_members WHERE workspace_id = ${c.get('workspaceId')})`,
+        ]
+      : [eq(trackedEmails.userId, userId)]
   // Cursor pagination only applies to the default sort (sentAt-desc).
   if (q.data.sort === 'sentAt-desc' && q.data.cursor) {
     filters.push(sql`${trackedEmails.sentAt} < ${q.data.cursor}`)
@@ -260,6 +271,7 @@ emailsRouter.get('/', async (c) => {
       sentAt: trackedEmails.sentAt,
       recipientCount: trackedEmails.recipientCount,
       privacyMode: trackedEmails.privacyMode,
+      senderUserId: trackedEmails.userId,
       openCount: opensExpr,
       humanOpenCount: humanOpensExpr,
       clickCount: clicksExpr,
@@ -293,6 +305,9 @@ emailsRouter.get('/', async (c) => {
       humanOpenCount: Number(r.humanOpenCount),
       clickCount: Number(r.clickCount),
       lastEventAt: r.lastEventAt,
+      // Always returned. Only meaningfully different from the caller's
+      // own userId in team scope, but harmless either way.
+      senderUserId: r.senderUserId,
     })),
     nextCursor,
   })

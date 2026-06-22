@@ -19,6 +19,14 @@ import { repliesRouter } from './routes/replies'
 import { streamRouter } from './routes/stream'
 import { stripeWebhookRouter } from './routes/stripe-webhook'
 import { templatesRouter } from './routes/templates'
+import { workspacesRouter } from './routes/workspaces'
+import { eq } from 'drizzle-orm'
+import {
+  users as usersTable,
+  workspaceInvites,
+  workspaces as workspacesTable,
+} from '@mailfalcon/db/schema'
+import { getDb } from './lib/db'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -87,6 +95,38 @@ app.get('/vapid-public-key', (c) =>
 
 app.route('/auth', authRouter)
 
+// Unauthed invite preview — the /workspaces/accept web page calls this
+// to show "X invited you to Workspace Y" before the user has signed in.
+app.use(
+  '/workspace-invites/*',
+  cors({ origin: originPolicy, credentials: false }),
+)
+app.get('/workspace-invites/:token', async (c) => {
+  const token = c.req.param('token')
+  const db = getDb(c.env.DB)
+  const row = await db
+    .select({
+      workspaceName: workspacesTable.name,
+      inviterEmail: usersTable.email,
+      email: workspaceInvites.email,
+      expiresAt: workspaceInvites.expiresAt,
+      acceptedAt: workspaceInvites.acceptedAt,
+    })
+    .from(workspaceInvites)
+    .innerJoin(workspacesTable, eq(workspacesTable.id, workspaceInvites.workspaceId))
+    .innerJoin(usersTable, eq(usersTable.id, workspaceInvites.invitedBy))
+    .where(eq(workspaceInvites.id, token))
+    .get()
+  if (!row) return c.json({ error: 'not_found' }, 404)
+  if (row.acceptedAt != null) return c.json({ error: 'already_accepted' }, 410)
+  if (row.expiresAt < Date.now()) return c.json({ error: 'expired' }, 410)
+  return c.json({
+    workspaceName: row.workspaceName,
+    inviterEmail: row.inviterEmail,
+    inviteEmail: row.email,
+  })
+})
+
 app.use('/v1/*', authMiddleware)
 app.use('/v1/admin/*', adminMiddleware)
 app.route('/v1/me', meRouter)
@@ -100,6 +140,7 @@ app.route('/v1/replies', repliesRouter)
 app.route('/v1/push', pushRouter)
 app.route('/v1/billing', billingRouter)
 app.route('/v1/oauth', oauthRouter)
+app.route('/v1/workspaces', workspacesRouter)
 
 app.use(
   '/stream',
@@ -133,7 +174,6 @@ app.onError((err, c) => {
 import { sendAdminDigests } from './lib/admin-digest'
 import { cleanupStalePushSubs } from './lib/cron-cleanup'
 import { sendDailyDigests } from './lib/digest'
-import { getDb } from './lib/db'
 import { evaluateFollowups } from './lib/followups'
 
 export default {

@@ -8,6 +8,7 @@ import {
   setPendingVerify,
 } from '../../src/auth-store'
 import { requestCode } from '../../src/api'
+import { config } from '../../src/config'
 import {
   cancel as cancelScheduled,
   listPending as listScheduled,
@@ -132,7 +133,48 @@ async function showSignedIn(email: string): Promise<void> {
     void reload()
   }
 
+  void renderWorkspaceLine()
   void renderSpoofSection()
+}
+
+async function renderWorkspaceLine(): Promise<void> {
+  const el = document.getElementById('workspace-line')
+  if (!el) return
+  try {
+    const me = await fetchMe()
+    if (!me) return
+    if (me.workspaces.length <= 1) return
+    const label =
+      me.activeWorkspaceRole === 'owner'
+        ? `Workspace: ${me.activeWorkspaceName} (owner)`
+        : `Workspace: ${me.activeWorkspaceName}`
+    el.textContent = label
+    el.style.display = 'block'
+  } catch {
+    /* ignore */
+  }
+}
+
+interface MeShape {
+  activeWorkspaceName: string
+  activeWorkspaceRole: 'owner' | 'member'
+  workspaces: Array<{
+    id: string
+    name: string
+    role: string
+    isPersonal: boolean
+    memberCount: number
+  }>
+}
+
+async function fetchMe(): Promise<MeShape | null> {
+  const session = await getSession()
+  if (!session) return null
+  const res = await fetch(`${config.apiHost}/v1/me`, {
+    headers: { Authorization: `Bearer ${session.token}` },
+  })
+  if (!res.ok) return null
+  return (await res.json()) as MeShape
 }
 
 interface SpoofStatus {

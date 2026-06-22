@@ -129,10 +129,21 @@ async function populateTemplateSelect(
     return []
   }
   select.innerHTML = '<option value="">— pick one —</option>'
-  for (const t of list) {
+  // Show personal templates first, then workspace-shared ones grouped
+  // by workspace name. Workspace templates get a "[team]" prefix so
+  // the picker makes the source obvious.
+  const personal = list.filter((t) => t.scope === 'personal')
+  const workspaceTpls = list.filter((t) => t.scope === 'workspace')
+  for (const t of personal) {
     const opt = document.createElement('option')
     opt.value = t.id
     opt.textContent = t.name
+    select.appendChild(opt)
+  }
+  for (const t of workspaceTpls) {
+    const opt = document.createElement('option')
+    opt.value = t.id
+    opt.textContent = `[team${t.workspaceName ? ' · ' + t.workspaceName : ''}] ${t.name}`
     select.appendChild(opt)
   }
   return list

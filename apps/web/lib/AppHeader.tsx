@@ -9,6 +9,7 @@ import {
   logout as apiLogout,
   openBillingPortal,
   startCheckout,
+  switchWorkspace,
 } from './api'
 import { clearSession, getSession, type Session } from './auth-store'
 
@@ -125,6 +126,9 @@ export function AppHeader({ liveCount = 0 }: Props) {
             {tierLabel}
           </span>
         )}
+        {me && me.workspaces.length > 0 && (
+          <WorkspaceSwitcher me={me} />
+        )}
         {liveCount > 0 && (
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
             live · {liveCount} new
@@ -180,5 +184,74 @@ export function AppHeader({ liveCount = 0 }: Props) {
         </button>
       </div>
     </header>
+  )
+}
+
+function WorkspaceSwitcher({ me }: { me: MeResponse }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function pick(id: string) {
+    if (id === me.activeWorkspaceId) {
+      setOpen(false)
+      return
+    }
+    setBusy(true)
+    try {
+      await switchWorkspace(id)
+      router.refresh()
+      // Force a reload so /v1/me + every cached query re-runs with the
+      // new active workspace context.
+      window.location.reload()
+    } finally {
+      setBusy(false)
+      setOpen(false)
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 rounded-md border border-falcon-200 bg-white px-2 py-1 text-xs font-medium text-falcon-700 hover:bg-falcon-50"
+        title="Active workspace"
+      >
+        <span className="truncate max-w-[140px]">{me.activeWorkspaceName}</span>
+        <span className="text-falcon-400">▾</span>
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-falcon-200 bg-white py-1 shadow-lg"
+          onMouseLeave={() => setOpen(false)}
+        >
+          {me.workspaces.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              disabled={busy}
+              onClick={() => pick(w.id)}
+              className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-falcon-50 ${
+                w.id === me.activeWorkspaceId ? 'font-semibold text-falcon-700' : 'text-falcon-600'
+              }`}
+            >
+              <span className="truncate">{w.name}</span>
+              <span className="text-[10px] uppercase tracking-wide text-falcon-400">
+                {w.isPersonal ? 'personal' : w.role}
+              </span>
+            </button>
+          ))}
+          <div className="my-1 border-t border-falcon-100" />
+          <Link
+            href="/workspaces"
+            onClick={() => setOpen(false)}
+            className="block px-3 py-1.5 text-xs text-falcon-600 hover:bg-falcon-50"
+          >
+            Manage workspaces
+          </Link>
+        </div>
+      )}
+    </div>
   )
 }
