@@ -37,6 +37,13 @@ interface ComposeView {
     el: HTMLElement
     destroy: () => void
   } | null
+  addButton?: (opts: {
+    title: string
+    iconUrl?: string
+    type?: 'MODIFIER' | 'SEND_ACTION'
+    orderHint?: number
+    onClick: (event: { composeView: ComposeView }) => void
+  }) => void
   getHTMLContent?: () => string
   setBodyHTML?: (html: string) => void
   setSubject?: (s: string) => void
@@ -255,6 +262,27 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           const optionsIcon = bar.el.querySelector('.mf-options-icon') as HTMLImageElement | null
           if (optionsIcon && typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
             optionsIcon.src = chrome.runtime.getURL('icon/32.png')
+          }
+
+          // Mirror entry point in the compose toolbar (next to Send,
+          // Aa, attach, …). New Gmail layouts expand the formatting
+          // toolbar by default which pushes the status bar below the
+          // fold; the toolbar button stays visible regardless. Clicking
+          // it just opens the same popover anchored to the status bar.
+          try {
+            const iconUrl =
+              typeof chrome !== 'undefined' && chrome.runtime?.getURL
+                ? chrome.runtime.getURL('icon/32.png')
+                : undefined
+            view.addButton?.({
+              title: 'MailFalcon tracking options',
+              iconUrl,
+              type: 'MODIFIER',
+              orderHint: 100,
+              onClick: () => optionsBtn?.click(),
+            })
+          } catch {
+            /* compose toolbar button is best-effort — status bar still works */
           }
 
           // First-send tour: spotlight the MailFalcon button once for
