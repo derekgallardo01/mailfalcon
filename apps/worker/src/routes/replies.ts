@@ -63,6 +63,7 @@ repliesRouter.post('/', async (c) => {
     .select({
       id: trackedEmails.id,
       userId: trackedEmails.userId,
+      subject: trackedEmails.subject,
       notificationsMuted: trackedEmails.notificationsMuted,
     })
     .from(trackedEmails)
@@ -114,7 +115,12 @@ repliesRouter.post('/', async (c) => {
 
   if (!muted) {
     c.executionCtx.waitUntil(
-      fanoutPush(db, c.env, target.userId).catch((err) =>
+      fanoutPush(db, c.env, target.userId, {
+        kind: 'reply',
+        subject: target.subject,
+        emailId: target.id,
+        text: 'New reply in tracked thread',
+      }).catch((err) =>
         createLogger({ env: c.env }).warn('reply_fanout_failed', errorMeta(err)),
       ),
     )

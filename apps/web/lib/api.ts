@@ -202,6 +202,78 @@ export interface MeResponse {
   trialActive: boolean
   trialDaysRemaining: number
   trialEndsAt: number | null
+  middayDigestEnabled: boolean
+  hotLeadAlertsEnabled: boolean
+}
+
+export interface EventWebhook {
+  id: string
+  url: string
+  enabled: boolean
+  notifyOpen: boolean
+  notifyClick: boolean
+  notifyReply: boolean
+  notifyHotLead: boolean
+  createdAt: number
+  lastFiredAt: number | null
+  lastStatus: string | null
+}
+
+export async function listWebhooks(): Promise<EventWebhook[]> {
+  const res = await fetch(`${config.apiHost}/v1/webhooks`, {
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) throw new Error(`webhooks_list_failed:${res.status}`)
+  const data = (await res.json()) as { webhooks: EventWebhook[] }
+  return data.webhooks
+}
+
+export async function createWebhook(input: {
+  url: string
+  notifyOpen?: boolean
+  notifyClick?: boolean
+  notifyReply?: boolean
+  notifyHotLead?: boolean
+}): Promise<string> {
+  const res = await fetch(`${config.apiHost}/v1/webhooks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `webhook_create_failed:${res.status}`)
+  }
+  const data = (await res.json()) as { id: string }
+  return data.id
+}
+
+export async function patchWebhook(
+  id: string,
+  patch: Partial<Omit<EventWebhook, 'id' | 'url' | 'createdAt' | 'lastFiredAt' | 'lastStatus'>>,
+): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/webhooks/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(`webhook_patch_failed:${res.status}`)
+}
+
+export async function deleteWebhook(id: string): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/webhooks/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) throw new Error(`webhook_delete_failed:${res.status}`)
+}
+
+export async function testWebhook(id: string): Promise<void> {
+  const res = await fetch(
+    `${config.apiHost}/v1/webhooks/${encodeURIComponent(id)}/test`,
+    { method: 'POST', headers: { ...authHeader() } },
+  )
+  if (!res.ok) throw new Error(`webhook_test_failed:${res.status}`)
 }
 
 export interface WorkspaceMember {
@@ -355,6 +427,8 @@ export async function getMe(): Promise<MeResponse> {
 
 export async function updateMe(patch: {
   digestEnabled?: boolean
+  middayDigestEnabled?: boolean
+  hotLeadAlertsEnabled?: boolean
   quietStartMinute?: number | null
   quietEndMinute?: number | null
   quietTimezone?: string | null

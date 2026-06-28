@@ -20,6 +20,7 @@ import { repliesRouter } from './routes/replies'
 import { streamRouter } from './routes/stream'
 import { stripeWebhookRouter } from './routes/stripe-webhook'
 import { templatesRouter } from './routes/templates'
+import { webhooksRouter } from './routes/webhooks'
 import { workspacesRouter } from './routes/workspaces'
 import { eq } from 'drizzle-orm'
 import {
@@ -143,6 +144,7 @@ app.route('/v1/billing', billingRouter)
 app.route('/v1/oauth', oauthRouter)
 app.route('/v1/workspaces', workspacesRouter)
 app.route('/v1/extension', extensionRouter)
+app.route('/v1/webhooks', webhooksRouter)
 
 app.use(
   '/stream',
@@ -178,6 +180,8 @@ import { sendAdminDigests } from './lib/admin-digest'
 import { cleanupStalePushSubs } from './lib/cron-cleanup'
 import { sendDailyDigests } from './lib/digest'
 import { evaluateFollowups } from './lib/followups'
+import { evaluateHotLeads } from './lib/hot-leads'
+import { sendMiddayDigests } from './lib/midday-digest'
 
 export default {
   fetch: app.fetch,
@@ -199,6 +203,36 @@ export default {
   ): Promise<void> {
     const log = createLogger({ env, waitUntil: (p) => ctx.waitUntil(p) })
     const db = getDb(env.DB)
+
+    // 17:00 UTC = 1pm ET — mid-day digest.
+    if (event.cron === '0 17 * * *') {
+      ctx.waitUntil(
+        (async () => {
+          try {
+            const out = await sendMiddayDigests(db, env)
+            log.info('cron_midday_digest', { cron: event.cron, ...out })
+          } catch (err) {
+            log.error('cron_midday_digest_failed', errorMeta(err))
+          }
+        })(),
+      )
+      return
+    }
+
+    // Hot-lead evaluator runs every 15 minutes.
+    if (event.cron === '*/15 * * * *') {
+      ctx.waitUntil(
+        (async () => {
+          try {
+            const out = await evaluateHotLeads(db, env)
+            log.info('cron_hot_leads', { cron: event.cron, ...out })
+          } catch (err) {
+            log.error('cron_hot_leads_failed', errorMeta(err))
+          }
+        })(),
+      )
+      return
+    }
 
     // Activation-emails cron runs every 10 minutes.
     if (event.cron === '*/10 * * * *') {

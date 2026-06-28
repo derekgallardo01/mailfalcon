@@ -47,6 +47,14 @@ export const users = sqliteTable('users', {
   // still null at that point.
   welcomeEmailSentAt: integer('welcome_email_sent_at'),
   activationEmailSentAt: integer('activation_email_sent_at'),
+  // Second daily digest at 17:00 UTC (~1pm ET) — catches activity the
+  // nightly 22:00 digest missed. Gated by digestEnabled.
+  middayDigestEnabled: integer('midday_digest_enabled').notNull().default(1),
+  // Cron-driven push when a contact crosses an engagement threshold
+  // (open burst, click after dormancy, reply within 24h).
+  hotLeadAlertsEnabled: integer('hot_lead_alerts_enabled').notNull().default(1),
+  // Which slot of "today" we already sent — 'morning' or 'midday'.
+  digestLastSentSlot: text('digest_last_sent_slot'),
 })
 
 export const subscriptions = sqliteTable('subscriptions', {
@@ -191,9 +199,58 @@ export const notificationSubscriptions = sqliteTable(
     // cron sweep to delete subscriptions whose endpoint has rotated
     // (Web Push providers re-issue endpoints; the old rows linger).
     lastSeenAt: integer('last_seen_at').notNull().default(0),
+    // Per-event-type push preferences. All default on for backwards-
+    // compat — existing users keep getting every event type unless
+    // they explicitly toggle one off in Settings.
+    notifyOpen: integer('notify_open').notNull().default(1),
+    notifyClick: integer('notify_click').notNull().default(1),
+    notifyReply: integer('notify_reply').notNull().default(1),
+    notifyHotLead: integer('notify_hot_lead').notNull().default(1),
   },
   (table) => ({
     userIdx: index('notification_subscriptions_user_idx').on(table.userId),
+  }),
+)
+
+/** Per-contact dedupe table for hot-lead push alerts. The evaluator
+ *  cron skips firing if last_alerted_at is within the dedupe window
+ *  (24h). Hashed_addr matches the tracked-emails recipient hash. */
+export const hotLeadAlerts = sqliteTable(
+  'hot_lead_alerts',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    hashedAddr: text('hashed_addr').notNull(),
+    lastAlertedAt: integer('last_alerted_at').notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.hashedAddr] }),
+  }),
+)
+
+/** Webhook integrations — Slack incoming-webhook URLs or Discord
+ *  webhook URLs (we sniff the platform from the URL pattern). Each
+ *  webhook subscribes to a subset of event types. */
+export const eventWebhooks = sqliteTable(
+  'event_webhooks',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    notifyOpen: integer('notify_open').notNull().default(1),
+    notifyClick: integer('notify_click').notNull().default(1),
+    notifyReply: integer('notify_reply').notNull().default(1),
+    notifyHotLead: integer('notify_hot_lead').notNull().default(1),
+    enabled: integer('enabled').notNull().default(1),
+    createdAt: integer('created_at').notNull(),
+    lastFiredAt: integer('last_fired_at'),
+    lastStatus: text('last_status'),
+  },
+  (table) => ({
+    userIdx: index('event_webhooks_user_idx').on(table.userId),
   }),
 )
 

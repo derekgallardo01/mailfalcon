@@ -3,15 +3,21 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
+  type EventWebhook,
   type MeResponse,
   type SubscriptionInfo,
   confirmAccountDeletion,
+  createWebhook,
+  deleteWebhook,
   exportMe,
   getMe,
   getSubscription,
+  listWebhooks,
   openBillingPortal,
+  patchWebhook,
   requestAccountDeletion,
   startCheckout,
+  testWebhook,
   updateMe,
 } from '../../lib/api'
 import { AppHeader } from '../../lib/AppHeader'
@@ -238,6 +244,10 @@ export default function SettingsPage() {
       </section>
 
       <SubscriptionPanel />
+
+      <NotificationsPanel />
+
+      <IntegrationsPanel />
 
       <div className="mt-6 text-xs text-falcon-500">
         {saving && 'Saving…'}
@@ -626,6 +636,214 @@ function SubscriptionPanel() {
       >
         Manage billing in Stripe
       </button>
+    </section>
+  )
+}
+
+function NotificationsPanel() {
+  const [me, setMe] = useState<MeResponse | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    void getMe().then(setMe).catch(() => undefined)
+  }, [])
+  async function toggle(field: 'middayDigestEnabled' | 'hotLeadAlertsEnabled') {
+    if (!me) return
+    const next = !me[field]
+    setBusy(true)
+    try {
+      await updateMe({ [field]: next })
+      setMe({ ...me, [field]: next })
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (!me) return null
+  return (
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-falcon-700">Notifications</h2>
+      <p className="mt-1 text-xs text-falcon-500">
+        Smart alerts on top of the existing real-time opens / clicks / replies push.
+      </p>
+      <div className="mt-4 space-y-3 text-sm">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={me.hotLeadAlertsEnabled}
+            disabled={busy}
+            onChange={() => toggle('hotLeadAlertsEnabled')}
+            className="mt-1"
+          />
+          <div>
+            <p className="font-medium text-falcon-700">Hot-lead alerts</p>
+            <p className="text-[11px] text-falcon-500">
+              Push when a contact crosses an engagement threshold — open burst, click after dormancy, or a reply right after sending. One alert per contact per 24h.
+            </p>
+          </div>
+        </label>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={me.middayDigestEnabled}
+            disabled={busy}
+            onChange={() => toggle('middayDigestEnabled')}
+            className="mt-1"
+          />
+          <div>
+            <p className="font-medium text-falcon-700">Mid-day digest email</p>
+            <p className="text-[11px] text-falcon-500">
+              1pm ET summary catching morning activity. The nightly digest still runs at 6pm.
+            </p>
+          </div>
+        </label>
+      </div>
+    </section>
+  )
+}
+
+function IntegrationsPanel() {
+  const [hooks, setHooks] = useState<EventWebhook[] | null>(null)
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function refresh() {
+    try {
+      setHooks(await listWebhooks())
+    } catch {
+      setHooks([])
+    }
+  }
+  useEffect(() => {
+    void refresh()
+  }, [])
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault()
+    if (!url) return
+    setBusy(true)
+    setError(null)
+    try {
+      await createWebhook({ url })
+      setUrl('')
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'create_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleField(
+    h: EventWebhook,
+    field: 'enabled' | 'notifyOpen' | 'notifyClick' | 'notifyReply' | 'notifyHotLead',
+  ) {
+    try {
+      await patchWebhook(h.id, { [field]: !h[field] })
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'patch_failed')
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm('Delete this webhook?')) return
+    try {
+      await deleteWebhook(id)
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'delete_failed')
+    }
+  }
+
+  async function test(id: string) {
+    try {
+      await testWebhook(id)
+      alert('Test fired — check your channel.')
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'test_failed')
+    }
+  }
+
+  return (
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-falcon-700">Integrations</h2>
+      <p className="mt-1 text-xs text-falcon-500">
+        Slack and Discord webhooks — events fire to your channel in real time.
+      </p>
+      <form onSubmit={add} className="mt-4 flex gap-2">
+        <input
+          type="url"
+          required
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://hooks.slack.com/services/..."
+          className="flex-1 rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-md bg-falcon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:opacity-50"
+        >
+          {busy ? 'Adding…' : 'Add webhook'}
+        </button>
+      </form>
+      {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+      <p className="mt-2 text-[11px] text-falcon-500">
+        Get a Slack incoming-webhook URL from your workspace's <em>Apps</em> page; Discord URLs come from a channel's Edit → Integrations → Webhooks.
+      </p>
+      {hooks && hooks.length > 0 && (
+        <div className="mt-4 space-y-3">
+          {hooks.map((h) => (
+            <div key={h.id} className="rounded border border-falcon-200 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate font-mono text-[11px] text-falcon-600" title={h.url}>
+                  {h.url}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => test(h.id)}
+                    className="text-xs text-falcon-500 hover:text-falcon-700"
+                  >
+                    Test
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(h.id)}
+                    className="text-xs text-red-600 hover:text-red-800"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-3 text-[11px]">
+                {([
+                  ['enabled', 'enabled'],
+                  ['notifyOpen', 'opens'],
+                  ['notifyClick', 'clicks'],
+                  ['notifyReply', 'replies'],
+                  ['notifyHotLead', 'hot leads'],
+                ] as const).map(([f, label]) => (
+                  <label key={f} className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={h[f]}
+                      onChange={() => toggleField(h, f)}
+                    />
+                    <span className="capitalize text-falcon-600">{label}</span>
+                  </label>
+                ))}
+              </div>
+              {h.lastFiredAt && (
+                <p className="mt-2 text-[10px] text-falcon-400">
+                  Last fired {new Date(h.lastFiredAt).toLocaleString()} · status {h.lastStatus ?? '—'}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   )
 }

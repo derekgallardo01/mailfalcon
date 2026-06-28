@@ -119,7 +119,7 @@ function escape(s: string): string {
     .replaceAll('"', '&quot;')
 }
 
-function renderDigestHtml(args: {
+export function renderDigestHtml(args: {
   email: string
   stats: DigestStats
   webUrl: string
@@ -199,7 +199,7 @@ function renderDigestHtml(args: {
 </html>`
 }
 
-function renderDigestText(stats: DigestStats, webUrl: string): string {
+export function renderDigestText(stats: DigestStats, webUrl: string): string {
   const top = stats.topEmails
     .map((e, i) => `  ${i + 1}. ${e.subject ?? '(no subject)'} — ${e.opens} opens, ${e.clicks} clicks`)
     .join('\n')
@@ -220,7 +220,7 @@ function renderDigestText(stats: DigestStats, webUrl: string): string {
     .join('\n')
 }
 
-async function sendDigestViaResend(args: {
+export async function sendDigestViaResend(args: {
   email: string
   html: string
   text: string
@@ -301,7 +301,7 @@ export async function sendDailyDigests(db: DB, env: DigestEnv): Promise<{
       // sent so we don't recompute every minute on cron retry.
       await db
         .update(users)
-        .set({ digestLastSentDay: today })
+        .set({ digestLastSentDay: today, digestLastSentSlot: 'evening' })
         .where(eq(users.id, u.id))
         .run()
       skippedNoActivity++
@@ -317,7 +317,7 @@ export async function sendDailyDigests(db: DB, env: DigestEnv): Promise<{
       })
       await db
         .update(users)
-        .set({ digestLastSentDay: today })
+        .set({ digestLastSentDay: today, digestLastSentSlot: 'evening' })
         .where(eq(users.id, u.id))
         .run()
       sent++

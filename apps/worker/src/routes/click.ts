@@ -60,6 +60,7 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
       .select({
         userId: trackedEmails.userId,
         sentAt: trackedEmails.sentAt,
+        subject: trackedEmails.subject,
         notificationsMuted: trackedEmails.notificationsMuted,
       })
       .from(trackedEmails)
@@ -120,7 +121,12 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
         })
         .run()
       if (uaDetails.uaClass !== 'bot' && !isSelfClickWindow && !muted) {
-        await fanoutPush(db, c.env, email.userId).catch((err) =>
+        await fanoutPush(db, c.env, email.userId, {
+          kind: 'click',
+          subject: email.subject,
+          emailId: id,
+          text: 'Tracked link clicked',
+        }).catch((err) =>
           createLogger({ env: c.env }).warn(
             'click_fanout_failed',
             errorMeta(err),

@@ -53,6 +53,10 @@ vars = { ENVIRONMENT = "development", PUBLIC_WEB_URL = "http://localhost:3000" }
 [triggers]
 # 22:00 UTC daily = 6pm Eastern. Runs sendDailyDigests() once a day per
 # user with digestEnabled=1. Idempotent via users.digest_last_sent_day.
+# 17:00 UTC daily = 1pm Eastern. Runs sendMiddayDigests() — half-day
+# catch-up. Idempotent via (digest_last_sent_day, digest_last_sent_slot).
+# */15 * * * * — hot-lead evaluator. Pushes when a contact crosses the
+# engagement threshold. Idempotent via hot_lead_alerts dedupe table.
 # */10 * * * * — activation playbook (welcome + 3-day reminder).
 # Targeted SELECT + UPDATE per row, idempotent via *_email_sent_at.
-crons = ["0 22 * * *", "*/10 * * * *"]
+crons = ["0 22 * * *", "0 17 * * *", "*/15 * * * *", "*/10 * * * *"]

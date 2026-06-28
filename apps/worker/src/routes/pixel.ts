@@ -76,6 +76,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
       id: trackedEmails.id,
       userId: trackedEmails.userId,
       sentAt: trackedEmails.sentAt,
+      subject: trackedEmails.subject,
       notificationsMuted: trackedEmails.notificationsMuted,
     })
     .from(trackedEmails)
@@ -138,7 +139,12 @@ pixelRouter.get('/:idWithExt', async (c) => {
         })
         .run()
       if (uaDetails.uaClass !== 'bot' && !isSelfOpenWindow && !muted) {
-        await fanoutPush(db, c.env, row.userId).catch((err) =>
+        await fanoutPush(db, c.env, row.userId, {
+          kind: 'open',
+          subject: row.subject,
+          emailId: row.id,
+          text: 'Tracked email opened',
+        }).catch((err) =>
           createLogger({ env: c.env }).warn(
             'pixel_fanout_failed',
             errorMeta(err),

@@ -32,6 +32,8 @@ type Bindings = {
 
 const patchSchema = z.object({
   digestEnabled: z.boolean().optional(),
+  middayDigestEnabled: z.boolean().optional(),
+  hotLeadAlertsEnabled: z.boolean().optional(),
   quietStartMinute: z.number().int().min(0).max(1439).nullable().optional(),
   quietEndMinute: z.number().int().min(0).max(1439).nullable().optional(),
   quietTimezone: z
@@ -81,6 +83,8 @@ meRouter.get('/', async (c) => {
       quietEndMinute: users.quietEndMinute,
       quietTimezone: users.quietTimezone,
       trialEndsAt: users.trialEndsAt,
+      middayDigestEnabled: users.middayDigestEnabled,
+      hotLeadAlertsEnabled: users.hotLeadAlertsEnabled,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -160,6 +164,8 @@ meRouter.get('/', async (c) => {
     trialActive,
     trialDaysRemaining,
     trialEndsAt: row.trialEndsAt,
+    middayDigestEnabled: row.middayDigestEnabled === 1,
+    hotLeadAlertsEnabled: row.hotLeadAlertsEnabled === 1,
   })
 })
 
@@ -190,6 +196,12 @@ meRouter.patch('/', async (c) => {
   const updates: Record<string, unknown> = {}
   if (parsed.data.digestEnabled !== undefined) {
     updates.digestEnabled = parsed.data.digestEnabled ? 1 : 0
+  }
+  if (parsed.data.middayDigestEnabled !== undefined) {
+    updates.middayDigestEnabled = parsed.data.middayDigestEnabled ? 1 : 0
+  }
+  if (parsed.data.hotLeadAlertsEnabled !== undefined) {
+    updates.hotLeadAlertsEnabled = parsed.data.hotLeadAlertsEnabled ? 1 : 0
   }
   if (parsed.data.quietStartMinute !== undefined) {
     updates.quietStartMinute = parsed.data.quietStartMinute
