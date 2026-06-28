@@ -1,5 +1,6 @@
 import * as InboxSDK from '@inboxsdk/core'
 import { listTemplates, type Template } from '../api'
+import { hasSeenFirstSendTour, markFirstSendTourSeen } from '../auth-store'
 import { config } from '../config'
 import type {
   ComposeEvent,
@@ -255,6 +256,37 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           if (optionsIcon && typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
             optionsIcon.src = chrome.runtime.getURL('icon/32.png')
           }
+
+          // First-send tour: spotlight the MailFalcon button once for
+          // brand-new users to surface what we do without forcing them
+          // through a modal.
+          void (async () => {
+            try {
+              const seen = await hasSeenFirstSendTour()
+              if (seen || !optionsBtn) return
+              const tip = document.createElement('div')
+              tip.style.cssText =
+                'position:absolute;bottom:calc(100% + 8px);left:0;background:#0f1a2e;color:#fff;padding:8px 12px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:9999;pointer-events:auto;'
+              tip.innerHTML = `<span>First time? Hit Send — we'll track opens + clicks.</span> <button type="button" style="background:none;border:none;color:#9bc6ff;cursor:pointer;font:inherit;margin-left:6px;padding:0;">Got it</button>`
+              optionsBtn.style.boxShadow =
+                '0 0 0 3px rgba(59,108,183,0.25)'
+              const wrap = optionsBtn.parentElement
+              if (wrap && getComputedStyle(wrap).position === 'static') {
+                wrap.style.position = 'relative'
+              }
+              ;(wrap ?? optionsBtn).appendChild(tip)
+              const dismiss = (): void => {
+                tip.remove()
+                optionsBtn.style.boxShadow = ''
+                void markFirstSendTourSeen()
+              }
+              tip.querySelector('button')?.addEventListener('click', dismiss)
+              // Also dismiss on first send.
+              view.on('sent', () => dismiss())
+            } catch {
+              /* tour is best-effort */
+            }
+          })()
           const popover = bar.el.querySelector('.mf-popover') as HTMLElement | null
           const summaryEl = bar.el.querySelector('.mf-summary') as HTMLElement | null
           const privCb = bar.el.querySelector('.mf-priv') as HTMLInputElement | null

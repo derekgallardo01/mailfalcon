@@ -4,6 +4,7 @@ const USER_ID_KEY = 'mf.userId'
 const PENDING_KEY = 'mf.pendingVerify'
 const ONBOARDING_KEY = 'mf.seenOnboarding'
 const INSTALL_ID_KEY = 'mf.installId'
+const FIRST_SEND_TOUR_KEY = 'mf.seenFirstSendTour'
 
 const PENDING_TTL_MS = 15 * 60 * 1000
 
@@ -99,4 +100,18 @@ export async function markOnboardingSeen(): Promise<void> {
 
 export async function resetOnboarding(): Promise<void> {
   await chrome.storage.local.remove(ONBOARDING_KEY)
+}
+
+/** First-send tour: spotlight tooltip on the MailFalcon compose bar
+ *  shown once to brand-new users who haven't sent a tracked email yet.
+ *  Marked seen on first dismiss or first send. */
+export async function hasSeenFirstSendTour(): Promise<boolean> {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return true
+  const stored = await chrome.storage.local.get(FIRST_SEND_TOUR_KEY)
+  return !!stored[FIRST_SEND_TOUR_KEY]
+}
+
+export async function markFirstSendTourSeen(): Promise<void> {
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return
+  await chrome.storage.local.set({ [FIRST_SEND_TOUR_KEY]: true })
 }

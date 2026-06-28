@@ -37,6 +37,16 @@ export const users = sqliteTable('users', {
   lastSeenAt: integer('last_seen_at'),
   extensionVersion: text('extension_version'),
   extensionInstallId: text('extension_install_id'),
+  // 14-day Pro trial automatically granted on signup. effectiveTier in
+  // /v1/me reads this — if tier === 'free' AND trial_ends_at > now,
+  // surfaces 'pro' to the caller. Allows new users to try paid features
+  // before deciding to subscribe.
+  trialEndsAt: integer('trial_ends_at'),
+  // Activation playbook timestamps. Welcome fires ~5min after the first
+  // /v1/extension/ping; the 3-day reminder fires if first_send_at is
+  // still null at that point.
+  welcomeEmailSentAt: integer('welcome_email_sent_at'),
+  activationEmailSentAt: integer('activation_email_sent_at'),
 })
 
 export const subscriptions = sqliteTable('subscriptions', {

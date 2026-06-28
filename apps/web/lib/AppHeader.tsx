@@ -129,6 +129,14 @@ export function AppHeader({ liveCount = 0 }: Props) {
             {tierLabel}
           </span>
         )}
+        {me?.trialActive && me.trialDaysRemaining > 0 && (
+          <span
+            className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800"
+            title={`Pro trial — ${me.trialDaysRemaining} day${me.trialDaysRemaining === 1 ? '' : 's'} left`}
+          >
+            Trial · {me.trialDaysRemaining}d
+          </span>
+        )}
         {me && me.workspaces.length > 0 && (
           <WorkspaceSwitcher me={me} />
         )}

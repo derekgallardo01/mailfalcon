@@ -147,6 +147,10 @@ authRouter.post('/verify', async (c) => {
   if (!row) {
     const id = newTrackingId()
     const createdAt = Date.now()
+    // 14-day Pro trial granted on signup. effectiveTier in /v1/me reads
+    // this — new users get paid features immediately so they have a
+    // reason to come back before deciding to subscribe.
+    const trialEndsAt = createdAt + 14 * 86_400_000
     await db
       .insert(users)
       .values({
@@ -154,6 +158,7 @@ authRouter.post('/verify', async (c) => {
         email,
         createdAt,
         tier: 'free',
+        trialEndsAt,
       })
       .run()
     // Bootstrap a personal workspace + owner membership so every

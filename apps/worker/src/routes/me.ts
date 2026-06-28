@@ -80,6 +80,7 @@ meRouter.get('/', async (c) => {
       quietStartMinute: users.quietStartMinute,
       quietEndMinute: users.quietEndMinute,
       quietTimezone: users.quietTimezone,
+      trialEndsAt: users.trialEndsAt,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -120,6 +121,18 @@ meRouter.get('/', async (c) => {
     }
   }
 
+  // Trial layer: free users with an active trial get treated as 'pro'.
+  // Doesn't override a workspace-owner inheritance to 'team' since team
+  // outranks pro.
+  const now = Date.now()
+  const trialActive = row.trialEndsAt != null && row.trialEndsAt > now
+  if (trialActive && tierRank(effectiveTier) < tierRank('pro')) {
+    effectiveTier = 'pro'
+  }
+  const trialDaysRemaining = trialActive
+    ? Math.ceil((row.trialEndsAt! - now) / 86_400_000)
+    : 0
+
   const usage = await getUsage(c.env.KV, userId)
   return c.json({
     id: row.id,
@@ -144,6 +157,9 @@ meRouter.get('/', async (c) => {
       isPersonal: w.isPersonal === 1,
       memberCount: Number(w.memberCount),
     })),
+    trialActive,
+    trialDaysRemaining,
+    trialEndsAt: row.trialEndsAt,
   })
 })
 

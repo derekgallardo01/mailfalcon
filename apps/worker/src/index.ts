@@ -173,6 +173,7 @@ app.onError((err, c) => {
   return c.json({ error: 'internal' }, 500)
 })
 
+import { sendActivationEmails } from './lib/activation-emails'
 import { sendAdminDigests } from './lib/admin-digest'
 import { cleanupStalePushSubs } from './lib/cron-cleanup'
 import { sendDailyDigests } from './lib/digest'
@@ -180,16 +181,42 @@ import { evaluateFollowups } from './lib/followups'
 
 export default {
   fetch: app.fetch,
-  // Cron trigger: 22:00 UTC = 6pm Eastern. Runs both digest passes.
+  /**
+   * Crons:
+   *   - `0 22 * * *` (22:00 UTC = 6pm ET) — daily digests, followups,
+   *     stale push cleanup. The legacy "big nightly job".
+   *   - `*\/10 * * * *` (every 10 min) — activation playbook: welcome
+   *     emails ~5min after install + 3-day reminders. Lightweight; just
+   *     one targeted SELECT + per-row UPDATE.
+   *
+   * The function dispatches by the cron expression so each schedule
+   * only does what it needs to.
+   */
   async scheduled(
     event: ScheduledEvent,
     env: Bindings,
     ctx: ExecutionContext,
   ): Promise<void> {
     const log = createLogger({ env, waitUntil: (p) => ctx.waitUntil(p) })
+    const db = getDb(env.DB)
+
+    // Activation-emails cron runs every 10 minutes.
+    if (event.cron === '*/10 * * * *') {
+      ctx.waitUntil(
+        (async () => {
+          try {
+            const out = await sendActivationEmails(db, env)
+            log.info('cron_activation_emails', { cron: event.cron, ...out })
+          } catch (err) {
+            log.error('cron_activation_emails_failed', errorMeta(err))
+          }
+        })(),
+      )
+      return
+    }
+
     ctx.waitUntil(
       (async () => {
-        const db = getDb(env.DB)
         try {
           const user = await sendDailyDigests(db, env)
           log.info('cron_user_digest', { cron: event.cron, ...user })

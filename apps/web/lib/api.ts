@@ -199,6 +199,9 @@ export interface MeResponse {
     isPersonal: boolean
     memberCount: number
   }>
+  trialActive: boolean
+  trialDaysRemaining: number
+  trialEndsAt: number | null
 }
 
 export interface WorkspaceMember {
