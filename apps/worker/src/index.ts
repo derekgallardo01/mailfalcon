@@ -19,6 +19,7 @@ import { pushRouter } from './routes/push'
 import { repliesRouter } from './routes/replies'
 import { streamRouter } from './routes/stream'
 import { stripeWebhookRouter } from './routes/stripe-webhook'
+import { customDomainRouter } from './routes/custom-domain'
 import { templatesRouter } from './routes/templates'
 import { webhooksRouter } from './routes/webhooks'
 import { workspacesRouter } from './routes/workspaces'
@@ -145,6 +146,7 @@ app.route('/v1/oauth', oauthRouter)
 app.route('/v1/workspaces', workspacesRouter)
 app.route('/v1/extension', extensionRouter)
 app.route('/v1/webhooks', webhooksRouter)
+app.route('/v1/me/custom-domain', customDomainRouter)
 
 app.use(
   '/stream',

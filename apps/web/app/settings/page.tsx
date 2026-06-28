@@ -3,23 +3,29 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
+  type CustomDomainState,
   type EventWebhook,
   type MeResponse,
   type SubscriptionInfo,
   confirmAccountDeletion,
   createWebhook,
+  deleteCustomDomain,
   deleteWebhook,
   exportMe,
+  getCustomDomain,
   getMe,
   getSubscription,
   listWebhooks,
   openBillingPortal,
   patchWebhook,
   requestAccountDeletion,
+  setCustomDomain,
   startCheckout,
   testWebhook,
   updateMe,
+  verifyCustomDomain,
 } from '../../lib/api'
+import { config } from '../../lib/config'
 import { AppHeader } from '../../lib/AppHeader'
 import { clearSession, getSession } from '../../lib/auth-store'
 
@@ -248,6 +254,10 @@ export default function SettingsPage() {
       <NotificationsPanel />
 
       <IntegrationsPanel />
+
+      <CustomDomainPanel meTier={me?.tier ?? 'free'} />
+
+      <ReportsPanel />
 
       <div className="mt-6 text-xs text-falcon-500">
         {saving && 'Saving…'}
@@ -695,6 +705,279 @@ function NotificationsPanel() {
             </p>
           </div>
         </label>
+      </div>
+    </section>
+  )
+}
+
+function CustomDomainPanel({ meTier }: { meTier: string }) {
+  const [state, setState] = useState<CustomDomainState | null>(null)
+  const [hostInput, setHostInput] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+
+  const isPaid = meTier !== 'free'
+
+  async function refresh() {
+    try {
+      setState(await getCustomDomain())
+    } catch {
+      setState(null)
+    }
+  }
+  useEffect(() => {
+    if (isPaid) void refresh()
+  }, [isPaid])
+
+  async function save() {
+    if (!hostInput.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      const next = await setCustomDomain(hostInput.trim().toLowerCase())
+      setState(next)
+      setHostInput('')
+      setInfo('DNS instructions generated — set them up, then click Verify.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'save_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function verify() {
+    setBusy(true)
+    setError(null)
+    try {
+      await verifyCustomDomain()
+      await refresh()
+      setInfo('Verified! Pixel + click URLs now use your domain.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'verify_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function disconnect() {
+    if (!confirm('Disconnect custom domain? Tracking reverts to t.mailfalcon.app.')) return
+    setBusy(true)
+    try {
+      await deleteCustomDomain()
+      await refresh()
+      setInfo('Disconnected.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!isPaid) {
+    return (
+      <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+        <h2 className="text-base font-semibold text-falcon-700">
+          Custom tracking domain
+        </h2>
+        <p className="mt-2 text-sm text-falcon-500">
+          Pro + Team only — serve the tracking pixel + click redirects from
+          <code className="mx-1 rounded bg-falcon-50 px-1 py-0.5 font-mono text-xs">
+            t.acmecorp.com
+          </code>
+          instead of t.mailfalcon.app. Hides MailFalcon branding from recipients.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.assign(`${config.apiHost}`)}
+          disabled
+          className="mt-3 cursor-not-allowed rounded bg-falcon-200 px-3 py-1.5 text-xs font-semibold text-falcon-500"
+        >
+          Upgrade to enable
+        </button>
+      </section>
+    )
+  }
+
+  return (
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-falcon-700">
+        Custom tracking domain
+      </h2>
+      <p className="mt-1 text-xs text-falcon-500">
+        Serve the pixel + click redirects from your own domain. Recipients see
+        your brand instead of mailfalcon.app.
+      </p>
+
+      {!state?.host && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void save()
+          }}
+          className="mt-4 flex gap-2"
+        >
+          <input
+            type="text"
+            required
+            placeholder="t.acmecorp.com"
+            value={hostInput}
+            onChange={(e) => setHostInput(e.target.value)}
+            className="flex-1 rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-md bg-falcon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:opacity-50"
+          >
+            {busy ? 'Saving…' : 'Add domain'}
+          </button>
+        </form>
+      )}
+
+      {state?.host && (
+        <div className="mt-4 space-y-3 text-sm">
+          <p>
+            <strong>{state.host}</strong>{' '}
+            {state.verifiedAt ? (
+              <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                verified
+              </span>
+            ) : (
+              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                pending DNS
+              </span>
+            )}
+          </p>
+          {state.instructions && (
+            <div className="rounded-md bg-falcon-50 p-3 text-xs">
+              <p className="font-medium text-falcon-700">
+                1. Add these DNS records:
+              </p>
+              <pre className="mt-2 overflow-x-auto font-mono text-[11px] text-falcon-700">
+                {`CNAME ${state.instructions.cname.name}  →  ${state.instructions.cname.target}
+TXT   ${state.instructions.txt.name}  →  ${state.instructions.txt.value}`}
+              </pre>
+              <p className="mt-2 text-falcon-500">
+                Note: your domain should be proxied through Cloudflare for HTTPS
+                to work on the custom hostname.
+              </p>
+            </div>
+          )}
+          <div className="flex gap-2">
+            {!state.verifiedAt && (
+              <button
+                type="button"
+                onClick={verify}
+                disabled={busy}
+                className="rounded-md bg-falcon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:opacity-50"
+              >
+                {busy ? 'Verifying…' : 'Verify DNS'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={disconnect}
+              disabled={busy}
+              className="text-xs text-red-600 hover:text-red-800"
+            >
+              Disconnect
+            </button>
+          </div>
+        </div>
+      )}
+
+      {info && <p className="mt-3 text-xs text-emerald-700">{info}</p>}
+      {error && <p className="mt-3 text-xs text-red-700">{error}</p>}
+    </section>
+  )
+}
+
+function ReportsPanel() {
+  const today = new Date().toISOString().slice(0, 10)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000)
+    .toISOString()
+    .slice(0, 10)
+  const [from, setFrom] = useState(thirtyDaysAgo)
+  const [to, setTo] = useState(today)
+
+  function url(format: 'html' | 'csv'): string {
+    const fromTs = new Date(from).getTime()
+    const toTs = new Date(to).getTime() + 86_400_000 // include the end day
+    const qs = new URLSearchParams({
+      from: String(fromTs),
+      to: String(toTs),
+      format,
+    })
+    const token =
+      typeof window !== 'undefined' ? localStorage.getItem('mf.token') : null
+    if (token) qs.set('_token', token)
+    return `${config.apiHost}/v1/me/report?${qs.toString()}`
+  }
+
+  async function download(format: 'html' | 'csv') {
+    // Use fetch + blob so the Authorization header is honored — opening
+    // the URL directly would skip the header.
+    const res = await fetch(url(format), {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('mf.token') ?? ''}`,
+      },
+    })
+    if (!res.ok) {
+      alert(`Report failed: ${res.status}`)
+      return
+    }
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    if (format === 'html') {
+      window.open(objectUrl, '_blank')
+    } else {
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = `mailfalcon-report-${from}-${to}.csv`
+      a.click()
+    }
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+  }
+
+  return (
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-falcon-700">Reports</h2>
+      <p className="mt-1 text-xs text-falcon-500">
+        Downloadable agency-friendly reports. The HTML version uses your
+        company name + logo (set in Account) and is print-to-PDF ready.
+      </p>
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs text-falcon-500">
+          From
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="rounded-md border border-falcon-200 bg-white px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-falcon-500">
+          To
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="rounded-md border border-falcon-200 bg-white px-2 py-1.5 text-sm"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => void download('html')}
+          className="rounded-md bg-falcon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-falcon-600"
+        >
+          Open HTML report
+        </button>
+        <button
+          type="button"
+          onClick={() => void download('csv')}
+          className="rounded-md border border-falcon-300 bg-white px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50"
+        >
+          Download CSV
+        </button>
       </div>
     </section>
   )

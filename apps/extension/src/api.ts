@@ -28,6 +28,10 @@ export interface MintEmailResponse {
   id: string
   sig: string
   recipientPixels?: RecipientPixel[]
+  /** Host the pixel + click URLs should use. Defaults to the worker's
+   *  t.mailfalcon.app; pro users with a verified custom domain get
+   *  their own host returned here. */
+  trackerHost?: string
 }
 
 // Try direct chrome.storage first (popup + SW context), then fall back

@@ -30,6 +30,10 @@ export interface MintFn {
     id: string
     sig: string
     recipientPixels?: MintRecipientPixel[]
+    /** Pixel + click host returned by the server. Lets the worker swap
+     *  to a verified custom domain at mint time without the extension
+     *  needing to know about it. */
+    trackerHost?: string
   }>
 }
 
@@ -239,7 +243,7 @@ export async function prepareTrackedBody(args: {
     }
   }
 
-  const { id, sig, recipientPixels } = await mint({
+  const { id, sig, recipientPixels, trackerHost: mintedTrackerHost } = await mint({
     recipientCount,
     links: originalLinks,
     subject,
@@ -274,7 +278,10 @@ export async function prepareTrackedBody(args: {
       pixelSig: pixelSig ?? sig,
       clickSig: clickSig ?? sig,
       ...(recipientId ? { recipientId } : {}),
-      trackerHost,
+      // Prefer the host the server returned (which respects the user's
+      // verified custom domain). Falls back to the caller-supplied
+      // default when the server didn't include it.
+      trackerHost: mintedTrackerHost ?? trackerHost,
     })
     return variantBody.innerHTML
   }

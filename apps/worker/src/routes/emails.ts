@@ -106,7 +106,11 @@ emailsRouter.post('/', async (c) => {
   const db = getDb(c.env.DB)
 
   const user = await db
-    .select({ tier: users.tier })
+    .select({
+      tier: users.tier,
+      customTrackerHost: users.customTrackerHost,
+      customTrackerVerifiedAt: users.customTrackerVerifiedAt,
+    })
     .from(users)
     .where(eq(users.id, userId))
     .get()
@@ -192,10 +196,16 @@ emailsRouter.post('/', async (c) => {
     })),
   )
 
+  const trackerHost =
+    user?.customTrackerHost && user.customTrackerVerifiedAt
+      ? `https://${user.customTrackerHost}`
+      : 'https://t.mailfalcon.app'
+
   return c.json({
     id,
     sig,
     recipientPixels,
+    trackerHost,
     usage: { used: usage.used, limit: usage.limit, tier },
   })
 })

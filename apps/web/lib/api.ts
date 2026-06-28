@@ -204,6 +204,69 @@ export interface MeResponse {
   trialEndsAt: number | null
   middayDigestEnabled: boolean
   hotLeadAlertsEnabled: boolean
+  trackerHost: string
+  customTrackerHost: string | null
+  customTrackerVerifiedAt: number | null
+  companyName: string | null
+  companyLogoUrl: string | null
+}
+
+export interface CustomDomainState {
+  host: string | null
+  token: string | null
+  verifiedAt: number | null
+  instructions: {
+    cname: { name: string; target: string }
+    txt: { name: string; value: string }
+  } | null
+}
+
+export async function getCustomDomain(): Promise<CustomDomainState> {
+  const res = await fetch(`${config.apiHost}/v1/me/custom-domain`, {
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) throw new Error(`custom_domain_failed:${res.status}`)
+  return (await res.json()) as CustomDomainState
+}
+
+export async function setCustomDomain(host: string): Promise<CustomDomainState> {
+  const res = await fetch(`${config.apiHost}/v1/me/custom-domain`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ host }),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `custom_domain_set_failed:${res.status}`)
+  }
+  return (await res.json()) as CustomDomainState
+}
+
+export async function verifyCustomDomain(): Promise<{ verifiedAt: number }> {
+  const res = await fetch(`${config.apiHost}/v1/me/custom-domain/verify`, {
+    method: 'POST',
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string
+      found?: string[]
+    }
+    throw new Error(
+      body.error +
+        (body.found?.length ? ` (found: ${body.found.join(', ')})` : '') ||
+        `verify_failed:${res.status}`,
+    )
+  }
+  return (await res.json()) as { verifiedAt: number }
+}
+
+export async function deleteCustomDomain(): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/me/custom-domain`, {
+    method: 'DELETE',
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) throw new Error(`custom_domain_delete_failed:${res.status}`)
 }
 
 export interface EventWebhook {

@@ -55,6 +55,16 @@ export const users = sqliteTable('users', {
   hotLeadAlertsEnabled: integer('hot_lead_alerts_enabled').notNull().default(1),
   // Which slot of "today" we already sent — 'morning' or 'midday'.
   digestLastSentSlot: text('digest_last_sent_slot'),
+  // Pro-tier white-label tracking. If verified, pixel + click URLs go
+  // through the custom host instead of t.mailfalcon.app. The token is
+  // the value the user puts in a TXT record we verify via DNS-over-HTTPS.
+  customTrackerHost: text('custom_tracker_host'),
+  customTrackerVerifiedAt: integer('custom_tracker_verified_at'),
+  customTrackerToken: text('custom_tracker_token'),
+  // Branded PDF/HTML reports — agency-friendly. Falls back to MailFalcon
+  // brand when null.
+  companyName: text('company_name'),
+  companyLogoUrl: text('company_logo_url'),
 })
 
 export const subscriptions = sqliteTable('subscriptions', {

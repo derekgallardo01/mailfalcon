@@ -85,6 +85,10 @@ meRouter.get('/', async (c) => {
       trialEndsAt: users.trialEndsAt,
       middayDigestEnabled: users.middayDigestEnabled,
       hotLeadAlertsEnabled: users.hotLeadAlertsEnabled,
+      customTrackerHost: users.customTrackerHost,
+      customTrackerVerifiedAt: users.customTrackerVerifiedAt,
+      companyName: users.companyName,
+      companyLogoUrl: users.companyLogoUrl,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -166,6 +170,16 @@ meRouter.get('/', async (c) => {
     trialEndsAt: row.trialEndsAt,
     middayDigestEnabled: row.middayDigestEnabled === 1,
     hotLeadAlertsEnabled: row.hotLeadAlertsEnabled === 1,
+    // Tracker host the extension should bake into pixel + click URLs.
+    // Falls back to t.mailfalcon.app when no verified custom domain.
+    trackerHost:
+      row.customTrackerHost && row.customTrackerVerifiedAt
+        ? `https://${row.customTrackerHost}`
+        : 'https://t.mailfalcon.app',
+    customTrackerHost: row.customTrackerHost,
+    customTrackerVerifiedAt: row.customTrackerVerifiedAt,
+    companyName: row.companyName,
+    companyLogoUrl: row.companyLogoUrl,
   })
 })
 
@@ -220,6 +234,177 @@ meRouter.patch('/', async (c) => {
   await db.update(users).set(updates).where(eq(users.id, userId)).run()
   return c.json({ ok: true })
 })
+
+/** Branded report — HTML at /v1/me/report?from=&to= (printable to PDF
+ *  via browser), or CSV via ?format=csv. Agency-friendly. */
+meRouter.get('/report', async (c) => {
+  const userId = c.get('userId')
+  const db = getDb(c.env.DB)
+  const now = Date.now()
+  const from = Math.max(0, Number(c.req.query('from')) || now - 30 * 86_400_000)
+  const to = Math.max(from, Number(c.req.query('to')) || now)
+  const format = c.req.query('format') === 'csv' ? 'csv' : 'html'
+
+  const user = await db
+    .select({
+      email: users.email,
+      companyName: users.companyName,
+      companyLogoUrl: users.companyLogoUrl,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get()
+  if (!user) return c.json({ error: 'not_found' }, 404)
+
+  const emails = await db
+    .select({
+      id: trackedEmails.id,
+      subject: trackedEmails.subject,
+      sentAt: trackedEmails.sentAt,
+      recipientCount: trackedEmails.recipientCount,
+      opens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`,
+      humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`,
+      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
+      replies: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'reply' THEN 1 ELSE 0 END), 0)`,
+      lastEventAt: sql<number | null>`MAX(${events.ts})`,
+    })
+    .from(trackedEmails)
+    .leftJoin(events, eq(events.emailId, trackedEmails.id))
+    .where(
+      sql`${trackedEmails.userId} = ${userId} AND ${trackedEmails.sentAt} >= ${from} AND ${trackedEmails.sentAt} < ${to}`,
+    )
+    .groupBy(trackedEmails.id)
+    .orderBy(sql`${trackedEmails.sentAt} DESC`)
+    .all()
+
+  if (format === 'csv') {
+    const headers = [
+      'id',
+      'subject',
+      'sentAt',
+      'recipientCount',
+      'opens',
+      'humanOpens',
+      'clicks',
+      'replies',
+      'lastEventAt',
+    ]
+    const rows = emails.map((r) =>
+      [
+        r.id,
+        csvEscape(r.subject ?? ''),
+        new Date(r.sentAt).toISOString(),
+        r.recipientCount,
+        Number(r.opens),
+        Number(r.humanOpens),
+        Number(r.clicks),
+        Number(r.replies),
+        r.lastEventAt ? new Date(r.lastEventAt).toISOString() : '',
+      ].join(','),
+    )
+    const csv = [headers.join(','), ...rows].join('\n')
+    return new Response(csv, {
+      headers: {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="mailfalcon-report-${dateStamp(from)}-${dateStamp(to)}.csv"`,
+      },
+    })
+  }
+
+  const totals = emails.reduce(
+    (acc, r) => {
+      acc.opens += Number(r.opens)
+      acc.humanOpens += Number(r.humanOpens)
+      acc.clicks += Number(r.clicks)
+      acc.replies += Number(r.replies)
+      return acc
+    },
+    { opens: 0, humanOpens: 0, clicks: 0, replies: 0 },
+  )
+
+  const brandName = escapeHtml(user.companyName ?? 'MailFalcon')
+  const brandLogo = user.companyLogoUrl
+    ? `<img src="${escapeHtml(user.companyLogoUrl)}" alt="" style="height:32px;vertical-align:middle;margin-right:8px;">`
+    : ''
+  const periodLabel = `${dateStamp(from)} → ${dateStamp(to)}`
+
+  const rowsHtml = emails
+    .map(
+      (r) => `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${escapeHtml(r.subject ?? '(no subject)')}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-variant-numeric:tabular-nums;color:#6b7280;">${dateStamp(r.sentAt)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-variant-numeric:tabular-nums;">${r.recipientCount}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-variant-numeric:tabular-nums;color:${Number(r.humanOpens) > 0 ? '#0f1a2e' : '#9ca3af'};">${Number(r.humanOpens)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-variant-numeric:tabular-nums;color:${Number(r.clicks) > 0 ? '#0f1a2e' : '#9ca3af'};">${Number(r.clicks)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-variant-numeric:tabular-nums;color:${Number(r.replies) > 0 ? '#0f1a2e' : '#9ca3af'};">${Number(r.replies)}</td>
+        </tr>`,
+    )
+    .join('')
+
+  const html = `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><title>${brandName} report — ${periodLabel}</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color:#0f1a2e; margin:0; padding:32px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  h2 { font-size:14px; color:#3b6cb7; margin:24px 0 8px; text-transform:uppercase; letter-spacing:0.05em; }
+  .meta { color:#6b7280; font-size:12px; }
+  .cards { display:flex; gap:16px; flex-wrap:wrap; margin:24px 0; }
+  .card { flex:1; min-width:140px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; }
+  .card .label { font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#6b7280; }
+  .card .value { font-size:24px; font-weight:600; margin-top:4px; font-variant-numeric:tabular-nums; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { padding:8px 12px; text-align:left; background:#f3f4f6; border-bottom:1px solid #e5e7eb; font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#6b7280; font-weight:600; }
+  .print-hint { background:#fef3c7; border:1px solid #fde68a; padding:8px 12px; border-radius:6px; font-size:11px; color:#92400e; margin:0 0 16px; }
+  @media print { .print-hint { display:none; } body { padding:0; } }
+  .footer { margin-top:32px; padding-top:16px; border-top:1px solid #e5e7eb; font-size:10px; color:#9ca3af; text-align:center; }
+</style>
+</head><body>
+<div class="print-hint">📄 Use File → Print → Save as PDF to export this report.</div>
+<h1>${brandLogo}${brandName}</h1>
+<p class="meta">Tracked-email report · ${escapeHtml(periodLabel)} · ${escapeHtml(user.email)}</p>
+<div class="cards">
+  <div class="card"><p class="label">Emails sent</p><p class="value">${emails.length}</p></div>
+  <div class="card"><p class="label">Opens (human)</p><p class="value">${totals.humanOpens}</p></div>
+  <div class="card"><p class="label">Clicks</p><p class="value">${totals.clicks}</p></div>
+  <div class="card"><p class="label">Replies</p><p class="value">${totals.replies}</p></div>
+</div>
+<h2>Per-email breakdown</h2>
+<table>
+  <thead><tr>
+    <th>Subject</th><th>Sent</th><th style="text-align:right">To</th><th style="text-align:right">Opens</th><th style="text-align:right">Clicks</th><th style="text-align:right">Replies</th>
+  </tr></thead>
+  <tbody>${rowsHtml || '<tr><td colspan="6" style="padding:24px;text-align:center;color:#9ca3af;">No tracked emails in this period.</td></tr>'}</tbody>
+</table>
+<p class="footer">${user.companyName ? `Generated by ${escapeHtml(user.companyName)} · ` : ''}Powered by MailFalcon</p>
+</body></html>`
+
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  })
+})
+
+function csvEscape(s: string): string {
+  if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+    return '"' + s.replaceAll('"', '""') + '"'
+  }
+  return s
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function dateStamp(ts: number): string {
+  return new Date(ts).toISOString().slice(0, 10)
+}
 
 /**
  * GET /v1/me/export — returns a JSON dump of every row scoped to the
