@@ -495,6 +495,8 @@ export async function updateMe(patch: {
   quietStartMinute?: number | null
   quietEndMinute?: number | null
   quietTimezone?: string | null
+  companyName?: string | null
+  companyLogoUrl?: string | null
 }): Promise<void> {
   const res = await fetch(`${config.apiHost}/v1/me`, {
     method: 'PATCH',

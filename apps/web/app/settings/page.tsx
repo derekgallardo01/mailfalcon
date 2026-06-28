@@ -257,6 +257,8 @@ export default function SettingsPage() {
 
       <CustomDomainPanel meTier={me?.tier ?? 'free'} />
 
+      <BrandingPanel />
+
       <ReportsPanel />
 
       <div className="mt-6 text-xs text-falcon-500">
@@ -887,6 +889,106 @@ TXT   ${state.instructions.txt.name}  →  ${state.instructions.txt.value}`}
 
       {info && <p className="mt-3 text-xs text-emerald-700">{info}</p>}
       {error && <p className="mt-3 text-xs text-red-700">{error}</p>}
+    </section>
+  )
+}
+
+function BrandingPanel() {
+  const [me, setMe] = useState<MeResponse | null>(null)
+  const [name, setName] = useState('')
+  const [logo, setLogo] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    void getMe()
+      .then((m) => {
+        setMe(m)
+        setName(m.companyName ?? '')
+        setLogo(m.companyLogoUrl ?? '')
+      })
+      .catch(() => undefined)
+  }, [])
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    setSaved(false)
+    try {
+      await updateMe({
+        companyName: name.trim() || null,
+        companyLogoUrl: logo.trim() || null,
+      })
+      if (me) {
+        setMe({
+          ...me,
+          companyName: name.trim() || null,
+          companyLogoUrl: logo.trim() || null,
+        })
+      }
+      setSaved(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'save_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!me) return null
+  return (
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-falcon-700">Branding</h2>
+      <p className="mt-1 text-xs text-falcon-500">
+        Shown on HTML/PDF reports. Leave blank to fall back to the MailFalcon
+        brand.
+      </p>
+      <div className="mt-4 space-y-3 text-sm">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs uppercase tracking-wide text-falcon-500">
+            Company name
+          </span>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Acme Co."
+            maxLength={80}
+            className="rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs uppercase tracking-wide text-falcon-500">
+            Logo URL (PNG or SVG, 32px tall recommended)
+          </span>
+          <input
+            type="url"
+            value={logo}
+            onChange={(e) => setLogo(e.target.value)}
+            placeholder="https://acmecorp.com/logo.png"
+            className="rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={save}
+            disabled={busy}
+            className="rounded-md bg-falcon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:opacity-50"
+          >
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+          {saved && <span className="text-xs text-emerald-700">Saved ✓</span>}
+          {error && <span className="text-xs text-red-700">{error}</span>}
+        </div>
+        {logo && (
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-falcon-100 bg-falcon-50 p-3">
+            <span className="text-[11px] text-falcon-500">Preview:</span>
+            <img src={logo} alt="" style={{ height: 32 }} />
+            {name && <span className="text-sm font-semibold text-falcon-700">{name}</span>}
+          </div>
+        )}
+      </div>
     </section>
   )
 }

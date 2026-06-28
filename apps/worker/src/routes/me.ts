@@ -45,6 +45,10 @@ const patchSchema = z.object({
       (v) => v == null || v === '' || /^[A-Za-z]+\/[A-Za-z_/-]+$|^UTC$/.test(v),
       'invalid_tz',
     ),
+  // Branded report fields. Empty string normalizes to null so the
+  // report falls back to the MailFalcon brand.
+  companyName: z.string().max(80).nullable().optional(),
+  companyLogoUrl: z.string().url().max(500).nullable().optional(),
 })
 
 const deleteConfirmSchema = z.object({
@@ -228,6 +232,15 @@ meRouter.patch('/', async (c) => {
       parsed.data.quietTimezone && parsed.data.quietTimezone.length > 0
         ? parsed.data.quietTimezone
         : null
+  }
+  if (parsed.data.companyName !== undefined) {
+    updates.companyName =
+      parsed.data.companyName && parsed.data.companyName.trim().length > 0
+        ? parsed.data.companyName.trim()
+        : null
+  }
+  if (parsed.data.companyLogoUrl !== undefined) {
+    updates.companyLogoUrl = parsed.data.companyLogoUrl || null
   }
   if (Object.keys(updates).length === 0) return c.json({ ok: true })
 
