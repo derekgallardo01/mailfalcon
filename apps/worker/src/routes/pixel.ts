@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
-import { events, trackedEmails } from '@mailfalcon/db/schema'
+import { events, recipients, trackedEmails } from '@mailfalcon/db/schema'
 import { verify } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
 import { getClientIp } from '../lib/ip'
@@ -8,7 +8,7 @@ import { createLogger, errorMeta } from '../lib/logger'
 import { fanoutPush } from '../lib/push-fanout'
 import { rateLimit } from '../lib/rate-limit'
 import { getHmacSecret } from '../lib/secrets'
-import { extractCfGeo, hashUa, parseUa, truncateIpV4 } from '../lib/ua'
+import { extractCfGeo, hashUa, parseUa, truncateIpV4, type UaDetails } from '../lib/ua'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -43,6 +43,29 @@ const GIF_HEADERS: HeadersInit = {
 
 function gif(): Response {
   return new Response(TRANSPARENT_GIF, { headers: GIF_HEADERS })
+}
+
+export function buildLocationLabel(
+  city: string | null,
+  regionCode: string | null,
+  country: string | null,
+): string | undefined {
+  const parts: string[] = []
+  if (city) parts.push(city)
+  if (regionCode) parts.push(regionCode)
+  else if (country) parts.push(country)
+  return parts.length > 0 ? parts.join(', ') : undefined
+}
+
+export function buildDeviceLabel(ua: UaDetails): string | undefined {
+  const segs: string[] = []
+  if (ua.deviceType) {
+    const t = ua.deviceType
+    segs.push(t.charAt(0).toUpperCase() + t.slice(1))
+  }
+  if (ua.osName) segs.push(ua.osName)
+  if (ua.browserName) segs.push(ua.browserName)
+  return segs.length > 0 ? segs.join(' · ') : undefined
 }
 
 export const pixelRouter = new Hono<{ Bindings: Bindings }>()
@@ -139,11 +162,23 @@ pixelRouter.get('/:idWithExt', async (c) => {
         })
         .run()
       if (uaDetails.uaClass !== 'bot' && !isSelfOpenWindow && !muted) {
+        let recipientLabel: string | undefined
+        if (recipientId) {
+          const r = await db
+            .select({ displayLabel: recipients.displayLabel })
+            .from(recipients)
+            .where(eq(recipients.id, recipientId))
+            .get()
+          recipientLabel = r?.displayLabel ?? undefined
+        }
         await fanoutPush(db, c.env, row.userId, {
           kind: 'open',
           subject: row.subject,
           emailId: row.id,
           text: 'Tracked email opened',
+          recipientLabel,
+          location: buildLocationLabel(geo.city, geo.regionCode, country),
+          device: buildDeviceLabel(uaDetails),
         }).catch((err) =>
           createLogger({ env: c.env }).warn(
             'pixel_fanout_failed',

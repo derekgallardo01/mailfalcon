@@ -123,6 +123,7 @@ export async function evaluateHotLeads(
           kind: 'hot-lead',
           subject: `🔥 ${label} is hot`,
           text: reasonLabel,
+          recipientLabel: label,
         }
 
         try {

@@ -1,5 +1,5 @@
-import { lt } from 'drizzle-orm'
-import { notificationSubscriptions } from '@mailfalcon/db/schema'
+import { and, inArray, lt } from 'drizzle-orm'
+import { notificationSubscriptions, scheduledSends } from '@mailfalcon/db/schema'
 import type { DB } from './db'
 import { createLogger } from './logger'
 
@@ -34,6 +34,35 @@ export async function cleanupStalePushSubs(
   const deleted = result.meta.changes
   if (deleted > 0) {
     createLogger({ env }).info('cron_push_subs_cleanup', { deleted, cutoff })
+  }
+  return { deleted }
+}
+
+const OLD_SCHEDULED_MS = 90 * 86_400_000
+
+/**
+ * Drop scheduled-send rows older than 90 days where the status is a
+ * terminal-success ('fired') or terminal-explicit ('cancelled'). Failed
+ * rows stick around so users can review what broke. Without this the
+ * mirror table grows linearly with extension usage.
+ */
+export async function cleanupOldScheduledSends(
+  db: DB,
+  env: CleanupEnv,
+): Promise<{ deleted: number }> {
+  const cutoff = Date.now() - OLD_SCHEDULED_MS
+  const result = await db
+    .delete(scheduledSends)
+    .where(
+      and(
+        lt(scheduledSends.scheduledAt, cutoff),
+        inArray(scheduledSends.status, ['fired', 'cancelled']),
+      ),
+    )
+    .run()
+  const deleted = result.meta.changes
+  if (deleted > 0) {
+    createLogger({ env }).info('cron_scheduled_cleanup', { deleted, cutoff })
   }
   return { deleted }
 }

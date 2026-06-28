@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
-import { events, links, trackedEmails } from '@mailfalcon/db/schema'
+import { events, links, recipients, trackedEmails } from '@mailfalcon/db/schema'
 import { verify } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
 import { getClientIp } from '../lib/ip'
@@ -9,6 +9,7 @@ import { fanoutPush } from '../lib/push-fanout'
 import { rateLimit } from '../lib/rate-limit'
 import { getHmacSecret } from '../lib/secrets'
 import { extractCfGeo, parseUa, truncateIpV4 } from '../lib/ua'
+import { buildDeviceLabel, buildLocationLabel } from './pixel'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -121,11 +122,23 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
         })
         .run()
       if (uaDetails.uaClass !== 'bot' && !isSelfClickWindow && !muted) {
+        let recipientLabel: string | undefined
+        if (recipientId) {
+          const r = await db
+            .select({ displayLabel: recipients.displayLabel })
+            .from(recipients)
+            .where(eq(recipients.id, recipientId))
+            .get()
+          recipientLabel = r?.displayLabel ?? undefined
+        }
         await fanoutPush(db, c.env, email.userId, {
           kind: 'click',
           subject: email.subject,
           emailId: id,
           text: 'Tracked link clicked',
+          recipientLabel,
+          location: buildLocationLabel(geo.city, geo.regionCode, country),
+          device: buildDeviceLabel(uaDetails),
         }).catch((err) =>
           createLogger({ env: c.env }).warn(
             'click_fanout_failed',

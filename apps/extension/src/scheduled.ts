@@ -5,6 +5,8 @@
  * which actually fires the compose + send.
  */
 
+import { mirrorScheduledSend, removeScheduled } from './api'
+
 export interface ScheduledSend {
   id: string
   scheduledAt: number
@@ -54,6 +56,17 @@ export async function schedule(
   await chrome.alarms.create(`${ALARM_PREFIX}${record.id}`, {
     when: record.scheduledAt,
   })
+  // Server-side visibility mirror. Best-effort — local queue is the
+  // dispatcher, the server is just the dashboard view.
+  void mirrorScheduledSend({
+    id: record.id,
+    scheduledAt: record.scheduledAt,
+    to: record.to,
+    cc: record.cc,
+    bcc: record.bcc,
+    subject: record.subject,
+    bodyPreview: plaintextPreview(record.bodyHtml),
+  })
   return record
 }
 
@@ -63,6 +76,39 @@ export async function cancel(id: string): Promise<void> {
   delete all[id]
   await writeAll(all)
   await chrome.alarms.clear(`${ALARM_PREFIX}${id}`)
+  // Mirror to server as cancelled. Soft-delete on the server keeps the
+  // history row visible in the dashboard.
+  void removeScheduled(id)
+}
+
+/** Clear the local row + alarm WITHOUT touching the server status.
+ *  Use after a successful dispatch or a hard failure where we already
+ *  PATCHed the server status to fired/failed; calling cancel() would
+ *  clobber that with 'cancelled'. */
+export async function clearLocalOnly(id: string): Promise<void> {
+  const all = await readAll()
+  if (all[id]) {
+    delete all[id]
+    await writeAll(all)
+  }
+  if (typeof chrome !== 'undefined' && chrome.alarms) {
+    await chrome.alarms.clear(`${ALARM_PREFIX}${id}`).catch(() => undefined)
+  }
+}
+
+/** Strip HTML tags + collapse whitespace for the 200-char body preview
+ *  we mirror to the server. Good enough for the dashboard's "what was
+ *  this scheduled to say" column without storing the full body. */
+function plaintextPreview(html: string): string {
+  const text = html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return text.slice(0, 200)
 }
 
 export async function get(id: string): Promise<ScheduledSend | null> {

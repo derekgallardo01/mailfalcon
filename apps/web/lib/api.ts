@@ -204,6 +204,10 @@ export interface MeResponse {
   trialEndsAt: number | null
   middayDigestEnabled: boolean
   hotLeadAlertsEnabled: boolean
+  emailNotifyOpen: boolean
+  emailNotifyClick: boolean
+  emailNotifyReply: boolean
+  emailNotifyHotLead: boolean
   trackerHost: string
   customTrackerHost: string | null
   customTrackerVerifiedAt: number | null
@@ -492,6 +496,10 @@ export async function updateMe(patch: {
   digestEnabled?: boolean
   middayDigestEnabled?: boolean
   hotLeadAlertsEnabled?: boolean
+  emailNotifyOpen?: boolean
+  emailNotifyClick?: boolean
+  emailNotifyReply?: boolean
+  emailNotifyHotLead?: boolean
   quietStartMinute?: number | null
   quietEndMinute?: number | null
   quietTimezone?: string | null
@@ -505,6 +513,41 @@ export async function updateMe(patch: {
   })
   if (res.status === 401) throw new Error('unauthorized')
   if (!res.ok) throw new Error(`me_patch_failed:${res.status}`)
+}
+
+export interface ScheduledSend {
+  id: string
+  scheduledAt: number
+  to: string[]
+  cc: string[]
+  bcc: string[]
+  subject: string
+  bodyPreview: string | null
+  status: 'queued' | 'fired' | 'failed' | 'cancelled' | 'snoozed'
+  firedAt: number | null
+  firedEmailId: string | null
+  failureReason: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export async function listScheduledSends(): Promise<ScheduledSend[]> {
+  const res = await fetch(`${config.apiHost}/v1/scheduled`, {
+    headers: { ...authHeader() },
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`scheduled_list_failed:${res.status}`)
+  const data = (await res.json()) as { scheduled: ScheduledSend[] }
+  return data.scheduled
+}
+
+export async function cancelScheduledSend(id: string): Promise<void> {
+  const res = await fetch(
+    `${config.apiHost}/v1/scheduled/${encodeURIComponent(id)}`,
+    { method: 'DELETE', headers: { ...authHeader() } },
+  )
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`scheduled_cancel_failed:${res.status}`)
 }
 
 /** Triggers a JSON download of every row scoped to the current user. */

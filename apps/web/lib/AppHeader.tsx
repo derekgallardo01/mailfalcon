@@ -158,6 +158,7 @@ export function AppHeader({ liveCount = 0 }: Props) {
 
       <nav className="flex flex-wrap items-center gap-1">
         {navLink('/dashboard', 'Dashboard')}
+        {navLink('/dashboard/scheduled', 'Scheduled')}
         {navLink('/dashboard/contacts', 'Contacts')}
         {navLink('/templates', 'Templates')}
         {navLink('/settings', 'Settings')}

@@ -34,6 +34,10 @@ const patchSchema = z.object({
   digestEnabled: z.boolean().optional(),
   middayDigestEnabled: z.boolean().optional(),
   hotLeadAlertsEnabled: z.boolean().optional(),
+  emailNotifyOpen: z.boolean().optional(),
+  emailNotifyClick: z.boolean().optional(),
+  emailNotifyReply: z.boolean().optional(),
+  emailNotifyHotLead: z.boolean().optional(),
   quietStartMinute: z.number().int().min(0).max(1439).nullable().optional(),
   quietEndMinute: z.number().int().min(0).max(1439).nullable().optional(),
   quietTimezone: z
@@ -89,6 +93,10 @@ meRouter.get('/', async (c) => {
       trialEndsAt: users.trialEndsAt,
       middayDigestEnabled: users.middayDigestEnabled,
       hotLeadAlertsEnabled: users.hotLeadAlertsEnabled,
+      emailNotifyOpen: users.emailNotifyOpen,
+      emailNotifyClick: users.emailNotifyClick,
+      emailNotifyReply: users.emailNotifyReply,
+      emailNotifyHotLead: users.emailNotifyHotLead,
       customTrackerHost: users.customTrackerHost,
       customTrackerVerifiedAt: users.customTrackerVerifiedAt,
       companyName: users.companyName,
@@ -174,6 +182,10 @@ meRouter.get('/', async (c) => {
     trialEndsAt: row.trialEndsAt,
     middayDigestEnabled: row.middayDigestEnabled === 1,
     hotLeadAlertsEnabled: row.hotLeadAlertsEnabled === 1,
+    emailNotifyOpen: row.emailNotifyOpen === 1,
+    emailNotifyClick: row.emailNotifyClick === 1,
+    emailNotifyReply: row.emailNotifyReply === 1,
+    emailNotifyHotLead: row.emailNotifyHotLead === 1,
     // Tracker host the extension should bake into pixel + click URLs.
     // Falls back to t.mailfalcon.app when no verified custom domain.
     trackerHost:
@@ -220,6 +232,18 @@ meRouter.patch('/', async (c) => {
   }
   if (parsed.data.hotLeadAlertsEnabled !== undefined) {
     updates.hotLeadAlertsEnabled = parsed.data.hotLeadAlertsEnabled ? 1 : 0
+  }
+  if (parsed.data.emailNotifyOpen !== undefined) {
+    updates.emailNotifyOpen = parsed.data.emailNotifyOpen ? 1 : 0
+  }
+  if (parsed.data.emailNotifyClick !== undefined) {
+    updates.emailNotifyClick = parsed.data.emailNotifyClick ? 1 : 0
+  }
+  if (parsed.data.emailNotifyReply !== undefined) {
+    updates.emailNotifyReply = parsed.data.emailNotifyReply ? 1 : 0
+  }
+  if (parsed.data.emailNotifyHotLead !== undefined) {
+    updates.emailNotifyHotLead = parsed.data.emailNotifyHotLead ? 1 : 0
   }
   if (parsed.data.quietStartMinute !== undefined) {
     updates.quietStartMinute = parsed.data.quietStartMinute

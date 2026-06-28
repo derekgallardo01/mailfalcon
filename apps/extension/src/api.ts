@@ -367,3 +367,60 @@ export async function clearTemplatesCache(): Promise<void> {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return
   await chrome.storage.local.remove(TEMPLATES_CACHE_KEY).catch(() => undefined)
 }
+
+/**
+ * Mirror a freshly-scheduled send to the server. The actual dispatch
+ * still happens locally via chrome.alarms — this is the visibility
+ * layer so the user can see queued + past sends on the dashboard.
+ * Fire-and-forget: if it fails (offline / 5xx), the local queue still
+ * works correctly, the dashboard just won't show this row.
+ */
+export async function mirrorScheduledSend(args: {
+  id: string
+  scheduledAt: number
+  to: string[]
+  cc: string[]
+  bcc: string[]
+  subject: string
+  bodyPreview?: string
+}): Promise<void> {
+  const session = await loadSession()
+  if (!session) return
+  await fetch(`${config.apiHost}/v1/scheduled`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.token}`,
+    },
+    body: JSON.stringify(args),
+  }).catch(() => undefined)
+}
+
+export async function updateScheduledStatus(
+  id: string,
+  patch: {
+    status?: 'queued' | 'fired' | 'failed' | 'cancelled' | 'snoozed'
+    firedEmailId?: string | null
+    failureReason?: string | null
+  },
+): Promise<void> {
+  const session = await loadSession()
+  if (!session) return
+  await fetch(`${config.apiHost}/v1/scheduled/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.token}`,
+    },
+    body: JSON.stringify(patch),
+  }).catch(() => undefined)
+}
+
+export async function removeScheduled(id: string): Promise<void> {
+  const session = await loadSession()
+  if (!session) return
+  await fetch(`${config.apiHost}/v1/scheduled/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${session.token}` },
+  }).catch(() => undefined)
+}

@@ -652,13 +652,21 @@ function SubscriptionPanel() {
   )
 }
 
+type NotifyToggleField =
+  | 'middayDigestEnabled'
+  | 'hotLeadAlertsEnabled'
+  | 'emailNotifyOpen'
+  | 'emailNotifyClick'
+  | 'emailNotifyReply'
+  | 'emailNotifyHotLead'
+
 function NotificationsPanel() {
   const [me, setMe] = useState<MeResponse | null>(null)
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     void getMe().then(setMe).catch(() => undefined)
   }, [])
-  async function toggle(field: 'middayDigestEnabled' | 'hotLeadAlertsEnabled') {
+  async function toggle(field: NotifyToggleField) {
     if (!me) return
     const next = !me[field]
     setBusy(true)
@@ -707,6 +715,55 @@ function NotificationsPanel() {
             </p>
           </div>
         </label>
+      </div>
+
+      <div className="mt-6 border-t border-falcon-100 pt-4">
+        <h3 className="text-sm font-semibold text-falcon-700">Email me when…</h3>
+        <p className="mt-1 text-[11px] text-falcon-500">
+          Real-time emails to <span className="font-mono">{me.email}</span> on each event.
+          Pro &amp; team only. Quiet hours suppress everything in this section too.
+        </p>
+        <div className="mt-3 space-y-2 text-sm">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={me.emailNotifyOpen}
+              disabled={busy}
+              onChange={() => toggle('emailNotifyOpen')}
+            />
+            <span className="text-falcon-700">A recipient opens a tracked email</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={me.emailNotifyClick}
+              disabled={busy}
+              onChange={() => toggle('emailNotifyClick')}
+            />
+            <span className="text-falcon-700">A recipient clicks a link</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={me.emailNotifyReply}
+              disabled={busy}
+              onChange={() => toggle('emailNotifyReply')}
+            />
+            <span className="text-falcon-700">A recipient replies</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={me.emailNotifyHotLead}
+              disabled={busy}
+              onChange={() => toggle('emailNotifyHotLead')}
+            />
+            <span className="text-falcon-700">A contact becomes a hot lead</span>
+          </label>
+        </div>
+        <p className="mt-3 text-[11px] italic text-falcon-500">
+          Capped at 20 emails per hour per event type to keep your inbox quiet.
+        </p>
       </div>
     </section>
   )

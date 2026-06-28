@@ -1,4 +1,4 @@
-import { muteEmail, pingExtension } from '../src/api'
+import { muteEmail, pingExtension, updateScheduledStatus } from '../src/api'
 import { ensureInstallId, getSession } from '../src/auth-store'
 import { bumpBadge, clearBadge, initBadge } from '../src/badge'
 import { config } from '../src/config'
@@ -6,6 +6,7 @@ import { dropPushSubscription, ensurePushSubscription } from '../src/push-client
 import {
   alarmNameToId,
   cancel as cancelScheduled,
+  clearLocalOnly as clearScheduledLocalOnly,
   get as getScheduled,
 } from '../src/scheduled'
 import { StreamClient, type StreamEvent } from '../src/stream-client'
@@ -415,29 +416,50 @@ export default defineBackground(() => {
       if (!record) return
       const tabs = await chrome.tabs.query({ url: 'https://mail.google.com/*' })
       let dispatched = false
+      let lastError: string | null = null
       for (const tab of tabs) {
         if (!tab.id) continue
         try {
           const res = (await chrome.tabs.sendMessage(tab.id, {
             type: 'fire-scheduled-send',
             record,
-          })) as { ok?: boolean } | undefined
+          })) as { ok?: boolean; error?: string } | undefined
           if (res?.ok) {
             dispatched = true
             break
           }
+          if (res?.error) lastError = res.error
         } catch {
           // Content script not ready on this tab; try the next one.
         }
       }
       if (dispatched) {
-        await cancelScheduled(id)
-      } else {
+        // Local-only clear so the server-side DELETE doesn't fire and
+        // overwrite our 'fired' status with 'cancelled'.
+        await clearScheduledLocalOnly(id)
+        void updateScheduledStatus(id, { status: 'fired' })
+      } else if (tabs.length === 0) {
+        // No Gmail tab open at all — snooze; report once.
         console.warn(
           '[mailfalcon] scheduled send had no live Gmail tab; snoozing 1h',
           { id },
         )
+        void updateScheduledStatus(id, { status: 'snoozed' })
         await chrome.alarms.create(alarm.name, { delayInMinutes: 60 })
+      } else {
+        // Tabs were present but every dispatch threw — likely Gmail SDK
+        // hiccup. Mark failed so the user sees it on the dashboard.
+        console.warn('[mailfalcon] scheduled send dispatch failed', {
+          id,
+          lastError,
+        })
+        void updateScheduledStatus(id, {
+          status: 'failed',
+          failureReason: lastError ?? 'dispatch_failed',
+        })
+        // Local-only clear — failed shouldn't loop, and we don't want
+        // to overwrite the 'failed' server status with 'cancelled'.
+        await clearScheduledLocalOnly(id)
       }
     })()
   })

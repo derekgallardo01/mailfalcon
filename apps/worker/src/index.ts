@@ -17,6 +17,7 @@ import { oauthRouter } from './routes/oauth'
 import { pixelRouter } from './routes/pixel'
 import { pushRouter } from './routes/push'
 import { repliesRouter } from './routes/replies'
+import { scheduledRouter } from './routes/scheduled'
 import { streamRouter } from './routes/stream'
 import { stripeWebhookRouter } from './routes/stripe-webhook'
 import { customDomainRouter } from './routes/custom-domain'
@@ -140,6 +141,7 @@ app.route('/v1/events', eventsRouter)
 app.route('/v1/templates', templatesRouter)
 app.route('/v1/followups', followupsRouter)
 app.route('/v1/replies', repliesRouter)
+app.route('/v1/scheduled', scheduledRouter)
 app.route('/v1/push', pushRouter)
 app.route('/v1/billing', billingRouter)
 app.route('/v1/oauth', oauthRouter)
@@ -179,7 +181,7 @@ app.onError((err, c) => {
 
 import { sendActivationEmails } from './lib/activation-emails'
 import { sendAdminDigests } from './lib/admin-digest'
-import { cleanupStalePushSubs } from './lib/cron-cleanup'
+import { cleanupOldScheduledSends, cleanupStalePushSubs } from './lib/cron-cleanup'
 import { sendDailyDigests } from './lib/digest'
 import { evaluateFollowups } from './lib/followups'
 import { evaluateHotLeads } from './lib/hot-leads'
@@ -276,6 +278,12 @@ export default {
           log.info('cron_push_cleanup', { cron: event.cron, ...cleanup })
         } catch (err) {
           log.error('cron_push_cleanup_failed', errorMeta(err))
+        }
+        try {
+          const cleanup = await cleanupOldScheduledSends(db, env)
+          log.info('cron_scheduled_cleanup', { cron: event.cron, ...cleanup })
+        } catch (err) {
+          log.error('cron_scheduled_cleanup_failed', errorMeta(err))
         }
       })(),
     )

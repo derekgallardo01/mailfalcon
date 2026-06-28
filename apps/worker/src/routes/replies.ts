@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { and, eq } from 'drizzle-orm'
-import { events, trackedEmails } from '@mailfalcon/db/schema'
+import { events, recipients, trackedEmails } from '@mailfalcon/db/schema'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
 import { getClientIp } from '../lib/ip'
@@ -114,12 +114,25 @@ repliesRouter.post('/', async (c) => {
   )
 
   if (!muted) {
+    // Best-effort recipient label — replies don't tell us *which*
+    // recipient replied (gmailMessageId is the reply, not the original
+    // recipient). Pull the first recipient's displayLabel; if multiple,
+    // append "+N". Mostly cosmetic in the email-to-self subject.
+    const recs = await db
+      .select({ displayLabel: recipients.displayLabel })
+      .from(recipients)
+      .where(eq(recipients.emailId, target.id))
+      .all()
+    const first = recs.find((r) => r.displayLabel != null)?.displayLabel ?? null
+    const more = recs.length > 1 ? ` +${recs.length - 1}` : ''
+    const recipientLabel = first ? `${first}${more}` : undefined
     c.executionCtx.waitUntil(
       fanoutPush(db, c.env, target.userId, {
         kind: 'reply',
         subject: target.subject,
         emailId: target.id,
         text: 'New reply in tracked thread',
+        recipientLabel,
       }).catch((err) =>
         createLogger({ env: c.env }).warn('reply_fanout_failed', errorMeta(err)),
       ),

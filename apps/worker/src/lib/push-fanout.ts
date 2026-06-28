@@ -3,9 +3,12 @@ import {
   eventWebhooks,
   notificationSubscriptions,
   users,
+  workspaceMembers,
+  workspaces,
 } from '@mailfalcon/db/schema'
 import type { DB } from './db'
 import { createLogger, errorMeta } from './logger'
+import { sendEventNotification, type EventNotificationKind } from './mailer'
 import { isInQuietHours } from './quiet-hours'
 import { sendPushEmpty } from './web-push'
 
@@ -16,6 +19,9 @@ interface PushEnv {
   VAPID_SUBJECT?: string
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
+  RESEND_API_KEY?: string
+  PUBLIC_WEB_URL?: string
+  KV?: KVNamespace
 }
 
 export type PushKind = 'open' | 'click' | 'reply' | 'hot-lead'
@@ -32,6 +38,13 @@ export interface PushPayload {
   subject?: string | null
   /** Used by the webhook formatter to deep-link back to the dashboard. */
   emailId?: string
+  /** Human label for the event source (recipient email or contact
+   *  name). Surfaces in webhook + email-to-self bodies. */
+  recipientLabel?: string
+  /** Optional geo string for email-to-self ("Miami, FL"). */
+  location?: string
+  /** Optional device/UA string for email-to-self ("Mobile · Safari"). */
+  device?: string
 }
 
 /**
@@ -45,20 +58,35 @@ export async function fanoutPush(
   env: PushEnv,
   userId: string,
   payload: PushPayload = { kind: 'open' },
-): Promise<{ sent: number; pruned: number; webhookFired: number; suppressed?: 'quiet_hours' }> {
+): Promise<{
+  sent: number
+  pruned: number
+  webhookFired: number
+  emailNotified: number
+  suppressed?: 'quiet_hours'
+}> {
   // Quiet hours: a single users-row read, then short-circuit if inside
   // the window. Saves the subs query + every push round-trip.
+  // Also pulls the email-to-self gating: tier (Pro+ only), per-event
+  // flags, and the user's own email + workspace tier for inheritance.
   const user = await db
     .select({
+      email: users.email,
+      tier: users.tier,
+      trialEndsAt: users.trialEndsAt,
       quietStartMinute: users.quietStartMinute,
       quietEndMinute: users.quietEndMinute,
       quietTimezone: users.quietTimezone,
+      emailNotifyOpen: users.emailNotifyOpen,
+      emailNotifyClick: users.emailNotifyClick,
+      emailNotifyReply: users.emailNotifyReply,
+      emailNotifyHotLead: users.emailNotifyHotLead,
     })
     .from(users)
     .where(eq(users.id, userId))
     .get()
   if (user && isInQuietHours(user)) {
-    return { sent: 0, pruned: 0, webhookFired: 0, suppressed: 'quiet_hours' }
+    return { sent: 0, pruned: 0, webhookFired: 0, emailNotified: 0, suppressed: 'quiet_hours' }
   }
 
   const subs = await db
@@ -146,7 +174,131 @@ export async function fanoutPush(
     )
   }
 
-  return { sent, pruned, webhookFired }
+  // Email-to-self fan-out. Gated by:
+  //   - per-event-type flag on users (default off for open/click, on for
+  //     reply/hot-lead — see migration 0014).
+  //   - effective tier ≥ pro (trial counts as pro). Free users don't get
+  //     the channel; would otherwise be an open Resend-bill vector.
+  //   - per-(user, kind) KV rate limit: 20/hour, fail-open on KV write
+  //     errors so we never silently drop on KV blips.
+  let emailNotified = 0
+  if (
+    user &&
+    env.RESEND_API_KEY &&
+    emailNotifyEnabled(user, payload.kind)
+  ) {
+    const tierOk = await hasEffectiveProTier(db, user, userId)
+    if (tierOk) {
+      const allowed = await rateLimitEmailNotify(env, userId, payload.kind)
+      if (allowed) {
+        try {
+          await sendEventNotification({
+            to: user.email,
+            kind: payload.kind as EventNotificationKind,
+            subject: payload.subject ?? null,
+            recipientLabel: payload.recipientLabel,
+            location: payload.location,
+            device: payload.device,
+            emailId: payload.emailId,
+            webUrl: env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app',
+            env,
+          })
+          emailNotified++
+        } catch (err) {
+          createLogger({ env }).warn('email_notify_send_failed', errorMeta(err))
+        }
+      } else {
+        createLogger({ env }).info('email_notify_throttled', {
+          userId,
+          kind: payload.kind,
+        })
+      }
+    }
+  }
+
+  return { sent, pruned, webhookFired, emailNotified }
+}
+
+/** Per-event-type flag check for email-to-self. */
+function emailNotifyEnabled(
+  user: {
+    emailNotifyOpen: number
+    emailNotifyClick: number
+    emailNotifyReply: number
+    emailNotifyHotLead: number
+  },
+  kind: PushKind,
+): boolean {
+  switch (kind) {
+    case 'open':
+      return user.emailNotifyOpen === 1
+    case 'click':
+      return user.emailNotifyClick === 1
+    case 'reply':
+      return user.emailNotifyReply === 1
+    case 'hot-lead':
+      return user.emailNotifyHotLead === 1
+  }
+}
+
+const TIER_RANK: Record<string, number> = {
+  admin: 4,
+  team: 3,
+  pro: 2,
+  free: 1,
+}
+
+/** Effective tier: own tier OR strongest workspace-owner tier OR pro if
+ *  the trial is active. Mirrors /v1/me's tier-inheritance + trial-layer
+ *  logic. Returns true when the resulting tier is pro or better.
+ *
+ *  Tier inheritance walks every workspace the user is a member of —
+ *  fanout fires outside the request lifecycle so we don't have an
+ *  "active workspace" hint to lean on. */
+async function hasEffectiveProTier(
+  db: DB,
+  user: { tier: string; trialEndsAt: number | null },
+  userId: string,
+): Promise<boolean> {
+  const ownRank = TIER_RANK[user.tier] ?? 0
+  if (ownRank >= TIER_RANK.pro!) return true
+  if (user.trialEndsAt != null && user.trialEndsAt > Date.now()) return true
+
+  const ownerTiers = await db
+    .select({ tier: users.tier })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .innerJoin(users, eq(users.id, workspaces.ownerId))
+    .where(eq(workspaceMembers.userId, userId))
+    .all()
+  for (const row of ownerTiers) {
+    const r = TIER_RANK[row.tier] ?? 0
+    if (r >= TIER_RANK.pro!) return true
+  }
+  return false
+}
+
+/** KV-backed rate limit: 20 sends per (user, kind) per rolling hour
+ *  bucket. The bucket key includes a floor(now/3600000) hour token so
+ *  it auto-rolls without explicit TTL bookkeeping. Fail-open on any KV
+ *  error — we'd rather over-send than silently drop. */
+async function rateLimitEmailNotify(
+  env: PushEnv,
+  userId: string,
+  kind: PushKind,
+): Promise<boolean> {
+  if (!env.KV) return true
+  const hourBucket = Math.floor(Date.now() / 3_600_000)
+  const key = `email-notify:${userId}:${kind}:${hourBucket}`
+  try {
+    const cur = await env.KV.get(key)
+    const n = cur ? parseInt(cur, 10) : 0
+    if (Number.isFinite(n) && n >= 20) return false
+    await env.KV.put(key, String(n + 1), { expirationTtl: 3600 })
+    return true
+  } catch {
+    return true
+  }
 }
 
 /** Per-event-type gating expressions. Returning a drizzle SQL

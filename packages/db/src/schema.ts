@@ -65,6 +65,14 @@ export const users = sqliteTable('users', {
   // brand when null.
   companyName: text('company_name'),
   companyLogoUrl: text('company_logo_url'),
+  // Per-event-type email-to-self toggles. Opens + clicks default off
+  // (they can be noisy); replies + hot leads default on since they're
+  // rare + high-signal. Capped at 20/hour/kind via KV throttle in
+  // push-fanout so a single recipient opening 50 times doesn't flood.
+  emailNotifyOpen: integer('email_notify_open').notNull().default(0),
+  emailNotifyClick: integer('email_notify_click').notNull().default(0),
+  emailNotifyReply: integer('email_notify_reply').notNull().default(1),
+  emailNotifyHotLead: integer('email_notify_hot_lead').notNull().default(1),
 })
 
 export const subscriptions = sqliteTable('subscriptions', {
@@ -261,6 +269,48 @@ export const eventWebhooks = sqliteTable(
   },
   (table) => ({
     userIdx: index('event_webhooks_user_idx').on(table.userId),
+  }),
+)
+
+/** Mirror of the extension's chrome.alarms-driven scheduled-send queue.
+ *  The extension is still the source of truth for *dispatching* the
+ *  send (it needs a live Gmail tab); this table is the visibility layer
+ *  + post-fire history. The id is the same `sch_xxx` the extension
+ *  generates client-side, so writes are idempotent on retry. */
+export const scheduledSends = sqliteTable(
+  'scheduled_sends',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    scheduledAt: integer('scheduled_at').notNull(),
+    // JSON arrays of strings. Stored verbatim so the dashboard can show
+    // each recipient address; the extension already truncated to a
+    // reasonable max.
+    toAddresses: text('to_addresses').notNull(),
+    ccAddresses: text('cc_addresses').notNull().default('[]'),
+    bccAddresses: text('bcc_addresses').notNull().default('[]'),
+    subject: text('subject').notNull(),
+    // First 200 chars of plaintext body, stored for visibility only.
+    // Disclosed in privacy policy.
+    bodyPreview: text('body_preview'),
+    status: text('status', {
+      enum: ['queued', 'fired', 'failed', 'cancelled', 'snoozed'],
+    }).notNull(),
+    firedAt: integer('fired_at'),
+    /** FK to tracked_emails once the send dispatches. Lets the
+     *  dashboard deep-link to the tracked-email detail page. */
+    firedEmailId: text('fired_email_id'),
+    failureReason: text('failure_reason'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => ({
+    userIdx: index('scheduled_sends_user_idx').on(
+      table.userId,
+      table.scheduledAt,
+    ),
   }),
 )
 
