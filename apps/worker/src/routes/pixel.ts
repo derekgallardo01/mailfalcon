@@ -130,6 +130,18 @@ pixelRouter.get('/:idWithExt', async (c) => {
   const isSelfOpenWindow = Date.now() - row.sentAt < SELF_OPEN_GUARD_MS
   const muted = row.notificationsMuted === 1
 
+  // The pixel img is embedded in the compose body via setBodyHTML for
+  // Gmail-native scheduled sends. Gmail's compose iframe + Sent-folder
+  // preview both fetch the image directly from the sender's own
+  // browser, sending a `mail.google.com` Referer. Recipients viewing
+  // the delivered mail proxy through googleimageproxy (bot-filtered)
+  // and don't send this referer. Treat any mail.google.com referer as
+  // a sender-context render and suppress the notification.
+  const referer = c.req.header('Referer') ?? c.req.header('Referrer') ?? ''
+  const isSenderContextRender =
+    referer.startsWith('https://mail.google.com') ||
+    referer.startsWith('http://mail.google.com')
+
   const ua = c.req.header('User-Agent') ?? ''
   const uaDetails = parseUa(ua)
   const ipFull = c.req.header('CF-Connecting-IP') ?? null
@@ -186,7 +198,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
       // no legit browser omits User-Agent.
       const humanLike =
         uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
-      if (humanLike && !isSelfOpenWindow && !muted) {
+      if (humanLike && !isSelfOpenWindow && !muted && !isSenderContextRender) {
         let recipientLabel: string | undefined
         // Self-open guard for CC-to-self / to-self sends: if the recipient
         // whose pixel URL was signed matches the sender's own address,
