@@ -68,7 +68,13 @@ eventsRouter.get('/recent', async (c) => {
       .from(events)
       .innerJoin(trackedEmails, eq(events.emailId, trackedEmails.id))
       .leftJoin(recipients, eq(recipients.id, events.recipientId))
-      .where(and(eq(trackedEmails.userId, userId), gt(events.ts, since)))
+      .where(
+        and(
+          eq(trackedEmails.userId, userId),
+          gt(events.ts, since),
+          eq(events.notificationSuppressed, 0),
+        ),
+      )
       .orderBy(desc(events.ts))
       .limit(20)
       .all(),

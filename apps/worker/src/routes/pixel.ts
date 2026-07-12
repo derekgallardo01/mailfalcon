@@ -170,6 +170,58 @@ pixelRouter.get('/:idWithExt', async (c) => {
 
   c.executionCtx.waitUntil(
     (async () => {
+      // Notification gate: 'bot' + 'unknown' UAs suppress. Real
+      // browsers always send a UA — omission is a scanner signal.
+      const humanLike =
+        uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
+
+      // Sender-IP guard. Some Gmail configs send Referrer-Policy:
+      // no-referrer, stripping the referer that isSenderGmailContext
+      // relied on. Fall back to comparing pixel-fetch IP against the
+      // sender's mint-time IP stashed in KV by the mint handler.
+      let isSenderIpFetch = false
+      try {
+        const mintIp = await c.env.KV.get(`mint-ip:${row.id}`)
+        if (mintIp && ipFull && mintIp === ipFull) isSenderIpFetch = true
+      } catch {
+        /* fail-open: notification still fires if KV blips */
+      }
+
+      // Self-recipient guard: sender opening their own to-self / cc-self
+      // copy. Compare sender's SHA-256 to the recipient row's hashedAddr.
+      let recipientLabel: string | null = null
+      let isSelfRecipientOpen = false
+      if (recipientId) {
+        const [rec, sender] = await Promise.all([
+          db
+            .select({
+              displayLabel: recipients.displayLabel,
+              hashedAddr: recipients.hashedAddr,
+            })
+            .from(recipients)
+            .where(eq(recipients.id, recipientId))
+            .get(),
+          db
+            .select({ email: users.email })
+            .from(users)
+            .where(eq(users.id, row.userId))
+            .get(),
+        ])
+        recipientLabel = rec?.displayLabel ?? null
+        if (rec?.hashedAddr && sender?.email) {
+          const senderHash = await sha256HexLower(sender.email)
+          isSelfRecipientOpen = rec.hashedAddr === senderHash
+        }
+      }
+
+      const notificationSuppressed =
+        !humanLike ||
+        isSelfOpenWindow ||
+        muted ||
+        isSenderGmailContext ||
+        isSenderIpFetch ||
+        isSelfRecipientOpen
+
       await db
         .insert(events)
         .values({
@@ -197,91 +249,36 @@ pixelRouter.get('/:idWithExt', async (c) => {
           deviceVendor: uaDetails.deviceVendor,
           deviceModel: uaDetails.deviceModel,
           isFirstOpen,
+          notificationSuppressed: notificationSuppressed ? 1 : 0,
         })
         .run()
-      // Notification gate: 'bot' AND 'unknown' UAs both suppressed.
-      // 'unknown' means no UA header at all — a classic scanner signal;
-      // no legit browser omits User-Agent.
-      const humanLike =
-        uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
-      // Sender-IP guard. Some Gmail configs strip the Referer header
-      // entirely (Referrer-Policy: no-referrer), which defeats the
-      // referer check above. Fall back to comparing the fetching IP
-      // against the sender's mint-time IP (stashed in KV by the mint
-      // handler). A match means the sender's own network — could be
-      // compose iframe, sent-folder preview, or the sender clicking
-      // their own copy from the same NAT.
-      let isSenderIpFetch = false
-      try {
-        const mintIp = await c.env.KV.get(`mint-ip:${row.id}`)
-        if (mintIp && ipFull && mintIp === ipFull) isSenderIpFetch = true
-      } catch {
-        /* fail-open: notification still fires if KV blips */
-      }
-      if (isSelfOpenWindow || muted || isSenderGmailContext || isSenderIpFetch) {
+
+      if (notificationSuppressed) {
         createLogger({ env: c.env }).info('pixel_notification_suppressed', {
           emailId: row.id,
+          uaClass: uaDetails.uaClass,
+          humanLike,
           isSelfOpenWindow,
           muted,
           isSenderGmailContext,
           isSenderIpFetch,
-          uaClass: uaDetails.uaClass,
+          isSelfRecipientOpen,
           referer: referer.slice(0, 60),
         })
+        return
       }
-      if (humanLike && !isSelfOpenWindow && !muted && !isSenderGmailContext && !isSenderIpFetch) {
-        let recipientLabel: string | undefined
-        // Self-open guard for CC-to-self / to-self sends: if the recipient
-        // whose pixel URL was signed matches the sender's own address,
-        // the "open" is almost certainly Gmail rendering the sender's
-        // own inbox copy (preview pane, offline sync, Sent-folder auto-
-        // render). Suppress the notification but still count the event
-        // on the dashboard.
-        let isSelfRecipientOpen = false
-        if (recipientId) {
-          const [rec, sender] = await Promise.all([
-            db
-              .select({
-                displayLabel: recipients.displayLabel,
-                hashedAddr: recipients.hashedAddr,
-              })
-              .from(recipients)
-              .where(eq(recipients.id, recipientId))
-              .get(),
-            db
-              .select({ email: users.email })
-              .from(users)
-              .where(eq(users.id, row.userId))
-              .get(),
-          ])
-          recipientLabel = rec?.displayLabel ?? undefined
-          if (rec?.hashedAddr && sender?.email) {
-            const senderHash = await sha256HexLower(sender.email)
-            isSelfRecipientOpen = rec.hashedAddr === senderHash
-          }
-        }
-        if (isSelfRecipientOpen) {
-          createLogger({ env: c.env }).info('pixel_self_open_suppressed', {
-            emailId: row.id,
-            recipientId,
-          })
-          return
-        }
-        await fanoutPush(db, c.env, row.userId, {
-          kind: 'open',
-          subject: row.subject,
-          emailId: row.id,
-          text: 'Tracked email opened',
-          recipientLabel,
-          location: buildLocationLabel(geo.city, geo.regionCode, country),
-          device: buildDeviceLabel(uaDetails),
-        }).catch((err) =>
-          createLogger({ env: c.env }).warn(
-            'pixel_fanout_failed',
-            errorMeta(err),
-          ),
-        )
-      }
+
+      await fanoutPush(db, c.env, row.userId, {
+        kind: 'open',
+        subject: row.subject,
+        emailId: row.id,
+        text: 'Tracked email opened',
+        recipientLabel: recipientLabel ?? undefined,
+        location: buildLocationLabel(geo.city, geo.regionCode, country),
+        device: buildDeviceLabel(uaDetails),
+      }).catch((err) =>
+        createLogger({ env: c.env }).warn('pixel_fanout_failed', errorMeta(err)),
+      )
     })(),
   )
 

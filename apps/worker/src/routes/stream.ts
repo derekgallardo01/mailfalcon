@@ -113,6 +113,7 @@ streamRouter.get('/', async (c) => {
               and(
                 eq(trackedEmails.userId, userIdResolved),
                 gt(events.ts, lastSeenTs),
+                eq(events.notificationSuppressed, 0),
               ),
             )
             .orderBy(asc(events.ts))

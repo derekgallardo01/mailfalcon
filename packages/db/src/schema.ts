@@ -166,6 +166,12 @@ export const events = sqliteTable(
     deviceVendor: text('device_vendor'),
     deviceModel: text('device_model'),
     isFirstOpen: integer('is_first_open').notNull().default(0),
+    // 1 = event is real (bot fetch, sender-context render, self-recipient
+    // preview, muted email) but should NOT trigger any notification
+    // channel (Web Push, chrome.notifications via SSE, email-to-self,
+    // webhooks). Dashboard totals still count these; only the notify
+    // pipeline filters them out.
+    notificationSuppressed: integer('notification_suppressed').notNull().default(0),
   },
   (table) => ({
     emailTsIdx: index('events_email_ts_idx').on(table.emailId, table.ts),
