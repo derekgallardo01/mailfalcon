@@ -204,7 +204,32 @@ pixelRouter.get('/:idWithExt', async (c) => {
       // no legit browser omits User-Agent.
       const humanLike =
         uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
-      if (humanLike && !isSelfOpenWindow && !muted && !isSenderGmailContext) {
+      // Sender-IP guard. Some Gmail configs strip the Referer header
+      // entirely (Referrer-Policy: no-referrer), which defeats the
+      // referer check above. Fall back to comparing the fetching IP
+      // against the sender's mint-time IP (stashed in KV by the mint
+      // handler). A match means the sender's own network — could be
+      // compose iframe, sent-folder preview, or the sender clicking
+      // their own copy from the same NAT.
+      let isSenderIpFetch = false
+      try {
+        const mintIp = await c.env.KV.get(`mint-ip:${row.id}`)
+        if (mintIp && ipFull && mintIp === ipFull) isSenderIpFetch = true
+      } catch {
+        /* fail-open: notification still fires if KV blips */
+      }
+      if (isSelfOpenWindow || muted || isSenderGmailContext || isSenderIpFetch) {
+        createLogger({ env: c.env }).info('pixel_notification_suppressed', {
+          emailId: row.id,
+          isSelfOpenWindow,
+          muted,
+          isSenderGmailContext,
+          isSenderIpFetch,
+          uaClass: uaDetails.uaClass,
+          referer: referer.slice(0, 60),
+        })
+      }
+      if (humanLike && !isSelfOpenWindow && !muted && !isSenderGmailContext && !isSenderIpFetch) {
         let recipientLabel: string | undefined
         // Self-open guard for CC-to-self / to-self sends: if the recipient
         // whose pixel URL was signed matches the sender's own address,

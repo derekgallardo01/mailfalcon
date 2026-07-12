@@ -12,6 +12,8 @@ import {
 import { newSalt, newTrackingId, sign } from '@mailfalcon/shared'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
+import { getClientIp } from '../lib/ip'
+import { createLogger, errorMeta } from '../lib/logger'
 import { getHmacSecret } from '../lib/secrets'
 import { checkAndIncrementUsage } from '../lib/usage'
 
@@ -200,6 +202,21 @@ emailsRouter.post('/', async (c) => {
     user?.customTrackerHost && user.customTrackerVerifiedAt
       ? `https://${user.customTrackerHost}`
       : 'https://t.mailfalcon.app'
+
+  // Stash the sender's IP so the pixel handler can suppress
+  // notifications for fetches from the same IP (compose iframe render,
+  // sent folder auto-preview, drafts view). 24h TTL — real recipient
+  // opens beyond that are exceedingly rare in the same NAT context,
+  // and the tracked_email is likely stale interest anyway.
+  const senderIp = getClientIp(c)
+  if (senderIp) {
+    c.executionCtx.waitUntil(
+      c.env.KV.put(`mint-ip:${id}`, senderIp, { expirationTtl: 24 * 60 * 60 }).catch(
+        (err) =>
+          createLogger({ env: c.env }).warn('mint_ip_kv_write_failed', errorMeta(err)),
+      ),
+    )
+  }
 
   return c.json({
     id,
