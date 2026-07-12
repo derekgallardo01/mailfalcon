@@ -121,7 +121,9 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
           isFirstOpen: 0,
         })
         .run()
-      if (uaDetails.uaClass !== 'bot' && !isSelfClickWindow && !muted) {
+      const humanLike =
+        uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
+      if (humanLike && !isSelfClickWindow && !muted) {
         let recipientLabel: string | undefined
         if (recipientId) {
           const r = await db

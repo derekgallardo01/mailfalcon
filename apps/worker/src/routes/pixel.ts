@@ -22,12 +22,15 @@ type Bindings = {
   AXIOM_DATASET?: string
 }
 
-// Window where opens are treated as self-views: Gmail auto-renders the
-// Sent copy a few seconds after the user clicks Send, and the sender's
-// own browser fetches the pixel as a normal user-agent. Suppress push
-// notifications in this window so the sender doesn't get pinged about
-// their own message. The event is still recorded for the dashboard.
-const SELF_OPEN_GUARD_MS = 30_000
+// Window where opens are treated as bot-prefetches: Gmail's Sent-copy
+// auto-render, corporate MTA scans, delivery-time image proxies, and
+// AV/spam scanners all fetch the pixel shortly after send with a
+// browser-like UA that our BOT_PATTERNS list can't reliably catch.
+// Suppress notifications inside this window so the sender doesn't get
+// pinged about their own send or about scanners. The open is still
+// recorded in the events table so dashboard totals stay accurate.
+// Widened from 30s → 90s to catch late corporate SEG scans.
+const SELF_OPEN_GUARD_MS = 90_000
 
 const TRANSPARENT_GIF = new Uint8Array([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0,
@@ -161,7 +164,12 @@ pixelRouter.get('/:idWithExt', async (c) => {
           isFirstOpen,
         })
         .run()
-      if (uaDetails.uaClass !== 'bot' && !isSelfOpenWindow && !muted) {
+      // Notification gate: 'bot' AND 'unknown' UAs both suppressed.
+      // 'unknown' means no UA header at all — a classic scanner signal;
+      // no legit browser omits User-Agent.
+      const humanLike =
+        uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
+      if (humanLike && !isSelfOpenWindow && !muted) {
         let recipientLabel: string | undefined
         if (recipientId) {
           const r = await db

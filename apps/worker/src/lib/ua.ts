@@ -3,20 +3,64 @@ import { UAParser } from 'ua-parser-js'
 export type UaClass = 'desktop' | 'mobile' | 'bot' | 'unknown'
 
 const BOT_PATTERNS = [
+  // Provider-side image proxies + search bots.
   'googleimageproxy',
   'googlebot',
+  'yahoobot',
+  'bingbot',
+  'msnbot',
+  'duckduckbot',
+  'baiduspider',
+  'yandexbot',
+  'applebot',
+  'slurp',
+  // Social-media unfurlers.
+  'linkedinbot',
+  'twitterbot',
+  'facebookexternalhit',
+  'slackbot',
+  'telegrambot',
+  'discordbot',
+  'whatsapp',
+  // Corporate SEG / email-security scanners.
   'mimecast',
   'proofpoint',
   'safelinks',
   'urldefense',
   'barracuda',
-  'bingbot',
-  'yahoobot',
+  'symantec',
+  'ironport',
+  'cisco-ironport',
+  'trendmicro',
+  'sophos',
+  'forcepoint',
+  'fireeye',
+  'sanesecurity',
+  'zscaler',
+  'agari',
+  'clearswift',
+  'clamav',
+  // Generic HTTP libraries — never a real human browser.
   'curl/',
   'wget/',
   'python-requests',
+  'python-urllib',
+  'aiohttp',
+  'go-http-client',
+  'node-fetch',
+  'axios/',
+  'okhttp',
+  'apache-httpclient',
+  'java/',
+  'libwww-perl',
+  'ruby',
+  // Headless / automation stacks.
   'headlesschrome',
   'phantomjs',
+  'puppeteer',
+  'playwright',
+  'selenium',
+  'chrome-lighthouse',
 ]
 
 const MOBILE_PATTERNS = ['mobile', 'android', 'iphone', 'ipad', 'ipod']
@@ -46,7 +90,14 @@ export function parseUa(ua: string | undefined | null): UaDetails {
     }
   }
   const lower = ua.toLowerCase()
-  if (BOT_PATTERNS.some((p) => lower.includes(p))) {
+  // A real browser UA is ≥ ~60 chars ("Mozilla/5.0 (…) …/…"). Anything
+  // dramatically shorter is a script/scanner even without a keyword hit.
+  const suspiciouslyShort = ua.length < 20
+  const noMozilla = !lower.startsWith('mozilla/')
+  if (
+    BOT_PATTERNS.some((p) => lower.includes(p)) ||
+    (suspiciouslyShort && noMozilla)
+  ) {
     return {
       uaClass: 'bot',
       browserName: null,
