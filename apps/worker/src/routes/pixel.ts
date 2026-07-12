@@ -130,17 +130,27 @@ pixelRouter.get('/:idWithExt', async (c) => {
   const isSelfOpenWindow = Date.now() - row.sentAt < SELF_OPEN_GUARD_MS
   const muted = row.notificationsMuted === 1
 
-  // The pixel img is embedded in the compose body via setBodyHTML for
-  // Gmail-native scheduled sends. Gmail's compose iframe + Sent-folder
-  // preview both fetch the image directly from the sender's own
-  // browser, sending a `mail.google.com` Referer. Recipients viewing
-  // the delivered mail proxy through googleimageproxy (bot-filtered)
-  // and don't send this referer. Treat any mail.google.com referer as
-  // a sender-context render and suppress the notification.
+  // Compose-render / recent-preview guard. When we inject the pixel
+  // via setBodyHTML for Gmail-native scheduled sends, Gmail's compose
+  // iframe renders the img immediately, firing the pixel from the
+  // sender's own browser with a `mail.google.com` Referer — a false
+  // positive on a compose that hasn't even been dispatched yet.
+  //
+  // Legit Gmail *recipient* opens ALSO have this referer, so we can't
+  // just blanket-suppress. The distinguisher is time: compose renders
+  // fire within seconds of mint; real recipient opens are typically
+  // much later, especially for scheduled sends where delivery is at
+  // least the scheduled interval away.
+  //
+  // Suppress only when both conditions hold: Referer is Gmail AND the
+  // fire is within 5 minutes of mint. Beyond that, treat as legit.
   const referer = c.req.header('Referer') ?? c.req.header('Referrer') ?? ''
-  const isSenderContextRender =
+  const isGmailReferer =
     referer.startsWith('https://mail.google.com') ||
     referer.startsWith('http://mail.google.com')
+  const COMPOSE_RENDER_WINDOW_MS = 5 * 60 * 1000
+  const isComposeRender =
+    isGmailReferer && Date.now() - row.sentAt < COMPOSE_RENDER_WINDOW_MS
 
   const ua = c.req.header('User-Agent') ?? ''
   const uaDetails = parseUa(ua)
@@ -198,7 +208,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
       // no legit browser omits User-Agent.
       const humanLike =
         uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
-      if (humanLike && !isSelfOpenWindow && !muted && !isSenderContextRender) {
+      if (humanLike && !isSelfOpenWindow && !muted && !isComposeRender) {
         let recipientLabel: string | undefined
         // Self-open guard for CC-to-self / to-self sends: if the recipient
         // whose pixel URL was signed matches the sender's own address,
