@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
-import { events, recipients, trackedEmails } from '@mailfalcon/db/schema'
+import { events, recipients, trackedEmails, users } from '@mailfalcon/db/schema'
 import { verify } from '@mailfalcon/shared'
 import { getDb } from '../lib/db'
 import { getClientIp } from '../lib/ip'
@@ -9,6 +9,23 @@ import { fanoutPush } from '../lib/push-fanout'
 import { rateLimit } from '../lib/rate-limit'
 import { getHmacSecret } from '../lib/secrets'
 import { extractCfGeo, hashUa, parseUa, truncateIpV4, type UaDetails } from '../lib/ua'
+
+/** SHA-256 hex of the lowercased address. Matches the extension's
+ *  `sha256Hex(r.address.toLowerCase())` used at mint time, so a
+ *  server-computed sender hash can be compared to a recipient row's
+ *  stored hashedAddr for self-open detection. */
+async function sha256HexLower(address: string): Promise<string> {
+  const buf = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(address.toLowerCase()),
+  )
+  const bytes = new Uint8Array(buf)
+  let hex = ''
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i]!.toString(16).padStart(2, '0')
+  }
+  return hex
+}
 
 type Bindings = {
   ENVIRONMENT: string
@@ -171,13 +188,41 @@ pixelRouter.get('/:idWithExt', async (c) => {
         uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
       if (humanLike && !isSelfOpenWindow && !muted) {
         let recipientLabel: string | undefined
+        // Self-open guard for CC-to-self / to-self sends: if the recipient
+        // whose pixel URL was signed matches the sender's own address,
+        // the "open" is almost certainly Gmail rendering the sender's
+        // own inbox copy (preview pane, offline sync, Sent-folder auto-
+        // render). Suppress the notification but still count the event
+        // on the dashboard.
+        let isSelfRecipientOpen = false
         if (recipientId) {
-          const r = await db
-            .select({ displayLabel: recipients.displayLabel })
-            .from(recipients)
-            .where(eq(recipients.id, recipientId))
-            .get()
-          recipientLabel = r?.displayLabel ?? undefined
+          const [rec, sender] = await Promise.all([
+            db
+              .select({
+                displayLabel: recipients.displayLabel,
+                hashedAddr: recipients.hashedAddr,
+              })
+              .from(recipients)
+              .where(eq(recipients.id, recipientId))
+              .get(),
+            db
+              .select({ email: users.email })
+              .from(users)
+              .where(eq(users.id, row.userId))
+              .get(),
+          ])
+          recipientLabel = rec?.displayLabel ?? undefined
+          if (rec?.hashedAddr && sender?.email) {
+            const senderHash = await sha256HexLower(sender.email)
+            isSelfRecipientOpen = rec.hashedAddr === senderHash
+          }
+        }
+        if (isSelfRecipientOpen) {
+          createLogger({ env: c.env }).info('pixel_self_open_suppressed', {
+            emailId: row.id,
+            recipientId,
+          })
+          return
         }
         await fanoutPush(db, c.env, row.userId, {
           kind: 'open',
