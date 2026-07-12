@@ -178,13 +178,14 @@ export default defineBackground(() => {
     }
 
     if (surfaced.length === 0) {
-      // Still must show one notification to satisfy Web Push spec.
-      await sw.registration.showNotification('MailFalcon — new activity', {
-        body: 'Open the dashboard to see what changed.',
-        icon: NOTIF_ICON_PATH,
-        tag: 'mf-push-generic',
-        data: { url: 'https://app.mailfalcon.app/dashboard' },
-      })
+      // Web Push userVisibleOnly technically wants a showNotification
+      // per push, but Chrome maintains a small budget of skipped pushes
+      // before it substitutes its own "site updated" placeholder.
+      // Given the server already filters bot + self-open events, an
+      // empty surfaced list means there's genuinely nothing new to
+      // report — showing a generic "new activity" ping was worse UX
+      // than staying silent. Skip.
+      console.log('[mailfalcon] push arrived with 0 surfaced events, staying silent')
     } else {
       // Show one notification per event so users can see what happened.
       for (const ev of surfaced) {
