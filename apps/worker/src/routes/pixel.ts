@@ -130,27 +130,23 @@ pixelRouter.get('/:idWithExt', async (c) => {
   const isSelfOpenWindow = Date.now() - row.sentAt < SELF_OPEN_GUARD_MS
   const muted = row.notificationsMuted === 1
 
-  // Compose-render / recent-preview guard. When we inject the pixel
-  // via setBodyHTML for Gmail-native scheduled sends, Gmail's compose
-  // iframe renders the img immediately, firing the pixel from the
-  // sender's own browser with a `mail.google.com` Referer — a false
-  // positive on a compose that hasn't even been dispatched yet.
-  //
-  // Legit Gmail *recipient* opens ALSO have this referer, so we can't
-  // just blanket-suppress. The distinguisher is time: compose renders
-  // fire within seconds of mint; real recipient opens are typically
-  // much later, especially for scheduled sends where delivery is at
-  // least the scheduled interval away.
-  //
-  // Suppress only when both conditions hold: Referer is Gmail AND the
-  // fire is within 5 minutes of mint. Beyond that, treat as legit.
+  // Sender's-own-Gmail-context guard. Any pixel fetch with a Gmail
+  // Referer originates from the sender's own web session (compose
+  // iframe rendering the injected img, drafts view re-rendering, sent-
+  // folder auto-preview). Real recipient opens NEVER produce this
+  // combo:
+  //   - Gmail recipients: their web client rewrites external images
+  //     through googleimageproxy — the referer we see is Google's, not
+  //     mail.google.com, and the UA is bot-classified anyway.
+  //   - Non-Gmail recipients (Outlook, Apple Mail, mobile clients):
+  //     no mail.google.com referer at all.
+  // So a mail.google.com referer is unambiguously the sender's own
+  // Gmail — suppress the notification, keep the event record for
+  // dashboard totals.
   const referer = c.req.header('Referer') ?? c.req.header('Referrer') ?? ''
-  const isGmailReferer =
+  const isSenderGmailContext =
     referer.startsWith('https://mail.google.com') ||
     referer.startsWith('http://mail.google.com')
-  const COMPOSE_RENDER_WINDOW_MS = 5 * 60 * 1000
-  const isComposeRender =
-    isGmailReferer && Date.now() - row.sentAt < COMPOSE_RENDER_WINDOW_MS
 
   const ua = c.req.header('User-Agent') ?? ''
   const uaDetails = parseUa(ua)
@@ -208,7 +204,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
       // no legit browser omits User-Agent.
       const humanLike =
         uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
-      if (humanLike && !isSelfOpenWindow && !muted && !isComposeRender) {
+      if (humanLike && !isSelfOpenWindow && !muted && !isSenderGmailContext) {
         let recipientLabel: string | undefined
         // Self-open guard for CC-to-self / to-self sends: if the recipient
         // whose pixel URL was signed matches the sender's own address,
