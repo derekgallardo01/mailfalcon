@@ -163,6 +163,10 @@ const reentered = new WeakSet<object>()
 // body either already has tracking baked in or, in the scheduled case,
 // is being re-sent as a normal compose that re-runs the full flow.
 const programmaticPassthrough = new WeakSet<object>()
+// Views where we've already baked tracking in ahead of Gmail's native
+// scheduled-send picker. Prevents double-minting if the user opens the
+// picker twice (cancels → re-opens) on the same compose.
+const scheduleTracked = new WeakSet<object>()
 
 interface MessageView {
   getMessageID?: () => string
@@ -512,6 +516,91 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
           view.send?.()
         } catch (err) {
           console.error('[mailfalcon] programmatic send failed:', err)
+        }
+      })
+
+      // Gmail's native "Schedule send" button doesn't fire `presending`
+      // (that's bound to the regular Send button). Without hooking this
+      // event, Gmail queues the raw body server-side with no tracking
+      // pixel or link rewriting. So we pre-mint + rewrite the body IN
+      // PLACE before the picker opens, then let the picker proceed —
+      // Gmail queues the already-tracked body.
+      //
+      // Trade-offs vs. MailFalcon's own scheduled-send queue:
+      //   • No reply detection — Gmail owns the messageId, released
+      //     server-side hours later in a context we can't observe.
+      //   • No mail-merge — Gmail's picker sends a single message.
+      //   • No /dashboard/scheduled mirror — Gmail owns the queue.
+      //   • But: opens, clicks, geo, device all work the moment the
+      //     message actually goes out.
+      view.on('scheduleSendMenuOpening', async (rawEvent) => {
+        if (programmaticPassthrough.has(view)) return
+        if (scheduleTracked.has(view)) return
+        const sdkEvent = rawEvent as { cancel: () => void }
+
+        // Wrapper mirrors the presending wrapper but with the branches
+        // that don't apply to native scheduled send disabled:
+        //   - getScheduledAt → null, so MailFalcon's own queue skips
+        //   - isMailMerge → false, dispatch loop skips
+        //   - close/cancel → no-ops, we don't want to kill the picker
+        //   - onSent → no-op, we don't get a `sent` event for this path
+        const wrapper: ComposeEvent = {
+          getHtmlBody: () => view.getHTMLContent?.() ?? '',
+          setHtmlBody: (html) => {
+            view.setBodyHTML?.(html)
+          },
+          setSubject: (s) => {
+            view.setSubject?.(s)
+          },
+          getRecipientCount: () => {
+            const to = view.getToRecipients?.() ?? []
+            const cc = view.getCcRecipients?.() ?? []
+            const bcc = view.getBccRecipients?.() ?? []
+            return to.length + cc.length + bcc.length
+          },
+          getRecipients: () => {
+            const to = view.getToRecipients?.() ?? []
+            const cc = view.getCcRecipients?.() ?? []
+            const bcc = view.getBccRecipients?.() ?? []
+            return [...toHandles(to), ...toHandles(cc), ...toHandles(bcc)]
+          },
+          getSubject: () => view.getSubject?.() ?? '',
+          isPrivacyMode: () => privacyMode,
+          getRemindAfterDays: () => (privacyMode ? null : remindAfterDays),
+          getThreadId: () => (privacyMode ? null : cachedThreadId),
+          onSent: () => {
+            /* no sent event fires for Gmail server-side scheduled sends */
+          },
+          getScheduledAt: () => null,
+          isMailMerge: () => false,
+          close: () => {
+            /* don't kill the compose during Gmail's picker flow */
+          },
+          cancel: () => {
+            /* don't cancel the schedule menu — presending handler may
+             *  choose to cancel via other means (e.g., recipient
+             *  validation), but we want the picker to open. */
+            sdkEvent.cancel()
+          },
+        }
+
+        try {
+          for (const handler of this.presendingHandlers) {
+            await handler(wrapper)
+          }
+          scheduleTracked.add(view)
+          // If the user cancels the picker and later clicks regular
+          // Send, the body is already tracked. Route through the
+          // passthrough so presending doesn't try to mint again.
+          programmaticPassthrough.add(view)
+          console.log(
+            '[mailfalcon] baked tracking into body ahead of Gmail native schedule',
+          )
+        } catch (err) {
+          console.warn(
+            '[mailfalcon] scheduleSendMenuOpening handler threw:',
+            err,
+          )
         }
       })
     })
