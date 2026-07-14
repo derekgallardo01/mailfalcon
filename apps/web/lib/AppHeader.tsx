@@ -157,6 +157,13 @@ export function AppHeader({ liveCount = 0 }: Props) {
       </div>
 
       <nav className="flex flex-wrap items-center gap-1">
+        <Link
+          href="/compose"
+          className="mr-1 flex items-center gap-1 rounded-md bg-falcon-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-falcon-600"
+        >
+          <span>✍</span>
+          Compose
+        </Link>
         {navLink('/dashboard', 'Dashboard')}
         {navLink('/dashboard/scheduled', 'Scheduled')}
         {navLink('/dashboard/contacts', 'Contacts')}
