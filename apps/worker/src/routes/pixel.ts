@@ -87,6 +87,67 @@ export function buildDeviceLabel(ua: UaDetails): string | undefined {
   return segs.length > 0 ? segs.join(' · ') : undefined
 }
 
+/** Human "3 min after sending" / "2 days after sending" for the
+ *  notification body. Under a minute we say "just now" — accurate
+ *  enough given the events fire within seconds of the pixel load. */
+export function buildOpenedAfter(sentAt: number, openedAt: number): string {
+  const diffMs = Math.max(0, openedAt - sentAt)
+  const min = Math.floor(diffMs / 60_000)
+  if (min < 1) return 'within a minute of sending'
+  if (min < 60) return `${min} min after sending`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h after sending`
+  const days = Math.floor(hr / 24)
+  return `${days}d after sending`
+}
+
+/** Coarse VPN/proxy heuristic based on ASN org name. Catches
+ *  well-known VPN providers + the hosting/cloud ASNs commonly used
+ *  as VPN exit nodes. Cloud provider ASNs (Google/Microsoft/Amazon)
+ *  are already caught earlier as datacenter fetches so we omit them
+ *  here — but their appearance in a non-suppressed pixel fetch would
+ *  also indicate VPN/hosting. */
+export function detectVpnLikely(asOrg: string): boolean {
+  if (!asOrg) return false
+  const s = asOrg.toLowerCase()
+  const vpnMarkers = [
+    'vpn',
+    'mullvad',
+    'nordvpn',
+    'expressvpn',
+    'surfshark',
+    'private internet access',
+    'protonvpn',
+    'ipvanish',
+    'cyberghost',
+    'tunnelbear',
+    'hide.me',
+    'purevpn',
+    'windscribe',
+    'm247', // very common VPN exit ASN
+    'quadranet',
+    'leaseweb',
+    'psychz',
+  ]
+  if (vpnMarkers.some((m) => s.includes(m))) return true
+  // Common hosting/VPS providers frequently used as VPN exits.
+  const hostingMarkers = [
+    'digitalocean',
+    'digital ocean',
+    'linode',
+    'vultr',
+    'ovh',
+    'hetzner',
+    'contabo',
+    'oracle cloud',
+    'alibaba',
+    'tencent',
+    'choopa', // Vultr parent
+    'akamai', // Linode parent
+  ]
+  return hostingMarkers.some((m) => s.includes(m))
+}
+
 export const pixelRouter = new Hono<{ Bindings: Bindings }>()
 
 pixelRouter.get('/:idWithExt', async (c) => {
@@ -365,6 +426,15 @@ pixelRouter.get('/:idWithExt', async (c) => {
         recipientLabel: recipientLabel ?? undefined,
         location: buildLocationLabel(geo.city, geo.regionCode, country),
         device: buildDeviceLabel(uaDetails),
+        ip: ipFull ?? undefined,
+        isp: asOrg || undefined,
+        openedAfter: buildOpenedAfter(row.sentAt, Date.now()),
+        isFirstOpen: isFirstOpen === 1,
+        timezone: geo.timezone ?? undefined,
+        postalCode: geo.postalCode ?? undefined,
+        latitude: geo.latitude ?? undefined,
+        longitude: geo.longitude ?? undefined,
+        isVpnLikely: detectVpnLikely(asOrg),
       }).catch((err) =>
         createLogger({ env: c.env }).warn('pixel_fanout_failed', errorMeta(err)),
       )

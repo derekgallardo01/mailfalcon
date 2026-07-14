@@ -45,6 +45,30 @@ export interface PushPayload {
   location?: string
   /** Optional device/UA string for email-to-self ("Mobile · Safari"). */
   device?: string
+  /** Full IP of the fetching client (email-to-self shows this + ISP so
+   *  the sender can spot VPN / bot / repeat-open patterns). */
+  ip?: string
+  /** ASN organization name (e.g. "Comcast Cable", "T-Mobile USA",
+   *  "M247 Ltd" — the latter is a common VPN exit). */
+  isp?: string
+  /** Human-friendly "opened 3 min after sending". Empty for hot-lead
+   *  which isn't email-scoped. */
+  openedAfter?: string
+  /** True when this is the first recorded open for the recipient/UA
+   *  combo. Surfaced as a chip in the notification. */
+  isFirstOpen?: boolean
+  /** IANA timezone at the geo (e.g. "America/New_York") — surfaces the
+   *  recipient's local clock. */
+  timezone?: string
+  /** Postal code (when Cloudflare has it) — narrows location beyond
+   *  city level. */
+  postalCode?: string
+  /** Coordinates for a Google Maps deep-link in the email body. */
+  latitude?: string
+  longitude?: string
+  /** True when the ASN org matches a VPN or common hosting provider
+   *  used as a VPN exit. Surfaces a caution chip. */
+  isVpnLikely?: boolean
 }
 
 /**
@@ -238,6 +262,15 @@ export async function fanoutPush(
             location: payload.location,
             device: payload.device,
             emailId: payload.emailId,
+            ip: payload.ip,
+            isp: payload.isp,
+            openedAfter: payload.openedAfter,
+            isFirstOpen: payload.isFirstOpen,
+            timezone: payload.timezone,
+            postalCode: payload.postalCode,
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+            isVpnLikely: payload.isVpnLikely,
             webUrl: env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app',
             env,
           })

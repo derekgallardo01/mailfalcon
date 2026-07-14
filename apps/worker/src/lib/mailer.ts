@@ -405,6 +405,15 @@ interface SendEventNotificationArgs {
    *  detail page; otherwise falls back to the dashboard root. Hot-lead
    *  pushes don't always carry an emailId. */
   emailId?: string
+  ip?: string
+  isp?: string
+  openedAfter?: string
+  isFirstOpen?: boolean
+  timezone?: string
+  postalCode?: string
+  latitude?: string
+  longitude?: string
+  isVpnLikely?: boolean
   webUrl: string
   env: { ENVIRONMENT: string; RESEND_API_KEY?: string }
 }
@@ -458,15 +467,37 @@ function eventColor(kind: EventNotificationKind): string {
   }
 }
 
-function renderEventNotificationHtml(args: {
+interface RenderArgs {
   kind: EventNotificationKind
   subject: string
   recipientLabel: string
   location?: string
   device?: string
   emailId?: string
+  ip?: string
+  isp?: string
+  openedAfter?: string
+  isFirstOpen?: boolean
+  timezone?: string
+  postalCode?: string
+  latitude?: string
+  longitude?: string
+  isVpnLikely?: boolean
   webUrl: string
-}): string {
+}
+
+function renderChip(text: string, bg: string, fg: string): string {
+  return `<span style="display:inline-block;background:${bg};color:${fg};font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;padding:2px 8px;border-radius:10px;margin-right:6px;">${escapeHtml(text)}</span>`
+}
+
+function renderMetaRow(label: string, value: string): string {
+  return `<tr>
+    <td style="padding:6px 12px 6px 0;font-size:11px;color:#6b7280;vertical-align:top;white-space:nowrap;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(label)}</td>
+    <td style="padding:6px 0;font-size:13px;color:#0f1a2e;line-height:1.4;">${value}</td>
+  </tr>`
+}
+
+function renderEventNotificationHtml(args: RenderArgs): string {
   const detailUrl = args.emailId
     ? `${args.webUrl}/dashboard/email/?id=${encodeURIComponent(args.emailId)}`
     : `${args.webUrl}/dashboard`
@@ -474,29 +505,71 @@ function renderEventNotificationHtml(args: {
   const safeWho = escapeHtml(args.recipientLabel)
   const color = eventColor(args.kind)
   const verb = eventVerb(args.kind)
-  const metaParts: string[] = []
-  if (args.location) metaParts.push(escapeHtml(args.location))
-  if (args.device) metaParts.push(escapeHtml(args.device))
-  const metaLine = metaParts.length
-    ? `<p style="margin:8px 0 0;font-size:12px;color:#6b7280;">${metaParts.join(' &middot; ')}</p>`
+
+  const chips: string[] = []
+  if (args.isFirstOpen) chips.push(renderChip('First open', '#dcfce7', '#166534'))
+  if (args.isVpnLikely) chips.push(renderChip('VPN / proxy', '#fef3c7', '#92400e'))
+  const chipsRow = chips.length
+    ? `<p style="margin:10px 0 0;">${chips.join('')}</p>`
     : ''
+
+  // Metadata table rows built conditionally so absent fields don't
+  // leave blank rows. Order is user-priority: when, who, network,
+  // then geo detail.
+  const metaRows: string[] = []
+  if (args.openedAfter) metaRows.push(renderMetaRow('When', escapeHtml(args.openedAfter)))
+  if (args.device) metaRows.push(renderMetaRow('Device', escapeHtml(args.device)))
+  if (args.location) {
+    const locBits = [args.location]
+    if (args.postalCode) locBits.push(args.postalCode)
+    if (args.timezone) locBits.push(`(${args.timezone})`)
+    metaRows.push(renderMetaRow('Location', escapeHtml(locBits.join(' · '))))
+  }
+  if (args.ip) {
+    // Show IP + ISP together for context; ISP alone rarely useful.
+    const ipLine = args.isp
+      ? `${escapeHtml(args.ip)} <span style="color:#6b7280;">&middot; ${escapeHtml(args.isp)}</span>`
+      : escapeHtml(args.ip)
+    metaRows.push(renderMetaRow('IP', ipLine))
+  }
+  if (args.latitude && args.longitude) {
+    const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(
+      args.latitude,
+    )},${encodeURIComponent(args.longitude)}`
+    metaRows.push(
+      renderMetaRow(
+        'Map',
+        `<a href="${mapUrl}" style="color:${color};text-decoration:underline;">View on Google Maps</a>`,
+      ),
+    )
+  }
+
+  const metaTable = metaRows.length
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:14px;border-top:1px solid #f3f4f6;padding-top:8px;">
+        <tbody>${metaRows.join('')}</tbody>
+      </table>`
+    : ''
+
   return `<!doctype html>
 <html lang="en">
 <body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f7fa;padding:40px 16px;">
     <tr><td align="center">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
-        <tr><td style="padding:32px 32px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:${color};letter-spacing:0.02em;">MailFalcon</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
+        <tr><td style="padding:28px 32px 8px;">
+          <p style="margin:0;font-size:12px;font-weight:600;color:${color};letter-spacing:0.05em;text-transform:uppercase;">MailFalcon</p>
         </td></tr>
-        <tr><td style="padding:8px 32px 8px;">
-          <p style="margin:0;font-size:16px;font-weight:600;color:#0f1a2e;">${safeWho} ${verb}</p>
+        <tr><td style="padding:4px 32px 4px;">
+          <p style="margin:0;font-size:17px;font-weight:600;color:#0f1a2e;">${safeWho} ${verb}</p>
         </td></tr>
-        <tr><td style="padding:8px 32px 8px;">
-          <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${safeSubject}</p>
-          ${metaLine}
+        <tr><td style="padding:8px 32px 4px;">
+          <p style="margin:0;font-size:14px;color:#374151;line-height:1.5;">${safeSubject}</p>
+          ${chipsRow}
         </td></tr>
-        <tr><td style="padding:16px 32px 32px;">
+        <tr><td style="padding:0 32px;">
+          ${metaTable}
+        </td></tr>
+        <tr><td style="padding:20px 32px 28px;">
           <a href="${detailUrl}" style="display:inline-block;background:${color};color:#fff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">Open in dashboard</a>
         </td></tr>
       </table>
@@ -507,17 +580,29 @@ function renderEventNotificationHtml(args: {
 </html>`
 }
 
-export async function sendEventNotification({
-  to,
-  kind,
-  subject,
-  recipientLabel,
-  location,
-  device,
-  emailId,
-  webUrl,
-  env,
-}: SendEventNotificationArgs): Promise<void> {
+export async function sendEventNotification(
+  args: SendEventNotificationArgs,
+): Promise<void> {
+  const {
+    to,
+    kind,
+    subject,
+    recipientLabel,
+    location,
+    device,
+    emailId,
+    ip,
+    isp,
+    openedAfter,
+    isFirstOpen,
+    timezone,
+    postalCode,
+    latitude,
+    longitude,
+    isVpnLikely,
+    webUrl,
+    env,
+  } = args
   const safeSubject = subject ?? '(no subject)'
   const who = recipientLabel ?? 'A recipient'
   const mailSubject = buildEventSubject(kind, who, safeSubject)
@@ -527,13 +612,38 @@ export async function sendEventNotification({
     return
   }
 
-  const metaParts: string[] = []
-  if (location) metaParts.push(location)
-  if (device) metaParts.push(device)
-  const metaText = metaParts.length ? `\n${metaParts.join(' · ')}\n` : '\n'
   const detailUrl = emailId
     ? `${webUrl}/dashboard/email/?id=${encodeURIComponent(emailId)}`
     : `${webUrl}/dashboard`
+
+  // Plaintext fallback mirrors the HTML metadata: shown in mail
+  // clients that don't render HTML (rare) and in Gmail's snippet
+  // preview under the subject line.
+  const textLines: string[] = []
+  textLines.push(`${who} ${eventVerb(kind)}.`)
+  textLines.push('')
+  textLines.push(`"${safeSubject}"`)
+  const chipLines: string[] = []
+  if (isFirstOpen) chipLines.push('[FIRST OPEN]')
+  if (isVpnLikely) chipLines.push('[VPN/PROXY]')
+  if (chipLines.length) textLines.push(chipLines.join(' '))
+  textLines.push('')
+  if (openedAfter) textLines.push(`When: ${openedAfter}`)
+  if (device) textLines.push(`Device: ${device}`)
+  if (location) {
+    const locBits = [location]
+    if (postalCode) locBits.push(postalCode)
+    if (timezone) locBits.push(`(${timezone})`)
+    textLines.push(`Location: ${locBits.join(' · ')}`)
+  }
+  if (ip) textLines.push(`IP: ${ip}${isp ? ` · ${isp}` : ''}`)
+  if (latitude && longitude) {
+    textLines.push(`Map: https://www.google.com/maps?q=${latitude},${longitude}`)
+  }
+  textLines.push('')
+  textLines.push(`Open in dashboard: ${detailUrl}`)
+  textLines.push('')
+  textLines.push(`Manage these alerts: ${webUrl}/settings`)
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -545,7 +655,7 @@ export async function sendEventNotification({
       from: 'MailFalcon <hello@mailfalcon.app>',
       to,
       subject: mailSubject,
-      text: `${who} ${eventVerb(kind)}.\n\n"${safeSubject}"${metaText}\nOpen in dashboard: ${detailUrl}\n\nManage these alerts: ${webUrl}/settings`,
+      text: textLines.join('\n'),
       html: renderEventNotificationHtml({
         kind,
         subject: safeSubject,
@@ -553,6 +663,15 @@ export async function sendEventNotification({
         location,
         device,
         emailId,
+        ip,
+        isp,
+        openedAfter,
+        isFirstOpen,
+        timezone,
+        postalCode,
+        latitude,
+        longitude,
+        isVpnLikely,
         webUrl,
       }),
     }),

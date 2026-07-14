@@ -9,7 +9,7 @@ import { fanoutPush } from '../lib/push-fanout'
 import { rateLimit } from '../lib/rate-limit'
 import { getHmacSecret } from '../lib/secrets'
 import { extractCfGeo, parseUa, truncateIpV4 } from '../lib/ua'
-import { buildDeviceLabel, buildLocationLabel } from './pixel'
+import { buildDeviceLabel, buildLocationLabel, buildOpenedAfter, detectVpnLikely } from './pixel'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -89,6 +89,9 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
   const ipPrefix = truncateIpV4(ipFull)
   const geo = extractCfGeo(c.req.raw)
   const country = geo.country ?? c.req.header('CF-IPCountry') ?? null
+  const cf = (c.req.raw as Request & { cf?: Record<string, unknown> }).cf ?? {}
+  const asOrg =
+    typeof cf.asOrganization === 'string' ? (cf.asOrganization as string) : ''
 
   c.executionCtx.waitUntil(
     (async () => {
@@ -159,6 +162,14 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
           recipientLabel,
           location: buildLocationLabel(geo.city, geo.regionCode, country),
           device: buildDeviceLabel(uaDetails),
+          ip: ipFull ?? undefined,
+          isp: asOrg || undefined,
+          openedAfter: buildOpenedAfter(email.sentAt, Date.now()),
+          timezone: geo.timezone ?? undefined,
+          postalCode: geo.postalCode ?? undefined,
+          latitude: geo.latitude ?? undefined,
+          longitude: geo.longitude ?? undefined,
+          isVpnLikely: detectVpnLikely(asOrg),
         }).catch((err) =>
           createLogger({ env: c.env }).warn(
             'click_fanout_failed',
