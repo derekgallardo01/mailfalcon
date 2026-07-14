@@ -39,15 +39,14 @@ type Bindings = {
   AXIOM_DATASET?: string
 }
 
-// Window where opens are treated as bot-prefetches: Gmail's Sent-copy
-// auto-render, corporate MTA scans, delivery-time image proxies, and
-// AV/spam scanners all fetch the pixel shortly after send with a
-// browser-like UA that our BOT_PATTERNS list can't reliably catch.
-// Suppress notifications inside this window so the sender doesn't get
-// pinged about their own send or about scanners. The open is still
-// recorded in the events table so dashboard totals stay accurate.
-// Widened from 30s → 90s to catch late corporate SEG scans.
-const SELF_OPEN_GUARD_MS = 90_000
+// Window where opens are treated as compose-render prefetches: our
+// injected pixel gets rendered by the sender's own compose iframe
+// within seconds of mint. The datacenter/ASN classifier catches
+// server-side prefetch (Gmail proxy, corp SEG scanners) regardless of
+// timing. Kept at 30s — long enough to cover the compose-render race,
+// short enough that a genuinely fast recipient open still fires the
+// notification within the same minute of send.
+const SELF_OPEN_GUARD_MS = 30_000
 
 const TRANSPARENT_GIF = new Uint8Array([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0,
@@ -261,22 +260,22 @@ pixelRouter.get('/:idWithExt', async (c) => {
         }
       }
 
-      // isSelfOpenWindow (90s of mint) previously suppressed ALL
-      // opens in that window, which false-negatived legit recipient
-      // opens on immediate sends. Narrow it: only suppress within-
-      // window opens when they're ALSO from the sender's network,
-      // from a datacenter (proxy prefetch), or self-recipient. A real
-      // outside-network browser hitting within 90s is a fast
-      // recipient — let them notify.
+      // Prefetch guard applies ONLY inside the 30s window after mint.
+      // Combines a sender-context signal (same IP, datacenter proxy,
+      // Gmail referer, or self-recipient) with the tight time window.
+      // Sender-IP and Gmail-referer alone (without the time window)
+      // false-negatived legit alt-account testing on the same wifi
+      // and Gmail-Web recipient views — dropped from the direct gate.
       const suppressAsPrefetch =
         isSelfOpenWindow &&
-        (isSenderIpFetch || isDatacenterFetch || isSelfRecipientOpen)
+        (isSenderIpFetch ||
+          isDatacenterFetch ||
+          isSenderGmailContext ||
+          isSelfRecipientOpen)
 
       const notificationSuppressed =
         !humanLike ||
         muted ||
-        isSenderGmailContext ||
-        isSenderIpFetch ||
         isSelfRecipientOpen ||
         suppressAsPrefetch
 
