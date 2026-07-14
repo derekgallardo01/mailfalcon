@@ -126,12 +126,30 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
       if (humanLike && !isSelfClickWindow && !muted) {
         let recipientLabel: string | undefined
         if (recipientId) {
+          // Per-recipient URL: exact attribution.
           const r = await db
             .select({ displayLabel: recipients.displayLabel })
             .from(recipients)
             .where(eq(recipients.id, recipientId))
             .get()
           recipientLabel = r?.displayLabel ?? undefined
+        } else {
+          // Shared-pixel URL (multi-recipient non-mail-merge or old
+          // extension build). Any recipient could be the clicker; surface
+          // the roster so the sender at least knows who might've clicked.
+          const rows = await db
+            .select({ displayLabel: recipients.displayLabel })
+            .from(recipients)
+            .where(eq(recipients.emailId, id))
+            .all()
+          const labels = rows.map((r) => r.displayLabel).filter(Boolean) as string[]
+          if (labels.length === 1) {
+            recipientLabel = labels[0]
+          } else if (labels.length > 1) {
+            const shown = labels.slice(0, 2).join(' or ')
+            const extra = labels.length > 2 ? ` +${labels.length - 2}` : ''
+            recipientLabel = `${shown}${extra}`
+          }
         }
         await fanoutPush(db, c.env, email.userId, {
           kind: 'click',

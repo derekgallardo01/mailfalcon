@@ -212,6 +212,24 @@ pixelRouter.get('/:idWithExt', async (c) => {
           const senderHash = await sha256HexLower(sender.email)
           isSelfRecipientOpen = rec.hashedAddr === senderHash
         }
+      } else {
+        // Shared-pixel path (multi-recipient non-mail-merge). Can't
+        // attribute to a single recipient, but we can surface the
+        // roster so the notification is more informative than the
+        // generic "A recipient" fallback.
+        const rows = await db
+          .select({ displayLabel: recipients.displayLabel })
+          .from(recipients)
+          .where(eq(recipients.emailId, id))
+          .all()
+        const labels = rows.map((r) => r.displayLabel).filter(Boolean) as string[]
+        if (labels.length === 1) {
+          recipientLabel = labels[0]!
+        } else if (labels.length > 1) {
+          const shown = labels.slice(0, 2).join(' or ')
+          const extra = labels.length > 2 ? ` +${labels.length - 2}` : ''
+          recipientLabel = `${shown}${extra}`
+        }
       }
 
       const notificationSuppressed =
