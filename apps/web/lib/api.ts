@@ -515,6 +515,68 @@ export async function updateMe(patch: {
   if (!res.ok) throw new Error(`me_patch_failed:${res.status}`)
 }
 
+export interface GmailComposeStatus {
+  connected: boolean
+  googleEmail?: string
+  connectedAt?: number
+  lastUsedAt?: number | null
+  scopesUpToDate?: boolean
+  missingScopes?: string[]
+}
+
+export async function getGmailComposeStatus(): Promise<GmailComposeStatus> {
+  const res = await fetch(`${config.apiHost}/v1/compose/oauth/status`, {
+    headers: { ...authHeader() },
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`compose_status_failed:${res.status}`)
+  return (await res.json()) as GmailComposeStatus
+}
+
+export async function disconnectGmailCompose(): Promise<void> {
+  const res = await fetch(`${config.apiHost}/v1/compose/oauth`, {
+    method: 'DELETE',
+    headers: { ...authHeader() },
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`compose_disconnect_failed:${res.status}`)
+}
+
+/** Return the Google authorize URL to open. Web app is expected to
+ *  stash the codeVerifier in sessionStorage before opening, then use
+ *  it in the callback POST. */
+export async function beginGmailComposeAuthorize(
+  codeChallenge: string,
+  redirectUri: string,
+): Promise<{ url: string }> {
+  const res = await fetch(`${config.apiHost}/v1/compose/oauth/authorize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ codeChallenge, redirectUri }),
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) throw new Error(`compose_authorize_failed:${res.status}`)
+  return (await res.json()) as { url: string }
+}
+
+export async function completeGmailComposeCallback(args: {
+  code: string
+  codeVerifier: string
+  redirectUri: string
+}): Promise<{ googleEmail: string }> {
+  const res = await fetch(`${config.apiHost}/v1/compose/oauth/callback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(args),
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { reason?: string }
+    throw new Error(body.reason ?? `compose_callback_failed:${res.status}`)
+  }
+  return (await res.json()) as { googleEmail: string }
+}
+
 export interface ScheduledSend {
   id: string
   scheduledAt: number

@@ -334,6 +334,36 @@ export const usageCounters = sqliteTable(
   }),
 )
 
+/** Google OAuth tokens for the mobile-web compose flow. The web app
+ *  runs an OAuth flow against Google, exchanges the code server-side
+ *  (secret can't ship to browser), and persists the resulting tokens
+ *  here. Compose backend uses them to call gmail.users.messages.send
+ *  on the user's behalf. Extension's spoof-detection tokens still live
+ *  in chrome.storage.local independently — this table is only for the
+ *  server-mediated compose path. */
+export const googleTokens = sqliteTable('google_tokens', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** The Gmail address the OAuth session was granted for. Surfaced in
+   *  Settings so the user knows which account they connected. */
+  googleEmail: text('google_email').notNull(),
+  /** Long-lived — only returned on first consent OR when the user
+   *  disconnects + reconnects. If null after first exchange, we lost
+   *  the refresh token and must prompt re-consent. */
+  refreshToken: text('refresh_token').notNull(),
+  /** Cached short-lived token. Refreshed on-demand by getGoogleAccessToken
+   *  when within 5 min of expiry. */
+  accessToken: text('access_token'),
+  accessTokenExpiresAt: integer('access_token_expires_at'),
+  /** Space-separated scope string from the token response. Used to
+   *  detect when the user's granted scopes have drifted from what
+   *  compose needs (e.g., after we add a new scope in a later release). */
+  scopes: text('scopes').notNull(),
+  connectedAt: integer('connected_at').notNull(),
+  lastUsedAt: integer('last_used_at'),
+})
+
 /** Sign-in one-time codes. Moved off KV when the free-tier daily put
  *  cap kept blocking sign-in. D1 has no daily-cap on writes. Rows are
  *  deleted on successful verify; the cron sweeps anything past

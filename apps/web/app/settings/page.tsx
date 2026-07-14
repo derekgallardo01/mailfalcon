@@ -5,14 +5,18 @@ import { useEffect, useState } from 'react'
 import {
   type CustomDomainState,
   type EventWebhook,
+  type GmailComposeStatus,
   type MeResponse,
   type SubscriptionInfo,
+  beginGmailComposeAuthorize,
   confirmAccountDeletion,
   createWebhook,
   deleteCustomDomain,
   deleteWebhook,
+  disconnectGmailCompose,
   exportMe,
   getCustomDomain,
+  getGmailComposeStatus,
   getMe,
   getSubscription,
   listWebhooks,
@@ -28,6 +32,11 @@ import {
 import { config } from '../../lib/config'
 import { AppHeader } from '../../lib/AppHeader'
 import { clearSession, getSession } from '../../lib/auth-store'
+import {
+  composeRedirectUri,
+  generateChallenge,
+  rememberVerifier,
+} from '../../lib/google-oauth'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -252,6 +261,8 @@ export default function SettingsPage() {
       <SubscriptionPanel />
 
       <NotificationsPanel />
+
+      <GmailComposePanel />
 
       <IntegrationsPanel />
 
@@ -1138,6 +1149,130 @@ function ReportsPanel() {
           Download CSV
         </button>
       </div>
+    </section>
+  )
+}
+
+function GmailComposePanel() {
+  const [status, setStatus] = useState<GmailComposeStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function refresh() {
+    try {
+      setStatus(await getGmailComposeStatus())
+    } catch {
+      setStatus({ connected: false })
+    }
+  }
+
+  useEffect(() => {
+    void refresh()
+    // Listen for the callback popup's success message so we can refresh
+    // without a full page reload.
+    function onMessage(ev: MessageEvent) {
+      if (ev.data?.type === 'mf.gmail-connected') void refresh()
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
+  async function connect() {
+    setBusy(true)
+    setError(null)
+    try {
+      const { verifier, challenge } = await generateChallenge()
+      const redirectUri = composeRedirectUri()
+      rememberVerifier(verifier, redirectUri)
+      const { url } = await beginGmailComposeAuthorize(challenge, redirectUri)
+      // On mobile a popup may be blocked or awkward; use same-window
+      // redirect. Callback page bounces back to /settings.
+      window.location.assign(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'connect_failed')
+      setBusy(false)
+    }
+  }
+
+  async function disconnect() {
+    if (!window.confirm('Disconnect Gmail? MailFalcon will stop being able to send from your account.')) {
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await disconnectGmailCompose()
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'disconnect_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!status) return null
+  const connected = status.connected
+
+  return (
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-falcon-700">Mobile compose</h2>
+      <p className="mt-1 text-xs text-falcon-500">
+        Connect your Gmail account so MailFalcon can send tracked emails from
+        any device via <a href="/compose/" className="text-falcon-600 underline">app.mailfalcon.app/compose</a>.
+        Works on phones + tablets without installing anything — the Chrome extension is still required for tracking sends from Gmail on desktop.
+      </p>
+
+      {connected ? (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-emerald-800">
+                ✓ Connected as {status.googleEmail}
+              </p>
+              {status.connectedAt && (
+                <p className="text-[11px] text-emerald-700/80">
+                  Connected {new Date(status.connectedAt).toLocaleDateString()}.
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <a
+                href="/compose/"
+                className="rounded-md bg-falcon-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-falcon-600"
+              >
+                Open compose
+              </a>
+              <button
+                type="button"
+                onClick={disconnect}
+                disabled={busy}
+                className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+          {status.scopesUpToDate === false && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              MailFalcon needs additional Gmail permissions. Disconnect and reconnect to grant them.
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={connect}
+          disabled={busy}
+          className="mt-4 rounded-md bg-falcon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:opacity-50"
+        >
+          {busy ? 'Redirecting…' : 'Connect Gmail'}
+        </button>
+      )}
+      {error && (
+        <p className="mt-3 text-xs text-red-600">
+          {error}
+        </p>
+      )}
     </section>
   )
 }

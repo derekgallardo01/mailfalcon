@@ -7,6 +7,7 @@ import { adminRouter } from './routes/admin'
 import { authRouter } from './routes/auth'
 import { billingRouter } from './routes/billing'
 import { clickRouter } from './routes/click'
+import { composeRouter } from './routes/compose'
 import { contactsRouter } from './routes/contacts'
 import { emailsRouter } from './routes/emails'
 import { eventsRouter } from './routes/events'
@@ -142,6 +143,7 @@ app.route('/v1/templates', templatesRouter)
 app.route('/v1/followups', followupsRouter)
 app.route('/v1/replies', repliesRouter)
 app.route('/v1/scheduled', scheduledRouter)
+app.route('/v1/compose', composeRouter)
 app.route('/v1/push', pushRouter)
 app.route('/v1/billing', billingRouter)
 app.route('/v1/oauth', oauthRouter)
