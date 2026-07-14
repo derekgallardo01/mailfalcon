@@ -54,6 +54,8 @@ const ADMIN_SORT_OPTIONS: { key: EmailSort; label: string }[] = [
   { key: 'clicks-desc', label: 'Most clicks' },
 ]
 
+const POLL_INTERVAL_MS = 10_000
+
 export default function AdminPage() {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('stats')
@@ -67,6 +69,9 @@ export default function AdminPage() {
   const [emails, setEmails] = useState<AdminEmail[]>([])
   const [events, setEvents] = useState<AdminEvent[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [autoRefresh, setAutoRefresh] = useState(true)
 
   // Filters for the emails tab (admin-local state, not URL-synced).
   const [emailQ, setEmailQ] = useState('')
@@ -111,6 +116,37 @@ export default function AdminPage() {
       })
   }, [userStatusFilter, forbidden, loading])
 
+  /** Silently refetch all tabs' data. Used by the initial load AND
+   *  the 10s poll. Preserves current filters so the auto-refresh
+   *  doesn't clobber a user's mid-tab drill-down. */
+  async function refreshAll(): Promise<void> {
+    setRefreshing(true)
+    try {
+      const [s, u, em, ev] = await Promise.all([
+        admin.stats(),
+        admin.users(userStatusFilter === 'all' ? undefined : userStatusFilter),
+        admin.emails({
+          q: emailQ || undefined,
+          sort: emailSort,
+          from: presetToFrom(emailDate),
+        }),
+        admin.events(),
+      ])
+      setStats(s)
+      setUsers(u.users)
+      setEmails(em.emails)
+      setEvents(ev.events)
+      setLastRefreshedAt(Date.now())
+      setError(null)
+    } catch (err) {
+      if (err instanceof Error && err.message !== 'forbidden') {
+        setError(err.message)
+      }
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   useEffect(() => {
     if (!getSession()) {
       router.replace('/sign-in')
@@ -124,16 +160,7 @@ export default function AdminPage() {
           setLoading(false)
           return
         }
-        const [s, u, em, ev] = await Promise.all([
-          admin.stats(),
-          admin.users(),
-          admin.emails(),
-          admin.events(),
-        ])
-        setStats(s)
-        setUsers(u.users)
-        setEmails(em.emails)
-        setEvents(ev.events)
+        await refreshAll()
       } catch (err) {
         if (err instanceof Error) {
           if (err.message === 'unauthorized') {
@@ -152,6 +179,35 @@ export default function AdminPage() {
       }
     })()
   }, [router])
+
+  /** Background polling — refresh silently every 10s while the tab
+   *  is visible + auto-refresh is on. Suspends when the tab is
+   *  backgrounded (visibilityState !== 'visible') so we don't burn
+   *  the admin API from a stale tab. */
+  useEffect(() => {
+    if (loading || forbidden || !autoRefresh) return
+    let cancelled = false
+    const tick = async () => {
+      if (cancelled) return
+      if (document.visibilityState !== 'visible') return
+      await refreshAll()
+    }
+    const interval = window.setInterval(() => {
+      void tick()
+    }, POLL_INTERVAL_MS)
+    // Also refresh when the tab comes back to the foreground after
+    // being backgrounded, so returning to the tab shows fresh data
+    // immediately without waiting for the next tick.
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void tick()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [loading, forbidden, autoRefresh, userStatusFilter, emailQ, emailSort, emailDate])
 
   const hasEmailFilters =
     emailQ || emailSort !== 'sentAt-desc' || emailDate !== 'all'
@@ -183,9 +239,18 @@ export default function AdminPage() {
     <div className="mx-auto max-w-6xl px-6 py-6">
       <AppHeader />
 
-      <div className="mt-6">
-        <h1 className="text-xl font-semibold text-falcon-700">Admin</h1>
-        <p className="text-xs text-falcon-500">All users, all activity</p>
+      <div className="mt-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-falcon-700">Admin</h1>
+          <p className="text-xs text-falcon-500">All users, all activity</p>
+        </div>
+        <LiveStatus
+          autoRefresh={autoRefresh}
+          onToggle={() => setAutoRefresh((v) => !v)}
+          onRefreshNow={() => void refreshAll()}
+          refreshing={refreshing}
+          lastRefreshedAt={lastRefreshedAt}
+        />
       </div>
 
       <nav className="mt-4 flex gap-1 border-b border-falcon-200">
@@ -567,4 +632,70 @@ function StatusBadge({ status }: { status: AdminUser['status'] }) {
   }
   const m = meta[status]
   return <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${m.cls}`}>{m.label}</span>
+}
+
+function LiveStatus({
+  autoRefresh,
+  onToggle,
+  onRefreshNow,
+  refreshing,
+  lastRefreshedAt,
+}: {
+  autoRefresh: boolean
+  onToggle: () => void
+  onRefreshNow: () => void
+  refreshing: boolean
+  lastRefreshedAt: number | null
+}) {
+  const [, tickNow] = useState(0)
+  // Force re-render every second so "last refreshed X sec ago"
+  // stays current between poll ticks.
+  useEffect(() => {
+    if (!lastRefreshedAt) return
+    const t = window.setInterval(() => tickNow((n) => n + 1), 1000)
+    return () => window.clearInterval(t)
+  }, [lastRefreshedAt])
+
+  const ago = lastRefreshedAt
+    ? Math.max(0, Math.floor((Date.now() - lastRefreshedAt) / 1000))
+    : null
+
+  return (
+    <div className="flex flex-col items-end gap-1 text-[11px] text-falcon-500">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            autoRefresh
+              ? 'bg-emerald-100 text-emerald-800'
+              : 'bg-slate-100 text-slate-600'
+          }`}
+          title={autoRefresh ? 'Auto-refresh on — click to pause' : 'Paused — click to resume'}
+        >
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              autoRefresh
+                ? refreshing
+                  ? 'animate-pulse bg-emerald-600'
+                  : 'bg-emerald-500'
+                : 'bg-slate-400'
+            }`}
+          />
+          {autoRefresh ? 'LIVE' : 'PAUSED'}
+        </button>
+        <button
+          type="button"
+          onClick={onRefreshNow}
+          disabled={refreshing}
+          className="rounded border border-falcon-300 bg-white px-2 py-0.5 text-[10px] font-medium text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+        >
+          {refreshing ? 'Refreshing…' : 'Refresh now'}
+        </button>
+      </div>
+      {ago != null && (
+        <span>Updated {ago === 0 ? 'just now' : `${ago}s ago`}</span>
+      )}
+    </div>
+  )
 }
