@@ -329,6 +329,34 @@ pixelRouter.get('/:idWithExt', async (c) => {
         return
       }
 
+      // Notification dedupe. Gmail Web fires the pixel twice in quick
+      // succession — once for the inbox-list preview render, once for
+      // the message-body render — from the same UA hash. Both are
+      // legitimate opens; both go on the dashboard. But we don't want
+      // to spam the user with two identical push + email pings for
+      // the same visual open event. 5-minute window catches the
+      // preview/body double-fire without suppressing legit re-opens
+      // hours later.
+      const notifDedupeKey = recipientId
+        ? `notif-open:${row.id}:${recipientId}:${uaHash}`
+        : `notif-open:${row.id}:${uaHash}`
+      try {
+        const alreadyNotified = await c.env.KV.get(notifDedupeKey)
+        if (alreadyNotified) {
+          createLogger({ env: c.env }).info('pixel_notification_deduped', {
+            emailId: row.id,
+            recipientId,
+            uaHashPrefix: uaHash.slice(0, 8),
+          })
+          return
+        }
+        c.executionCtx.waitUntil(
+          c.env.KV.put(notifDedupeKey, '1', { expirationTtl: 300 }),
+        )
+      } catch {
+        /* fail-open: still notify on KV blip */
+      }
+
       await fanoutPush(db, c.env, row.userId, {
         kind: 'open',
         subject: row.subject,
