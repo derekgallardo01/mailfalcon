@@ -96,6 +96,7 @@ export default function ComposePage() {
   const [sendState, setSendState] = useState<SendState>({ kind: 'idle' })
   const [draftLoadedAt, setDraftLoadedAt] = useState<number | null>(null)
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
+  const [pendingDraft, setPendingDraft] = useState<LocalDraft | null>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -110,26 +111,33 @@ export default function ComposePage() {
       .catch(() => setStatus({ connected: false }))
       .finally(() => setStatusLoading(false))
 
-    // Restore any in-flight local draft. Only prompt if the draft has
-    // meaningful content — an empty draft record (edge from a prior
-    // aborted save) is silently discarded.
+    // Surface any in-flight local draft as a dismissible banner —
+    // never a blocking OS dialog. User picks Resume, Discard, or
+    // ignores it entirely and starts fresh (draft auto-saves over
+    // the top). Empty-record edge from a prior aborted save is
+    // silently discarded so the banner isn't a false alarm.
     const existing = readLocalDraft()
     if (existing && !draftIsEmpty(existing)) {
-      const ageMin = Math.round((Date.now() - existing.updatedAt) / 60_000)
-      const ageLabel = ageMin < 1 ? 'just now' : `${ageMin} min ago`
-      if (window.confirm(`Resume your draft from ${ageLabel}?`)) {
-        setToRaw(existing.to)
-        setCcRaw(existing.cc)
-        setBccRaw(existing.bcc)
-        setSubject(existing.subject)
-        setBody(existing.body)
-        if (existing.cc || existing.bcc) setShowCcBcc(true)
-        setDraftLoadedAt(existing.updatedAt)
-      } else {
-        clearLocalDraft()
-      }
+      setPendingDraft(existing)
     }
   }, [])
+
+  function resumePendingDraft() {
+    if (!pendingDraft) return
+    setToRaw(pendingDraft.to)
+    setCcRaw(pendingDraft.cc)
+    setBccRaw(pendingDraft.bcc)
+    setSubject(pendingDraft.subject)
+    setBody(pendingDraft.body)
+    if (pendingDraft.cc || pendingDraft.bcc) setShowCcBcc(true)
+    setDraftLoadedAt(pendingDraft.updatedAt)
+    setPendingDraft(null)
+  }
+
+  function dismissPendingDraft() {
+    clearLocalDraft()
+    setPendingDraft(null)
+  }
 
   // Auto-save the local draft every N seconds while the form has
   // content. Cheap (single localStorage write); no server round-trip.
@@ -275,6 +283,36 @@ export default function ComposePage() {
         </span>
       </header>
 
+      {pendingDraft && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <span>
+            Unsent draft from {formatDraftAge(pendingDraft.updatedAt)}
+            {pendingDraft.subject && (
+              <span className="ml-1 text-amber-800/80">
+                &mdash; &ldquo;{pendingDraft.subject.slice(0, 60)}
+                {pendingDraft.subject.length > 60 ? '…' : ''}&rdquo;
+              </span>
+            )}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={resumePendingDraft}
+              className="rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700"
+            >
+              Resume
+            </button>
+            <button
+              type="button"
+              onClick={dismissPendingDraft}
+              className="rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
       <form
         className="flex flex-1 flex-col rounded-lg border border-falcon-200 bg-white shadow-sm"
         onSubmit={(e) => {
@@ -403,6 +441,16 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
       <div className="flex flex-1 items-center">{children}</div>
     </div>
   )
+}
+
+function formatDraftAge(ts: number): string {
+  const diffMin = Math.floor((Date.now() - ts) / 60_000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin} min ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDay = Math.floor(diffHr / 24)
+  return `${diffDay}d ago`
 }
 
 function escapeHtml(s: string): string {
