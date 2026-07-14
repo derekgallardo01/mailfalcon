@@ -170,10 +170,39 @@ pixelRouter.get('/:idWithExt', async (c) => {
 
   c.executionCtx.waitUntil(
     (async () => {
-      // Notification gate: 'bot' + 'unknown' UAs suppress. Real
-      // browsers always send a UA — omission is a scanner signal.
+      // ASN-based bot check. Google's image proxy occasionally fetches
+      // with a plain-Mozilla UA (no GoogleImageProxy suffix) which
+      // slips past the string-based BOT_PATTERNS filter. The fetch
+      // still originates from AS15169 (Google) though. Force-classify
+      // any fetch from Google's ASN as bot — every Google-datacenter
+      // pixel fetch is by definition Gmail infrastructure, not a
+      // recipient's browser. Same treatment for other known
+      // proxy/scanner ASNs (Microsoft mail scanners, Cloudflare
+      // Workers, Amazon SES scanners, etc).
+      const cf = (c.req.raw as Request & { cf?: Record<string, unknown> }).cf ?? {}
+      const asn = typeof cf.asn === 'number' ? (cf.asn as number) : null
+      const asOrg =
+        typeof cf.asOrganization === 'string'
+          ? (cf.asOrganization as string).toLowerCase()
+          : ''
+      const isDatacenterFetch =
+        asn === 15169 || // Google
+        asn === 8075 || // Microsoft
+        asn === 32934 || // Facebook
+        asn === 14618 || // Amazon EC2
+        asn === 16509 || // Amazon
+        asn === 13335 || // Cloudflare
+        asOrg.includes('google') ||
+        asOrg.includes('microsoft') ||
+        asOrg.includes('amazon') ||
+        asOrg.includes('facebook')
+
+      // Notification gate: 'bot' + 'unknown' UAs + datacenter fetches
+      // all suppress. Real browsers with real UAs from real networks
+      // are the only class that triggers notifications.
       const humanLike =
-        uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
+        (uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile') &&
+        !isDatacenterFetch
 
       // Sender-IP guard. Some Gmail configs send Referrer-Policy:
       // no-referrer, stripping the referer that isSenderGmailContext
@@ -232,13 +261,24 @@ pixelRouter.get('/:idWithExt', async (c) => {
         }
       }
 
+      // isSelfOpenWindow (90s of mint) previously suppressed ALL
+      // opens in that window, which false-negatived legit recipient
+      // opens on immediate sends. Narrow it: only suppress within-
+      // window opens when they're ALSO from the sender's network,
+      // from a datacenter (proxy prefetch), or self-recipient. A real
+      // outside-network browser hitting within 90s is a fast
+      // recipient — let them notify.
+      const suppressAsPrefetch =
+        isSelfOpenWindow &&
+        (isSenderIpFetch || isDatacenterFetch || isSelfRecipientOpen)
+
       const notificationSuppressed =
         !humanLike ||
-        isSelfOpenWindow ||
         muted ||
         isSenderGmailContext ||
         isSenderIpFetch ||
-        isSelfRecipientOpen
+        isSelfRecipientOpen ||
+        suppressAsPrefetch
 
       await db
         .insert(events)
@@ -276,7 +316,11 @@ pixelRouter.get('/:idWithExt', async (c) => {
           emailId: row.id,
           uaClass: uaDetails.uaClass,
           humanLike,
+          isDatacenterFetch,
+          asn,
+          asOrg: asOrg.slice(0, 40),
           isSelfOpenWindow,
+          suppressAsPrefetch,
           muted,
           isSenderGmailContext,
           isSenderIpFetch,
