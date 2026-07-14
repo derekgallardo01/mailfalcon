@@ -182,14 +182,52 @@ export async function fanoutPush(
   //   - per-(user, kind) KV rate limit: 20/hour, fail-open on KV write
   //     errors so we never silently drop on KV blips.
   let emailNotified = 0
+  const log = createLogger({ env })
+  if (!user) {
+    log.warn('email_notify_skipped', { userId, reason: 'no_user_row' })
+  } else if (!env.RESEND_API_KEY) {
+    log.warn('email_notify_skipped', {
+      userId,
+      reason: 'no_resend_key',
+      kind: payload.kind,
+    })
+  } else if (!emailNotifyEnabled(user, payload.kind)) {
+    log.info('email_notify_skipped', {
+      userId,
+      reason: 'flag_off',
+      kind: payload.kind,
+      flags: {
+        open: user.emailNotifyOpen,
+        click: user.emailNotifyClick,
+        reply: user.emailNotifyReply,
+        hotLead: user.emailNotifyHotLead,
+      },
+    })
+  }
   if (
     user &&
     env.RESEND_API_KEY &&
     emailNotifyEnabled(user, payload.kind)
   ) {
     const tierOk = await hasEffectiveProTier(db, user, userId)
+    if (!tierOk) {
+      log.info('email_notify_skipped', {
+        userId,
+        reason: 'tier_below_pro',
+        kind: payload.kind,
+        tier: user.tier,
+        trialEndsAt: user.trialEndsAt,
+      })
+    }
     if (tierOk) {
       const allowed = await rateLimitEmailNotify(env, userId, payload.kind)
+      if (!allowed) {
+        log.info('email_notify_skipped', {
+          userId,
+          reason: 'rate_limited',
+          kind: payload.kind,
+        })
+      }
       if (allowed) {
         try {
           await sendEventNotification({
