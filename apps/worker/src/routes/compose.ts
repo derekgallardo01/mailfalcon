@@ -118,6 +118,16 @@ composeRouter.post('/oauth/callback', async (c) => {
   }
 })
 
+/** Critical Gmail scopes the compose flow can't function without.
+ *  Excludes openid/email/profile because Google normalizes those into
+ *  userinfo URIs in the token response (openid → openid, email →
+ *  https://www.googleapis.com/auth/userinfo.email, profile → …/userinfo.profile),
+ *  which would false-positive a naive string-inclusion check. */
+const CRITICAL_GMAIL_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.compose',
+  'https://www.googleapis.com/auth/gmail.readonly',
+]
+
 /** GET /v1/compose/oauth/status — is Gmail connected? Which address? */
 composeRouter.get('/oauth/status', async (c) => {
   const userId = c.get('userId')
@@ -135,11 +145,10 @@ composeRouter.get('/oauth/status', async (c) => {
   if (!row) {
     return c.json({ connected: false })
   }
-  // Detect scope drift so the UI can prompt for re-consent when we
-  // ship new features that require additional scopes.
+  // Only flag drift for the Gmail scopes we genuinely can't operate
+  // without. OIDC scope name normalization is expected and harmless.
   const grantedScopes = row.scopes.split(' ').filter(Boolean)
-  const requiredScopes = GMAIL_COMPOSE_SCOPES.split(' ')
-  const missing = requiredScopes.filter((s) => !grantedScopes.includes(s))
+  const missing = CRITICAL_GMAIL_SCOPES.filter((s) => !grantedScopes.includes(s))
   return c.json({
     connected: true,
     googleEmail: row.googleEmail,
