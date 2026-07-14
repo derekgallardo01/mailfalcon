@@ -1,0 +1,16 @@
+{
+  "name": "MailFalcon",
+  "short_name": "MailFalcon",
+  "description": "Email tracking for Gmail — send tracked emails from any device.",
+  "start_url": "/compose/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f7fa",
+  "theme_color": "#3b6cb7",
+  "icons": [
+    { "src": "/falcon.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "/falcon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "categories": ["productivity", "business"]
+}

@@ -577,6 +577,44 @@ export async function completeGmailComposeCallback(args: {
   return (await res.json()) as { googleEmail: string }
 }
 
+export interface ComposeSendRequest {
+  to: string[]
+  cc?: string[]
+  bcc?: string[]
+  subject: string
+  bodyHtml: string
+  threadId?: string
+  inReplyToMessageId?: string
+  references?: string
+}
+
+export interface ComposeSendResponse {
+  ok: true
+  emailId: string
+  gmailMessageId: string
+  threadId: string
+}
+
+export async function composeSend(
+  req: ComposeSendRequest,
+): Promise<ComposeSendResponse> {
+  const res = await fetch(`${config.apiHost}/v1/compose/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(req),
+  })
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string
+      detail?: string
+      message?: string
+    }
+    throw new Error(body.message ?? body.error ?? `compose_send_failed:${res.status}`)
+  }
+  return (await res.json()) as ComposeSendResponse
+}
+
 export interface ScheduledSend {
   id: string
   scheduledAt: number

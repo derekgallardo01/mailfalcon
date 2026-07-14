@@ -50,12 +50,20 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'MailFalcon',
+    statusBarStyle: 'default',
+  },
 }
 
 export const viewport: Viewport = {
   themeColor: '#3b6cb7',
   width: 'device-width',
   initialScale: 1,
+  // Prevent auto-zoom when tapping the address / body inputs on iOS.
+  maximumScale: 5,
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {

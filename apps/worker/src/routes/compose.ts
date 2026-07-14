@@ -1,18 +1,31 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { eq } from 'drizzle-orm'
-import { googleTokens } from '@mailfalcon/db/schema'
+import { eq, sql } from 'drizzle-orm'
+import {
+  googleTokens,
+  links,
+  recipients,
+  trackedEmails,
+  users,
+} from '@mailfalcon/db/schema'
+import { newSalt, newTrackingId, sign, clickUrl, pixelUrl } from '@mailfalcon/shared'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
 import {
   GMAIL_COMPOSE_SCOPES,
   exchangeAndStoreGoogleTokens,
+  getGoogleAccessToken,
 } from '../lib/google-tokens'
 import { createLogger, errorMeta } from '../lib/logger'
+import { base64UrlEncodeRfc5322, buildRfc5322 } from '../lib/rfc5322'
+import { getHmacSecret } from '../lib/secrets'
+import { checkAndIncrementUsage } from '../lib/usage'
 
 type Bindings = {
   ENVIRONMENT: string
   DB: D1Database
+  KV: KVNamespace
+  HMAC_SECRET?: string
   GOOGLE_OAUTH_CLIENT_ID?: string
   GOOGLE_OAUTH_CLIENT_SECRET?: string
   PUBLIC_WEB_URL?: string
@@ -147,3 +160,271 @@ composeRouter.delete('/oauth', async (c) => {
   createLogger({ env: c.env }).info('gmail_disconnected', { userId })
   return c.json({ ok: true })
 })
+
+const addressSchema = z
+  .string()
+  .max(320)
+  .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'invalid_email')
+
+const sendSchema = z.object({
+  to: z.array(addressSchema).min(1).max(50),
+  cc: z.array(addressSchema).max(50).default([]),
+  bcc: z.array(addressSchema).max(50).default([]),
+  subject: z.string().max(500).default(''),
+  bodyHtml: z.string().max(500_000),
+  /** Optional Gmail threadId for reply-in-thread. When set the sent
+   *  message is grouped with the existing thread. */
+  threadId: z.string().max(200).optional(),
+  /** Message-ID of the parent for RFC 5322 In-Reply-To + References. */
+  inReplyToMessageId: z.string().max(300).optional(),
+  /** Prior References header from the source message. */
+  references: z.string().max(2000).optional(),
+})
+
+interface GmailSendResponse {
+  id: string
+  threadId: string
+  labelIds?: string[]
+}
+
+/**
+ * POST /v1/compose/send — the mobile-web compose endpoint. Mints a
+ * tracked_email, injects the tracking pixel + rewrites <a href> to
+ * per-recipient click-tracking URLs, builds an RFC 5322 message, and
+ * calls Gmail API users.messages.send. Returns the Gmail message-id +
+ * thread-id + the internal emailId for dashboard deep-links.
+ *
+ * Uses shared-pixel mode (single pixel URL for the whole email) when
+ * there are multiple recipients — same trade-off as the extension's
+ * default. Per-recipient attribution requires mail-merge mode which
+ * this endpoint doesn't yet support (v2 feature).
+ */
+composeRouter.post('/send', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const parsed = sendSchema.safeParse(body)
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
+  }
+  const userId = c.get('userId')
+  const db = getDb(c.env.DB)
+
+  // Load sender + tier — needed for tracker host (custom domain) and
+  // the "From" address on the outgoing message.
+  const user = await db
+    .select({
+      email: users.email,
+      tier: users.tier,
+      customTrackerHost: users.customTrackerHost,
+      customTrackerVerifiedAt: users.customTrackerVerifiedAt,
+      companyName: users.companyName,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get()
+  if (!user) return c.json({ error: 'not_found' }, 404)
+
+  const usage = await checkAndIncrementUsage(c.env.KV, userId, user.tier ?? 'free')
+  if (!usage.allowed) {
+    return c.json(
+      {
+        error: 'free_tier_cap_reached',
+        used: usage.used,
+        limit: usage.limit,
+        message: `Free plan allows ${usage.limit} tracked emails per day. Upgrade to Pro for unlimited.`,
+      },
+      429,
+    )
+  }
+
+  // Fetch a valid Gmail access token; also confirms the user has
+  // connected their Gmail account.
+  let accessToken: string
+  let googleEmail: string
+  try {
+    const t = await getGoogleAccessToken(db, c.env, userId)
+    accessToken = t.accessToken
+    googleEmail = t.googleEmail
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown'
+    return c.json({ error: 'gmail_not_ready', reason: msg }, 400)
+  }
+
+  // Extract every <a href="..."> URL so we can mint links + rewrite.
+  // Regex is fine for the compose case because the body is user-typed
+  // in our own editor and won't have exotic markup. Order matters:
+  // idx here IS the link idx in the tracked_emails row.
+  const linkMatches = [...parsed.data.bodyHtml.matchAll(/<a\b[^>]*\bhref\s*=\s*(["'])([^"']+)\1/gi)]
+  const originalLinks = linkMatches.map((m) => m[2]!).filter((u) => /^https?:\/\//i.test(u))
+
+  const secret = getHmacSecret(c.env)
+  const id = newTrackingId()
+  const hmacSalt = newSalt()
+  const now = Date.now()
+
+  // Build recipient rows (all addresses in to+cc+bcc get one row).
+  const allAddresses = [...parsed.data.to, ...parsed.data.cc, ...parsed.data.bcc]
+  const recipientRows = await Promise.all(
+    allAddresses.map(async (addr) => ({
+      id: `${id}:r${Math.random().toString(36).slice(2, 10)}`,
+      emailId: id,
+      hashedAddr: await sha256HexLower(addr),
+      displayLabel: addr.split('@')[0] ?? addr,
+    })),
+  )
+
+  await db.batch([
+    db.insert(trackedEmails).values({
+      id,
+      userId,
+      subjectHash: null,
+      subject: parsed.data.subject,
+      threadId: parsed.data.threadId ?? null,
+      messageId: null,
+      recipientCount: allAddresses.length,
+      sentAt: now,
+      hmacSalt,
+      privacyMode: 0,
+    }),
+    ...originalLinks.map((url, idx) =>
+      db.insert(links).values({
+        id: `${id}:${idx}`,
+        emailId: id,
+        idx,
+        originalUrl: url,
+      }),
+    ),
+    ...recipientRows.map((r) => db.insert(recipients).values(r)),
+    db
+      .update(users)
+      .set({ firstSendAt: sql`COALESCE(${users.firstSendAt}, ${now})` })
+      .where(eq(users.id, userId)),
+  ])
+
+  // Sender IP for the pixel-handler self-open guard.
+  const senderIp = c.req.header('CF-Connecting-IP') ?? null
+  if (senderIp) {
+    c.executionCtx.waitUntil(
+      c.env.KV.put(`mint-ip:${id}`, senderIp, { expirationTtl: 24 * 60 * 60 }).catch(
+        () => undefined,
+      ),
+    )
+  }
+
+  const trackerHost =
+    user.customTrackerHost && user.customTrackerVerifiedAt
+      ? `https://${user.customTrackerHost}`
+      : 'https://t.mailfalcon.app'
+
+  // Shared-pixel mode: sign over just `${id}` (no recipientId). The
+  // /v1/emails endpoint mirrors this; per-recipient pixels are a
+  // future upgrade for the compose flow.
+  const pixelSig = await sign(id, secret, 12)
+
+  // Rewrite the body: replace each <a href> with the click-tracked
+  // URL (in matched order), then append the tracking pixel img.
+  let rewrittenBody = parsed.data.bodyHtml
+  let linkIdx = 0
+  rewrittenBody = rewrittenBody.replace(
+    /(<a\b[^>]*\bhref\s*=\s*)(["'])([^"']+)\2/gi,
+    (whole, prefix: string, quote: string, url: string) => {
+      if (!/^https?:\/\//i.test(url)) return whole
+      const idxNow = linkIdx++
+      // We use pixelSig here because the current shared-pixel design
+      // signs everything over just `${id}`. When we ship per-recipient
+      // mode we'll switch to per-recipient click sigs.
+      const rewritten = clickUrl(id, idxNow, pixelSig, trackerHost)
+      return `${prefix}${quote}${rewritten}${quote}`
+    },
+  )
+  const pixelImg = `<img src="${pixelUrl(id, pixelSig, trackerHost)}" width="1" height="1" style="display:none" alt="">`
+  // Append near the end — before the closing body tag if the user
+  // pasted a full document, else at the very end.
+  if (/<\/body>/i.test(rewrittenBody)) {
+    rewrittenBody = rewrittenBody.replace(/<\/body>/i, `${pixelImg}</body>`)
+  } else {
+    rewrittenBody = `${rewrittenBody}${pixelImg}`
+  }
+
+  const raw = buildRfc5322({
+    fromAddress: googleEmail,
+    fromName: user.companyName ?? undefined,
+    to: parsed.data.to,
+    cc: parsed.data.cc,
+    bcc: parsed.data.bcc,
+    subject: parsed.data.subject,
+    htmlBody: rewrittenBody,
+    inReplyTo: parsed.data.inReplyToMessageId,
+    references: parsed.data.references,
+  })
+  const encoded = base64UrlEncodeRfc5322(raw)
+
+  const gmailBody: { raw: string; threadId?: string } = { raw: encoded }
+  if (parsed.data.threadId) gmailBody.threadId = parsed.data.threadId
+
+  const gmailRes = await fetch(
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(gmailBody),
+    },
+  )
+
+  if (!gmailRes.ok) {
+    const text = await gmailRes.text()
+    createLogger({ env: c.env }).warn('gmail_send_failed', {
+      userId,
+      status: gmailRes.status,
+      detail: text.slice(0, 300),
+    })
+    // Best-effort rollback: leave the tracked_email row; user might
+    // retry and we want the tracking to fire once the send does. But
+    // do return a specific error so the UI can surface it.
+    return c.json({ error: 'gmail_send_failed', detail: text.slice(0, 300) }, 502)
+  }
+
+  const gmailData = (await gmailRes.json()) as GmailSendResponse
+
+  // Backfill Gmail's threadId + messageId so reply detection can
+  // correlate inbound messages against this send.
+  await db
+    .update(trackedEmails)
+    .set({
+      threadId: gmailData.threadId,
+      messageId: gmailData.id,
+    })
+    .where(eq(trackedEmails.id, id))
+    .run()
+
+  createLogger({ env: c.env }).info('compose_sent', {
+    userId,
+    emailId: id,
+    gmailMessageId: gmailData.id,
+    threadId: gmailData.threadId,
+    recipientCount: allAddresses.length,
+    linkCount: originalLinks.length,
+  })
+
+  return c.json({
+    ok: true,
+    emailId: id,
+    gmailMessageId: gmailData.id,
+    threadId: gmailData.threadId,
+  })
+})
+
+async function sha256HexLower(address: string): Promise<string> {
+  const buf = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(address.toLowerCase()),
+  )
+  const bytes = new Uint8Array(buf)
+  let hex = ''
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i]!.toString(16).padStart(2, '0')
+  }
+  return hex
+}
