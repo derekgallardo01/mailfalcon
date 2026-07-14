@@ -9,6 +9,56 @@ import {
 } from '../../lib/api'
 import { getSession } from '../../lib/auth-store'
 
+const DRAFT_KEY = 'mf.compose.draft'
+const DRAFT_SAVE_INTERVAL_MS = 3_000
+
+interface LocalDraft {
+  to: string
+  cc: string
+  bcc: string
+  subject: string
+  body: string
+  updatedAt: number
+}
+
+function readLocalDraft(): LocalDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as LocalDraft
+    if (!parsed.updatedAt) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeLocalDraft(d: LocalDraft): void {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(d))
+  } catch {
+    /* quota exceeded / private mode — ignore */
+  }
+}
+
+function clearLocalDraft(): void {
+  try {
+    localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+function draftIsEmpty(d: LocalDraft): boolean {
+  return (
+    !d.to.trim() &&
+    !d.cc.trim() &&
+    !d.bcc.trim() &&
+    !d.subject.trim() &&
+    !d.body.trim()
+  )
+}
+
 type SendState =
   | { kind: 'idle' }
   | { kind: 'sending' }
@@ -44,6 +94,8 @@ export default function ComposePage() {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [sendState, setSendState] = useState<SendState>({ kind: 'idle' })
+  const [draftLoadedAt, setDraftLoadedAt] = useState<number | null>(null)
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -57,7 +109,46 @@ export default function ComposePage() {
       })
       .catch(() => setStatus({ connected: false }))
       .finally(() => setStatusLoading(false))
+
+    // Restore any in-flight local draft. Only prompt if the draft has
+    // meaningful content — an empty draft record (edge from a prior
+    // aborted save) is silently discarded.
+    const existing = readLocalDraft()
+    if (existing && !draftIsEmpty(existing)) {
+      const ageMin = Math.round((Date.now() - existing.updatedAt) / 60_000)
+      const ageLabel = ageMin < 1 ? 'just now' : `${ageMin} min ago`
+      if (window.confirm(`Resume your draft from ${ageLabel}?`)) {
+        setToRaw(existing.to)
+        setCcRaw(existing.cc)
+        setBccRaw(existing.bcc)
+        setSubject(existing.subject)
+        setBody(existing.body)
+        if (existing.cc || existing.bcc) setShowCcBcc(true)
+        setDraftLoadedAt(existing.updatedAt)
+      } else {
+        clearLocalDraft()
+      }
+    }
   }, [])
+
+  // Auto-save the local draft every N seconds while the form has
+  // content. Cheap (single localStorage write); no server round-trip.
+  useEffect(() => {
+    const d: LocalDraft = {
+      to: toRaw,
+      cc: ccRaw,
+      bcc: bccRaw,
+      subject,
+      body,
+      updatedAt: Date.now(),
+    }
+    if (draftIsEmpty(d)) return
+    const t = setTimeout(() => {
+      writeLocalDraft(d)
+      setDraftSavedAt(d.updatedAt)
+    }, DRAFT_SAVE_INTERVAL_MS)
+    return () => clearTimeout(t)
+  }, [toRaw, ccRaw, bccRaw, subject, body])
 
   const parsedTo = useMemo(() => parseAddresses(toRaw), [toRaw])
   const parsedCc = useMemo(() => parseAddresses(ccRaw), [ccRaw])
@@ -88,6 +179,7 @@ export default function ComposePage() {
         subject,
         bodyHtml,
       })
+      clearLocalDraft()
       setSendState({ kind: 'sent', emailId: res.emailId })
     } catch (err) {
       setSendState({
@@ -105,7 +197,17 @@ export default function ComposePage() {
     setBody('')
     setShowCcBcc(false)
     setSendState({ kind: 'idle' })
+    setDraftLoadedAt(null)
+    setDraftSavedAt(null)
+    clearLocalDraft()
     setTimeout(() => bodyRef.current?.focus(), 50)
+  }
+
+  function discardDraft() {
+    if (!window.confirm('Discard this draft? Any unsent changes will be lost.')) {
+      return
+    }
+    reset()
   }
 
   if (statusLoading) {
@@ -259,16 +361,33 @@ export default function ComposePage() {
         )}
 
         <div className="flex items-center justify-between gap-3 border-t border-falcon-200 bg-falcon-50 px-3 py-3">
-          <span className="text-[11px] text-falcon-500">
-            Every link is tracked · Pixel added automatically
-          </span>
-          <button
-            type="submit"
-            disabled={!canSend}
-            className="rounded-md bg-falcon-500 px-5 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sendState.kind === 'sending' ? 'Sending…' : 'Send'}
-          </button>
+          <div className="flex flex-col gap-0.5 text-[11px] text-falcon-500">
+            <span>Every link tracked · Pixel added</span>
+            {draftSavedAt && (
+              <span className="text-falcon-500">
+                Draft saved
+                {draftLoadedAt && draftLoadedAt !== draftSavedAt && ' · resumed'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {(toRaw || subject || body || ccRaw || bccRaw) && (
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="rounded-md border border-falcon-300 bg-white px-3 py-2 text-xs font-semibold text-falcon-700 hover:bg-falcon-50"
+              >
+                Discard
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={!canSend}
+              className="rounded-md bg-falcon-500 px-5 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {sendState.kind === 'sending' ? 'Sending…' : 'Send'}
+            </button>
+          </div>
         </div>
       </form>
     </main>

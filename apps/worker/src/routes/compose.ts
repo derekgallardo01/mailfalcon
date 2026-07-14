@@ -345,13 +345,23 @@ composeRouter.post('/send', async (c) => {
       return `${prefix}${quote}${rewritten}${quote}`
     },
   )
-  const pixelImg = `<img src="${pixelUrl(id, pixelSig, trackerHost)}" width="1" height="1" style="display:none" alt="">`
-  // Append near the end — before the closing body tag if the user
-  // pasted a full document, else at the very end.
-  if (/<\/body>/i.test(rewrittenBody)) {
-    rewrittenBody = rewrittenBody.replace(/<\/body>/i, `${pixelImg}</body>`)
+  // Style mirrors the extension's known-good pixel: visible 1x1
+  // block. NEVER `display:none` — Gmail (esp. mobile) skips those
+  // when deciding whether to prefetch through googleimageproxy, which
+  // means the pixel never fires and the open goes untracked.
+  const pixelImg = `<img src="${pixelUrl(id, pixelSig, trackerHost)}" width="1" height="1" alt="" style="border:0;display:block;height:1px;width:1px;">`
+  // Wrap the body in a full HTML document so Gmail treats it as
+  // proper HTML content (raw fragments sometimes get sanitized). If
+  // the caller already sent a full document, insert the pixel just
+  // before </body>; otherwise wrap + append.
+  if (/<html[\s>]/i.test(rewrittenBody)) {
+    if (/<\/body>/i.test(rewrittenBody)) {
+      rewrittenBody = rewrittenBody.replace(/<\/body>/i, `${pixelImg}</body>`)
+    } else {
+      rewrittenBody = `${rewrittenBody}${pixelImg}`
+    }
   } else {
-    rewrittenBody = `${rewrittenBody}${pixelImg}`
+    rewrittenBody = `<!doctype html><html><body>${rewrittenBody}${pixelImg}</body></html>`
   }
 
   const raw = buildRfc5322({
