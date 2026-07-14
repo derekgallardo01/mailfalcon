@@ -237,23 +237,34 @@ function EmailDetailInner() {
               live · {liveCount} new
             </span>
           )}
-          <button
-            type="button"
-            onClick={toggleMute}
-            disabled={muteBusy}
-            className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
-              data.email.notificationsMuted
-                ? 'border-falcon-200 bg-white text-falcon-700 hover:bg-falcon-50'
-                : 'border-falcon-200 bg-white text-falcon-500 hover:bg-falcon-50 hover:text-falcon-700'
-            }`}
-            title={
-              data.email.notificationsMuted
-                ? 'Notifications for this email are muted. Click to unmute.'
-                : 'Mute push notifications for this email. Events still record on the dashboard.'
-            }
-          >
-            {data.email.notificationsMuted ? '🔔 Unmute' : '🔕 Mute notifications'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {id && (
+              <Link
+                href={`/compose/?reply=${encodeURIComponent(id)}`}
+                className="rounded bg-falcon-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-falcon-600"
+                title="Reply in this thread — prefills recipient, subject, and quoted body"
+              >
+                ↩ Reply
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={toggleMute}
+              disabled={muteBusy}
+              className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+                data.email.notificationsMuted
+                  ? 'border-falcon-200 bg-white text-falcon-700 hover:bg-falcon-50'
+                  : 'border-falcon-200 bg-white text-falcon-500 hover:bg-falcon-50 hover:text-falcon-700'
+              }`}
+              title={
+                data.email.notificationsMuted
+                  ? 'Notifications for this email are muted. Click to unmute.'
+                  : 'Mute push notifications for this email. Events still record on the dashboard.'
+              }
+            >
+              {data.email.notificationsMuted ? '🔔 Unmute' : '🔕 Mute notifications'}
+            </button>
+          </div>
         </div>
       </header>
 

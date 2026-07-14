@@ -25,6 +25,17 @@ export interface Rfc5322Message {
   inReplyTo?: string
   /** Prior References header from the source message, if any. */
   references?: string
+  /** Optional attachments. Each part is base64-encoded standard (not
+   *  base64url) with 76-char line wrapping per RFC 2045. */
+  attachments?: Attachment[]
+}
+
+export interface Attachment {
+  filename: string
+  mimeType: string
+  /** File contents as standard base64 (no URL-safe substitutions).
+   *  Line-wrapping is applied at build time. */
+  dataBase64: string
 }
 
 /**
@@ -33,7 +44,12 @@ export interface Rfc5322Message {
  * gmail.users.messages.send{ raw }.
  */
 export function buildRfc5322(msg: Rfc5322Message): string {
-  const boundary = 'mfmix_' + Math.random().toString(36).slice(2)
+  const hasAttachments = msg.attachments && msg.attachments.length > 0
+  const altBoundary = 'mfalt_' + Math.random().toString(36).slice(2)
+  const mixedBoundary = hasAttachments
+    ? 'mfmix_' + Math.random().toString(36).slice(2)
+    : null
+
   const headers: string[] = []
   headers.push(`From: ${formatAddress(msg.fromAddress, msg.fromName)}`)
   headers.push(`To: ${msg.to.map((a) => formatAddress(a)).join(', ')}`)
@@ -52,25 +68,65 @@ export function buildRfc5322(msg: Rfc5322Message): string {
       : msg.inReplyTo
     headers.push(`References: ${refs}`)
   }
-  headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`)
 
   const text = msg.textBody ?? htmlToText(msg.htmlBody)
-  const body = [
-    `--${boundary}`,
+  const altPart = [
+    `--${altBoundary}`,
     'Content-Type: text/plain; charset="UTF-8"',
     'Content-Transfer-Encoding: 7bit',
     '',
     text,
-    `--${boundary}`,
+    `--${altBoundary}`,
     'Content-Type: text/html; charset="UTF-8"',
     'Content-Transfer-Encoding: 7bit',
     '',
     msg.htmlBody,
-    `--${boundary}--`,
-    '',
+    `--${altBoundary}--`,
   ].join('\r\n')
 
-  return headers.join('\r\n') + '\r\n\r\n' + body
+  if (!hasAttachments || !mixedBoundary) {
+    headers.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`)
+    return headers.join('\r\n') + '\r\n\r\n' + altPart + '\r\n'
+  }
+
+  // Attachments: wrap the multipart/alternative in a multipart/mixed
+  // container. Standard MIME shape most mail clients render correctly.
+  headers.push(`Content-Type: multipart/mixed; boundary="${mixedBoundary}"`)
+  const mixedParts: string[] = []
+  mixedParts.push(`--${mixedBoundary}`)
+  mixedParts.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`)
+  mixedParts.push('')
+  mixedParts.push(altPart)
+  for (const att of msg.attachments!) {
+    mixedParts.push(`--${mixedBoundary}`)
+    mixedParts.push(`Content-Type: ${att.mimeType}; name="${encodeFilename(att.filename)}"`)
+    mixedParts.push('Content-Transfer-Encoding: base64')
+    mixedParts.push(
+      `Content-Disposition: attachment; filename="${encodeFilename(att.filename)}"`,
+    )
+    mixedParts.push('')
+    mixedParts.push(wrap76(att.dataBase64))
+  }
+  mixedParts.push(`--${mixedBoundary}--`)
+  mixedParts.push('')
+
+  return headers.join('\r\n') + '\r\n\r\n' + mixedParts.join('\r\n')
+}
+
+/** Wrap standard base64 at 76 chars per RFC 2045. */
+function wrap76(b64: string): string {
+  const chunks: string[] = []
+  for (let i = 0; i < b64.length; i += 76) chunks.push(b64.slice(i, i + 76))
+  return chunks.join('\r\n')
+}
+
+/** Escape quote chars in a filename so the Content-Disposition header
+ *  stays parseable. Non-ASCII filenames get RFC 2047-encoded. */
+function encodeFilename(name: string): string {
+  const safe = name.replace(/["\\]/g, '_')
+  if (/^[\x20-\x7e]*$/.test(safe)) return safe
+  const b64 = btoa(unescape(encodeURIComponent(safe)))
+  return `=?UTF-8?B?${b64}?=`
 }
 
 /**

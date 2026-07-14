@@ -175,6 +175,13 @@ const addressSchema = z
   .max(320)
   .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'invalid_email')
 
+const attachmentSchema = z.object({
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().max(200).default('application/octet-stream'),
+  /** Standard base64 (NOT base64url) of the file bytes. */
+  dataBase64: z.string().max(35_000_000), // ~25MB decoded — Gmail's limit
+})
+
 const sendSchema = z.object({
   to: z.array(addressSchema).min(1).max(50),
   cc: z.array(addressSchema).max(50).default([]),
@@ -188,6 +195,8 @@ const sendSchema = z.object({
   inReplyToMessageId: z.string().max(300).optional(),
   /** Prior References header from the source message. */
   references: z.string().max(2000).optional(),
+  /** Up to 10 files, ~25MB combined per Gmail's limit. */
+  attachments: z.array(attachmentSchema).max(10).default([]),
 })
 
 interface GmailSendResponse {
@@ -364,6 +373,17 @@ composeRouter.post('/send', async (c) => {
     rewrittenBody = `<!doctype html><html><body>${rewrittenBody}${pixelImg}</body></html>`
   }
 
+  // Guard: total attachment payload cap ~25MB base64-encoded. This
+  // protects the worker's request-body limit + matches Gmail's own
+  // per-message size limit.
+  const totalAttachmentBytes = parsed.data.attachments.reduce(
+    (s, a) => s + a.dataBase64.length,
+    0,
+  )
+  if (totalAttachmentBytes > 34_000_000) {
+    return c.json({ error: 'attachments_too_large', bytes: totalAttachmentBytes }, 413)
+  }
+
   const raw = buildRfc5322({
     fromAddress: googleEmail,
     fromName: user.companyName ?? undefined,
@@ -374,6 +394,7 @@ composeRouter.post('/send', async (c) => {
     htmlBody: rewrittenBody,
     inReplyTo: parsed.data.inReplyToMessageId,
     references: parsed.data.references,
+    attachments: parsed.data.attachments,
   })
   const encoded = base64UrlEncodeRfc5322(raw)
 
@@ -446,4 +467,188 @@ async function sha256HexLower(address: string): Promise<string> {
     hex += bytes[i]!.toString(16).padStart(2, '0')
   }
   return hex
+}
+
+/**
+ * GET /v1/compose/thread/:emailId — fetch reply context for a tracked
+ * email. Resolves the tracked_emails.id to its Gmail threadId, then
+ * uses the Gmail API to fetch the latest message in that thread. The
+ * compose UI uses the returned fields to prefill To / Subject
+ * (Re:-prefixed) / quoted body + wire In-Reply-To + References so the
+ * outbound reply appears in the original thread on both sides.
+ */
+composeRouter.get('/thread/:emailId', async (c) => {
+  const emailId = c.req.param('emailId')
+  const userId = c.get('userId')
+  const db = getDb(c.env.DB)
+
+  const email = await db
+    .select({
+      id: trackedEmails.id,
+      userId: trackedEmails.userId,
+      threadId: trackedEmails.threadId,
+      subject: trackedEmails.subject,
+      messageId: trackedEmails.messageId,
+    })
+    .from(trackedEmails)
+    .where(eq(trackedEmails.id, emailId))
+    .get()
+  if (!email || email.userId !== userId) {
+    return c.json({ error: 'not_found' }, 404)
+  }
+  if (!email.threadId) {
+    return c.json({ error: 'no_thread_id' }, 400)
+  }
+
+  let accessToken: string
+  try {
+    const t = await getGoogleAccessToken(db, c.env, userId)
+    accessToken = t.accessToken
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown'
+    return c.json({ error: 'gmail_not_ready', reason: msg }, 400)
+  }
+
+  // Fetch the whole thread, then pick the most recent message.
+  const threadRes = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(
+      email.threadId,
+    )}?format=full`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!threadRes.ok) {
+    const detail = await threadRes.text()
+    createLogger({ env: c.env }).warn('gmail_thread_fetch_failed', {
+      userId,
+      threadId: email.threadId,
+      status: threadRes.status,
+      detail: detail.slice(0, 200),
+    })
+    return c.json({ error: 'gmail_thread_fetch_failed', status: threadRes.status }, 502)
+  }
+  const thread = (await threadRes.json()) as GmailThread
+  const messages = thread.messages ?? []
+  if (messages.length === 0) {
+    return c.json({ error: 'empty_thread' }, 404)
+  }
+  const latest = messages[messages.length - 1]!
+
+  const headers = new Map<string, string>()
+  for (const h of latest.payload?.headers ?? []) {
+    headers.set(h.name.toLowerCase(), h.value)
+  }
+
+  const fromHeader = headers.get('from') ?? ''
+  const parsedFrom = parseAddressHeader(fromHeader)
+  const subject = headers.get('subject') ?? email.subject ?? ''
+  const messageIdHeader = headers.get('message-id') ?? ''
+  const referencesHeader = headers.get('references') ?? ''
+
+  const bodyText = extractPlainText(latest.payload) ?? ''
+  const dateHeader = headers.get('date') ?? ''
+
+  return c.json({
+    threadId: email.threadId,
+    inReplyToMessageId: messageIdHeader,
+    references: referencesHeader,
+    subject: prefixReSubject(subject),
+    to: parsedFrom.address,
+    fromName: parsedFrom.name,
+    quotedBody: buildQuotedReply({
+      dateHeader,
+      fromDisplay: parsedFrom.name
+        ? `${parsedFrom.name} <${parsedFrom.address}>`
+        : parsedFrom.address,
+      bodyText,
+    }),
+    originalSnippet: (latest.snippet ?? '').slice(0, 200),
+  })
+})
+
+interface GmailThread {
+  id: string
+  messages?: GmailMessage[]
+}
+
+interface GmailMessage {
+  id: string
+  snippet?: string
+  payload?: GmailPayload
+}
+
+interface GmailPayload {
+  headers?: { name: string; value: string }[]
+  mimeType?: string
+  body?: { data?: string; size?: number }
+  parts?: GmailPayload[]
+}
+
+/** Depth-first walk to find the first text/plain part in a Gmail
+ *  message payload. Multipart messages nest text/plain +
+ *  text/html + attachments; we pull text for the quoted reply. */
+function extractPlainText(payload: GmailPayload | undefined): string | null {
+  if (!payload) return null
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    return b64UrlDecode(payload.body.data)
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const found = extractPlainText(part)
+      if (found) return found
+    }
+  }
+  // Fallback: strip HTML from text/html if no plain part.
+  if (payload.mimeType === 'text/html' && payload.body?.data) {
+    const html = b64UrlDecode(payload.body.data)
+    return html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+  return null
+}
+
+function b64UrlDecode(s: string): string {
+  const padded = s.replace(/-/g, '+').replace(/_/g, '/') +
+    '='.repeat((4 - (s.length % 4)) % 4)
+  try {
+    const binary = atob(padded)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return new TextDecoder('utf-8').decode(bytes)
+  } catch {
+    return ''
+  }
+}
+
+/** RFC 5322 address parsing — good enough for the two common forms:
+ *  bare `a@b.com` and `Name <a@b.com>`. Not RFC-strict but Gmail's
+ *  header content is always well-formed. */
+function parseAddressHeader(raw: string): { name: string; address: string } {
+  const m = /^\s*(?:"?([^"<>]*?)"?\s*)?<\s*([^\s<>]+@[^\s<>]+)\s*>\s*$/.exec(raw)
+  if (m) return { name: (m[1] ?? '').trim(), address: (m[2] ?? '').trim() }
+  const bare = raw.trim()
+  if (/^[^\s@]+@[^\s@]+$/.test(bare)) return { name: '', address: bare }
+  return { name: '', address: bare }
+}
+
+function prefixReSubject(subject: string): string {
+  if (/^re:/i.test(subject.trim())) return subject
+  return `Re: ${subject}`
+}
+
+function buildQuotedReply(args: {
+  dateHeader: string
+  fromDisplay: string
+  bodyText: string
+}): string {
+  const attribution = args.dateHeader
+    ? `On ${args.dateHeader}, ${args.fromDisplay} wrote:`
+    : `${args.fromDisplay} wrote:`
+  const quoted = args.bodyText
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n')
+  return `\n\n${attribution}\n${quoted}`
 }

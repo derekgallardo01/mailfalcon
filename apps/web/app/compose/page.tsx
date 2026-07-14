@@ -3,11 +3,48 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  type ComposeAttachment,
+  type ComposeThreadContext,
   type GmailComposeStatus,
   composeSend,
+  getComposeThreadContext,
   getGmailComposeStatus,
 } from '../../lib/api'
 import { getSession } from '../../lib/auth-store'
+
+/** Gmail's per-message limit is 25MB, but that's the raw MIME size —
+ *  base64 inflates ~33%. Cap at 18MB decoded so the post-encode payload
+ *  stays under Gmail's actual limit AND under our worker's request-body
+ *  cap. Enforced client-side to avoid a wasted upload round-trip. */
+const MAX_ATTACHMENTS_BYTES = 18 * 1024 * 1024
+
+interface AttachmentDraft extends ComposeAttachment {
+  /** Client-only id + decoded size for the UI list. */
+  id: string
+  sizeBytes: number
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+/** Read a File as standard base64 (not base64url). Handles arbitrary
+ *  binary content — FileReader.readAsDataURL gives us "data:mime;base64,..."
+ *  which we strip the prefix from. */
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      const comma = result.indexOf(',')
+      resolve(comma >= 0 ? result.slice(comma + 1) : result)
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('read_failed'))
+    reader.readAsDataURL(file)
+  })
+}
 
 const DRAFT_KEY = 'mf.compose.draft'
 const DRAFT_SAVE_INTERVAL_MS = 3_000
@@ -97,7 +134,53 @@ export default function ComposePage() {
   const [draftLoadedAt, setDraftLoadedAt] = useState<number | null>(null)
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
   const [pendingDraft, setPendingDraft] = useState<LocalDraft | null>(null)
+  const [replyContext, setReplyContext] = useState<ComposeThreadContext | null>(null)
+  const [replyLoading, setReplyLoading] = useState(false)
+  const [replyError, setReplyError] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([])
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const [attachBusy, setAttachBusy] = useState(false)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const attachmentsBytes = attachments.reduce((s, a) => s + a.sizeBytes, 0)
+
+  async function onFilesPicked(files: FileList | null) {
+    if (!files || files.length === 0) return
+    setAttachError(null)
+    setAttachBusy(true)
+    try {
+      const added: AttachmentDraft[] = []
+      let running = attachmentsBytes
+      for (const f of Array.from(files)) {
+        if (running + f.size > MAX_ATTACHMENTS_BYTES) {
+          setAttachError(
+            `Skipped ${f.name} — combined attachments would exceed 18 MB (Gmail limit).`,
+          )
+          continue
+        }
+        const dataBase64 = await fileToBase64(f)
+        added.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          filename: f.name,
+          mimeType: f.type || 'application/octet-stream',
+          dataBase64,
+          sizeBytes: f.size,
+        })
+        running += f.size
+      }
+      setAttachments((prev) => [...prev, ...added])
+    } catch (err) {
+      setAttachError(err instanceof Error ? err.message : 'attach_failed')
+    } finally {
+      setAttachBusy(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((prev) => prev.filter((a) => a.id !== id))
+  }
 
   useEffect(() => {
     if (!getSession()) {
@@ -111,11 +194,39 @@ export default function ComposePage() {
       .catch(() => setStatus({ connected: false }))
       .finally(() => setStatusLoading(false))
 
+    // Reply-in-thread prefill. When ?reply=<trackedEmailId> is on
+    // the URL, fetch the thread context (last message's from, subject,
+    // quoted body, In-Reply-To, References) and populate the form.
+    // Skip draft-banner rendering when replying — reply prefill wins.
+    const url = new URL(window.location.href)
+    const replyId = url.searchParams.get('reply')
+    if (replyId) {
+      setReplyLoading(true)
+      void getComposeThreadContext(replyId)
+        .then((ctx) => {
+          setReplyContext(ctx)
+          setToRaw(ctx.to)
+          setSubject(ctx.subject)
+          setBody(ctx.quotedBody)
+          // Position cursor at the very top of the body so the user
+          // can start typing above the quote.
+          setTimeout(() => {
+            if (bodyRef.current) {
+              bodyRef.current.focus()
+              bodyRef.current.setSelectionRange(0, 0)
+              bodyRef.current.scrollTop = 0
+            }
+          }, 50)
+        })
+        .catch((err) => {
+          setReplyError(err instanceof Error ? err.message : 'reply_load_failed')
+        })
+        .finally(() => setReplyLoading(false))
+      return
+    }
+
     // Surface any in-flight local draft as a dismissible banner —
-    // never a blocking OS dialog. User picks Resume, Discard, or
-    // ignores it entirely and starts fresh (draft auto-saves over
-    // the top). Empty-record edge from a prior aborted save is
-    // silently discarded so the banner isn't a false alarm.
+    // never a blocking OS dialog.
     const existing = readLocalDraft()
     if (existing && !draftIsEmpty(existing)) {
       setPendingDraft(existing)
@@ -186,6 +297,18 @@ export default function ComposePage() {
         bcc: parsedBcc.valid,
         subject,
         bodyHtml,
+        ...(replyContext?.threadId ? { threadId: replyContext.threadId } : {}),
+        ...(replyContext?.inReplyToMessageId
+          ? { inReplyToMessageId: replyContext.inReplyToMessageId }
+          : {}),
+        ...(replyContext?.references
+          ? { references: replyContext.references }
+          : {}),
+        ...(attachments.length > 0
+          ? {
+              attachments: attachments.map(({ id, sizeBytes, ...a }) => a),
+            }
+          : {}),
       })
       clearLocalDraft()
       setSendState({ kind: 'sent', emailId: res.emailId })
@@ -207,6 +330,9 @@ export default function ComposePage() {
     setSendState({ kind: 'idle' })
     setDraftLoadedAt(null)
     setDraftSavedAt(null)
+    setAttachments([])
+    setAttachError(null)
+    setReplyContext(null)
     clearLocalDraft()
     setTimeout(() => bodyRef.current?.focus(), 50)
   }
@@ -283,7 +409,31 @@ export default function ComposePage() {
         </span>
       </header>
 
-      {pendingDraft && (
+      {replyLoading && (
+        <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          Loading reply context…
+        </div>
+      )}
+
+      {replyError && (
+        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          Couldn&rsquo;t load the source message: {replyError}. Starting a fresh compose instead.
+        </div>
+      )}
+
+      {replyContext && !replyLoading && (
+        <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          <span className="font-semibold">Replying in thread</span>
+          {replyContext.originalSnippet && (
+            <span className="ml-2 text-blue-800/80">
+              &mdash; &ldquo;{replyContext.originalSnippet.slice(0, 80)}
+              {replyContext.originalSnippet.length > 80 ? '…' : ''}&rdquo;
+            </span>
+          )}
+        </div>
+      )}
+
+      {pendingDraft && !replyContext && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <span>
             Unsent draft from {formatDraftAge(pendingDraft.updatedAt)}
@@ -386,6 +536,45 @@ export default function ComposePage() {
           className="flex-1 min-h-[240px] resize-none border-t border-falcon-100 bg-transparent p-4 text-sm leading-relaxed text-falcon-800 outline-none placeholder:text-falcon-400 sm:min-h-[400px]"
         />
 
+        {attachments.length > 0 && (
+          <div className="border-t border-falcon-100 px-3 py-2">
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center gap-2 rounded-md border border-falcon-200 bg-falcon-50 px-2 py-1 text-xs"
+                >
+                  <span aria-hidden>📎</span>
+                  <span className="max-w-[180px] truncate font-medium text-falcon-700">
+                    {a.filename}
+                  </span>
+                  <span className="text-[10px] text-falcon-500">
+                    {formatBytes(a.sizeBytes)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(a.id)}
+                    className="rounded p-0.5 text-falcon-400 hover:bg-red-100 hover:text-red-600"
+                    aria-label={`Remove ${a.filename}`}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[10px] text-falcon-500">
+              {formatBytes(attachmentsBytes)} of {formatBytes(MAX_ATTACHMENTS_BYTES)}
+            </p>
+          </div>
+        )}
+
+        {attachError && (
+          <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-[11px] text-amber-800">
+            {attachError}
+          </div>
+        )}
+
         {(parsedTo.invalid.length > 0 || parsedCc.invalid.length > 0 || parsedBcc.invalid.length > 0) && (
           <div className="border-t border-red-200 bg-red-50 px-4 py-2 text-[11px] text-red-700">
             Invalid addresses: {[...parsedTo.invalid, ...parsedCc.invalid, ...parsedBcc.invalid].join(', ')}
@@ -409,7 +598,23 @@ export default function ComposePage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {(toRaw || subject || body || ccRaw || bccRaw) && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => void onFilesPicked(e.target.files)}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={attachBusy}
+              className="rounded-md border border-falcon-300 bg-white px-3 py-2 text-xs font-semibold text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+              title="Attach files (up to 18 MB combined)"
+            >
+              {attachBusy ? 'Reading…' : '📎 Attach'}
+            </button>
+            {(toRaw || subject || body || ccRaw || bccRaw || attachments.length > 0) && (
               <button
                 type="button"
                 onClick={discardDraft}

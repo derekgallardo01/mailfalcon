@@ -577,6 +577,12 @@ export async function completeGmailComposeCallback(args: {
   return (await res.json()) as { googleEmail: string }
 }
 
+export interface ComposeAttachment {
+  filename: string
+  mimeType: string
+  dataBase64: string
+}
+
 export interface ComposeSendRequest {
   to: string[]
   cc?: string[]
@@ -586,6 +592,7 @@ export interface ComposeSendRequest {
   threadId?: string
   inReplyToMessageId?: string
   references?: string
+  attachments?: ComposeAttachment[]
 }
 
 export interface ComposeSendResponse {
@@ -593,6 +600,35 @@ export interface ComposeSendResponse {
   emailId: string
   gmailMessageId: string
   threadId: string
+}
+
+export interface ComposeThreadContext {
+  threadId: string
+  inReplyToMessageId: string
+  references: string
+  subject: string
+  to: string
+  fromName: string
+  quotedBody: string
+  originalSnippet: string
+}
+
+export async function getComposeThreadContext(
+  emailId: string,
+): Promise<ComposeThreadContext> {
+  const res = await fetch(
+    `${config.apiHost}/v1/compose/thread/${encodeURIComponent(emailId)}`,
+    { headers: { ...authHeader() } },
+  )
+  if (res.status === 401) throw new Error('unauthorized')
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string
+      reason?: string
+    }
+    throw new Error(body.reason ?? body.error ?? `thread_fetch_failed:${res.status}`)
+  }
+  return (await res.json()) as ComposeThreadContext
 }
 
 export async function composeSend(
