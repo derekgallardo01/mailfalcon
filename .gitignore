@@ -49,3 +49,6 @@ apps/extension/public/pageWorld.js
 
 # Local-only secrets (extension signing key, etc.)
 .local/
+
+# Claude Code local settings
+.claude/
