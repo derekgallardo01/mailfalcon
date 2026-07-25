@@ -29,8 +29,12 @@ function todayStart(): number {
   return d.getTime()
 }
 
-adminRouter.get('/stats', async (c) => {
-  const db = getDb(c.env.DB)
+/**
+ * The admin stats aggregate — shared by the session-authed `/v1/admin/stats`
+ * route and the durable API-key `/metrics` endpoint (Kinetic Helix command
+ * center pulls the latter with a static key so it never expires).
+ */
+export async function computeStats(db: ReturnType<typeof getDb>) {
   const start = todayStart()
   const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000
 
@@ -79,7 +83,7 @@ adminRouter.get('/stats', async (c) => {
   }
   for (const row of byTier) tierMap[row.tier] = Number(row.count)
 
-  return c.json({
+  return {
     totals: {
       users: Number(totals?.users ?? 0),
       emails: Number(totals?.emails ?? 0),
@@ -96,7 +100,11 @@ adminRouter.get('/stats', async (c) => {
       activated: Number(telemetry?.activated ?? 0),
       active7d: Number(telemetry?.active7d ?? 0),
     },
-  })
+  }
+}
+
+adminRouter.get('/stats', async (c) => {
+  return c.json(await computeStats(getDb(c.env.DB)))
 })
 
 const ACTIVE_WINDOW_MS = 30 * 24 * 3600 * 1000

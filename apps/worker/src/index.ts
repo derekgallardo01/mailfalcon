@@ -49,12 +49,23 @@ type Bindings = {
   VAPID_SUBJECT?: string
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
+  // Durable static key for the Kinetic Helix command center's metrics pull.
+  KH_METRICS_KEY?: string
   DB: D1Database
   KV: KVNamespace
   ASSETS: R2Bucket
 }
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
+
+// Constant-time string compare so the metrics key check doesn't leak length
+// or content via response timing.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let out = 0
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return out === 0
+}
 
 function originPolicy(origin: string | undefined): string {
   if (!origin) return ''
@@ -93,6 +104,20 @@ app.use(
 app.get('/health', (c) =>
   c.json({ ok: true, env: c.env.ENVIRONMENT, ts: Date.now() }),
 )
+
+// Durable metrics pull for the Kinetic Helix command center. Gated by a
+// static `X-KH-Key` header (constant-time compared to KH_METRICS_KEY) rather
+// than an expiring session JWT, so the connection never drops. Returns the
+// same aggregate as the session-authed /v1/admin/stats route.
+app.get('/metrics', async (c) => {
+  const expected = c.env.KH_METRICS_KEY
+  const provided = c.req.header('x-kh-key') ?? ''
+  if (!expected || !timingSafeEqual(provided, expected)) {
+    return c.json({ error: 'unauthorized' }, 401)
+  }
+  const { computeStats } = await import('./routes/admin')
+  return c.json(await computeStats(getDb(c.env.DB)))
+})
 
 app.get('/vapid-public-key', (c) =>
   c.text(c.env.VAPID_PUBLIC_KEY ?? '', 200, { 'Cache-Control': 'public, max-age=300' }),
