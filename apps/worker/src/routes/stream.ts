@@ -13,6 +13,9 @@ type Bindings = {
   KV: KVNamespace
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
+  // Kinetic Helix command-center presence ingest (optional).
+  KH_INGEST_KEY?: string
+  KH_INGEST_URL?: string
 }
 
 const STREAM_MAX_PER_USER = 3
@@ -77,6 +80,21 @@ streamRouter.get('/', async (c) => {
 
   const db = getDb(c.env.DB)
   const userIdResolved = userId
+
+  // Presence: this authed SSE connection means the user is live right now.
+  // Fire-and-forget a heartbeat to the Kinetic Helix command center. The stream
+  // reconnects ~every 60s (< KH's 90s presence window), so one ping per connect
+  // keeps "online now" accurate with zero client changes.
+  if (c.env.KH_INGEST_KEY) {
+    c.executionCtx.waitUntil(
+      fetch(c.env.KH_INGEST_URL || 'https://kinetichelix.io/api/ingest/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-KH-Key': c.env.KH_INGEST_KEY },
+        body: JSON.stringify({ slug: 'mailfalcon', sessionId: userIdResolved }),
+      }).catch(() => {}),
+    )
+  }
+
   const encoder = new TextEncoder()
   const POLL_MS = 5_000
   const MAX_DURATION_MS = 60_000
