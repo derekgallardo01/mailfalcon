@@ -51,6 +51,9 @@ type Bindings = {
   AXIOM_DATASET?: string
   // Durable static key for the Kinetic Helix command center's metrics pull.
   KH_METRICS_KEY?: string
+  // Per-tier monthly price (cents) for the MRR figure in /metrics.
+  KH_MRR_PRO_CENTS?: string
+  KH_MRR_TEAM_CENTS?: string
   DB: D1Database
   KV: KVNamespace
   ASSETS: R2Bucket
@@ -116,7 +119,7 @@ app.get('/metrics', async (c) => {
     return c.json({ error: 'unauthorized' }, 401)
   }
   const { computeStats } = await import('./routes/admin')
-  return c.json(await computeStats(getDb(c.env.DB)))
+  return c.json(await computeStats(getDb(c.env.DB), c.env))
 })
 
 app.get('/vapid-public-key', (c) =>

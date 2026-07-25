@@ -16,6 +16,8 @@ import { getDb } from '../lib/db'
 type Bindings = {
   ENVIRONMENT: string
   DB: D1Database
+  KH_MRR_PRO_CENTS?: string
+  KH_MRR_TEAM_CENTS?: string
 }
 
 export const adminRouter = new Hono<{
@@ -29,16 +31,19 @@ function todayStart(): number {
   return d.getTime()
 }
 
+/** Per-tier monthly price in cents, from env (set to match Stripe prices). */
+type MrrConfig = { KH_MRR_PRO_CENTS?: string; KH_MRR_TEAM_CENTS?: string }
+
 /**
  * The admin stats aggregate — shared by the session-authed `/v1/admin/stats`
  * route and the durable API-key `/metrics` endpoint (Kinetic Helix command
  * center pulls the latter with a static key so it never expires).
  */
-export async function computeStats(db: ReturnType<typeof getDb>) {
+export async function computeStats(db: ReturnType<typeof getDb>, env?: MrrConfig) {
   const start = todayStart()
   const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000
 
-  const [totals, byTier, today, telemetry] = await Promise.all([
+  const [totals, byTier, today, telemetry, subsByTier] = await Promise.all([
     db
       .select({
         users: sql<number>`COUNT(DISTINCT ${users.id})`,
@@ -73,6 +78,13 @@ export async function computeStats(db: ReturnType<typeof getDb>) {
       .from(users)
       .limit(1)
       .get(),
+    // Active paying subscriptions by tier — the MRR base.
+    db
+      .select({ tier: subscriptions.tier, count: sql<number>`COUNT(*)` })
+      .from(subscriptions)
+      .where(sql`${subscriptions.status} IN ('active', 'trialing')`)
+      .groupBy(subscriptions.tier)
+      .all(),
   ])
 
   const tierMap: Record<string, number> = {
@@ -83,7 +95,18 @@ export async function computeStats(db: ReturnType<typeof getDb>) {
   }
   for (const row of byTier) tierMap[row.tier] = Number(row.count)
 
+  // MRR = active subs per tier × that tier's monthly price (cents, from env).
+  const proCents = Number(env?.KH_MRR_PRO_CENTS ?? 0) || 0
+  const teamCents = Number(env?.KH_MRR_TEAM_CENTS ?? 0) || 0
+  const subs = { pro: 0, team: 0 }
+  for (const row of subsByTier) subs[row.tier] = Number(row.count)
+  const mrrCents = subs.pro * proCents + subs.team * teamCents
+
   return {
+    revenue: {
+      mrrCents,
+      activeSubs: subs.pro + subs.team,
+    },
     totals: {
       users: Number(totals?.users ?? 0),
       emails: Number(totals?.emails ?? 0),
@@ -104,7 +127,7 @@ export async function computeStats(db: ReturnType<typeof getDb>) {
 }
 
 adminRouter.get('/stats', async (c) => {
-  return c.json(await computeStats(getDb(c.env.DB)))
+  return c.json(await computeStats(getDb(c.env.DB), c.env))
 })
 
 const ACTIVE_WINDOW_MS = 30 * 24 * 3600 * 1000
