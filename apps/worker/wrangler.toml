@@ -43,11 +43,11 @@ vars = { ENVIRONMENT = "development", PUBLIC_WEB_URL = "http://localhost:3000" }
 #   VAPID_SUBJECT          required — Web Push contact (mailto:…)
 #   STRIPE_SECRET_KEY      optional — billing checkout (returns 503 if unset)
 #   STRIPE_WEBHOOK_SECRET  optional — Stripe webhook signature
-#   STRIPE_PRICE_ID_PRO    optional — Pro tier price ($8/mo)
+#   STRIPE_PRICE_ID_PRO    optional — Pro tier price ($7/mo)
 #   STRIPE_PRICE_ID_TEAM   optional — Team tier price ($15/seat/mo)
 #   KH_METRICS_KEY         optional — Kinetic Helix command center reads GET /metrics with this X-KH-Key
 #   KH_INGEST_KEY          optional — outbound key for the SSE presence heartbeat to KH /api/ingest/presence
-#   KH_MRR_PRO_CENTS       optional — Pro monthly price in cents (800) — MRR figure in /metrics
+#   KH_MRR_PRO_CENTS       optional — Pro monthly price in cents (700) — MRR figure in /metrics
 #   KH_MRR_TEAM_CENTS      optional — Team monthly price in cents (1500) — MRR figure in /metrics
 #   GOOGLE_OAUTH_CLIENT_ID     optional — gmail.readonly spoof verification (returns 503 if unset)
 #   GOOGLE_OAUTH_CLIENT_SECRET optional — same; pairs with CLIENT_ID

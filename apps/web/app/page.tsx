@@ -162,7 +162,7 @@ function Pricing() {
         <p className="mx-auto mt-3 max-w-xl text-center text-falcon-500">
           Free forever for hobby use. Upgrade when you outgrow it.
         </p>
-        <div className="mx-auto mt-12 grid max-w-3xl gap-6 md:grid-cols-2">
+        <div className="mx-auto mt-12 grid max-w-5xl gap-6 md:grid-cols-3">
           <div className="flex flex-col rounded-lg border border-falcon-200 bg-falcon-50 p-8">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-falcon-500">
               Free
@@ -213,6 +213,30 @@ function Pricing() {
               className="mt-8 rounded bg-falcon-500 px-4 py-2 text-center text-sm font-medium text-white hover:bg-falcon-600"
             >
               Get Pro
+            </Link>
+          </div>
+
+          <div className="flex flex-col rounded-lg border border-falcon-200 bg-falcon-50 p-8">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-falcon-500">
+              Team
+            </h3>
+            <p className="mt-2 text-3xl font-semibold text-falcon-700">
+              $15
+              <span className="ml-1 text-sm font-normal text-falcon-500">
+                / seat / month
+              </span>
+            </p>
+            <ul className="mt-6 flex-1 space-y-2 text-sm text-falcon-600">
+              <li>· Everything in Pro</li>
+              <li>· Shared team workspaces</li>
+              <li>· Shared templates</li>
+              <li>· Centralized billing</li>
+            </ul>
+            <Link
+              href="/sign-in"
+              className="mt-8 rounded border border-falcon-300 bg-white px-4 py-2 text-center text-sm font-medium text-falcon-700 hover:bg-falcon-100"
+            >
+              Start Team
             </Link>
           </div>
         </div>
