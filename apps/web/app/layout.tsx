@@ -86,7 +86,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </Link>
             <span className="mx-2">·</span>
             <Link href="/privacy" className="hover:text-falcon-700">
-              Privacy policy
+              Privacy
+            </Link>
+            <span className="mx-2">·</span>
+            <Link href="/terms" className="hover:text-falcon-700">
+              Terms
+            </Link>
+            <span className="mx-2">·</span>
+            <Link href="/refunds" className="hover:text-falcon-700">
+              Refunds
             </Link>
             <span className="mx-2">·</span>
             <a
