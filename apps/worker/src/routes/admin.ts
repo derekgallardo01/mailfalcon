@@ -46,11 +46,14 @@ export async function computeStats(db: ReturnType<typeof getDb>, env?: MrrConfig
   const [totals, byTier, today, telemetry, subsByTier] = await Promise.all([
     db
       .select({
+        // Real accounts only — exclude internal `admin`-tier accounts so the
+        // public/customer user count isn't inflated by staff/owner logins.
         users: sql<number>`COUNT(DISTINCT ${users.id})`,
         emails: sql<number>`(SELECT COUNT(*) FROM ${trackedEmails})`,
         events: sql<number>`(SELECT COUNT(*) FROM ${events})`,
       })
       .from(users)
+      .where(sql`${users.tier} <> 'admin'`)
       .get(),
     db
       .select({
