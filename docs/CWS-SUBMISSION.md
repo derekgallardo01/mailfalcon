@@ -358,6 +358,37 @@ Capture five if possible:
 - Small promo tile: 440×280
 - Marquee: 1400×560
 
+## Generated store assets
+
+Brand-matched marketing assets live in `apps/extension/store-assets/`,
+generated with `sharp` (+ `ffmpeg` for the video). All PNGs are exact
+dimensions, 24-bit, no alpha (CWS-ready).
+
+| File | Use | Dimensions |
+|---|---|---|
+| `small-promo-440x280.png` | Small promo tile | 440×280 |
+| `marquee-promo-1400x560.png` | Marquee promo tile | 1400×560 |
+| `screenshot-1-opens-1280x800.png` | Screenshot — real-time opens | 1280×800 |
+| `screenshot-2-detail-1280x800.png` | Screenshot — event detail | 1280×800 |
+| `screenshot-3-privacy-1280x800.png` | Screenshot — privacy mode | 1280×800 |
+| `mailfalcon-promo.mp4` | Promo video (H.264, 1080p, ~18s, silent) | 1920×1080 |
+
+Regenerate:
+
+```
+node scripts/gen-store-assets.mjs           # promo tiles + screenshots
+node scripts/gen-promo-frames.mjs <tmpdir>  # 1080p video scene frames
+# then encode with ffmpeg xfade (see scripts/gen-promo-frames.mjs header / git history)
+```
+
+> The screenshots are polished **feature slides**, not literal UI captures.
+> They accurately depict real functionality and are fine to submit, but add
+> at least one real capture of the extension in Gmail for authenticity.
+
+> The listing's **video** field takes a **YouTube URL**, not a file. Upload
+> `mailfalcon-promo.mp4` to YouTube (Unlisted is fine) and paste the watch
+> link. The video is silent by design.
+
 ## Privacy policy URL
 
 `https://app.mailfalcon.app/privacy`
