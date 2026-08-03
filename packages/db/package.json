@@ -18,8 +18,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
-    "migrate:local": "wrangler d1 migrations apply mailfalcon --local",
-    "migrate:remote": "wrangler d1 migrations apply mailfalcon --remote",
+    "migrate:local": "pnpm -F @mailfalcon/worker exec wrangler d1 migrations apply mailfalcon --local",
+    "migrate:remote": "pnpm -F @mailfalcon/worker exec wrangler d1 migrations apply mailfalcon --remote",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
