@@ -9,6 +9,7 @@
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
+    "zip:cws": "wxt zip --mode cws",
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare && node scripts/copy-inboxsdk-pageworld.mjs",
     "predev": "node scripts/copy-inboxsdk-pageworld.mjs",

@@ -1,16 +1,25 @@
 import { defineConfig } from 'wxt'
 
+// Pinned public key so unpacked / dev / sideload builds load with a stable
+// extension ID (flimjkffmcjdmbppckejndmihbnflldm). The matching private key
+// lives at .local/extension-key.pem and is gitignored.
+//
+// The Chrome Web Store REJECTS a manifest `key` field ("key field is not
+// allowed in manifest") and assigns its own key on publish, so we strip it
+// for the store build. Package for CWS with `--mode cws`
+// (`pnpm zip:cws`); dev (`wxt`) and sideload (`wxt zip`) keep the key.
+const SIDELOAD_KEY =
+  'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApWuuwvsEWexo739A6cZd9EJhmMQIgxJx5U0rIKt2pCJzf8FPcwb+yTftC7DEvXpbC3v1fpD6Zi63qT3FDo0pKg+5huURm/bxlQz1AVtv4MhfMkPWqMBZ0t8Ds35r3J296Emll3pvx0Z0RR6G44wVAsEhr53zeSohatSuEU+BYE3Qk+v3xP87D9ZxM3+NKBfiVCPNTX28YkqgZyD2nF4YjVrX+g2gsAm9tONHKzUsg9VtYt6OpHDYRJrySlfgiksHqqEcq15QhawKEEiJx/RsVramAsThCFkEBfhKjivjiA9d9gI/o/LVPpSJita2N87aZ3dojvuoBep31shjJLhREQIDAQAB'
+
 export default defineConfig({
-  manifest: {
+  manifest: ({ mode }) => ({
     name: 'MailFalcon',
     description:
       'Email tracking for Gmail — opens, clicks, real-time notifications.',
     homepage_url: 'https://app.mailfalcon.app',
-    // Pinned public key so unpacked / dev / pre-CWS builds load with a
-    // stable extension ID (flimjkffmcjdmbppckejndmihbnflldm). The
-    // matching private key lives at .local/extension-key.pem and is
-    // gitignored. CWS overrides this on the published build.
-    key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApWuuwvsEWexo739A6cZd9EJhmMQIgxJx5U0rIKt2pCJzf8FPcwb+yTftC7DEvXpbC3v1fpD6Zi63qT3FDo0pKg+5huURm/bxlQz1AVtv4MhfMkPWqMBZ0t8Ds35r3J296Emll3pvx0Z0RR6G44wVAsEhr53zeSohatSuEU+BYE3Qk+v3xP87D9ZxM3+NKBfiVCPNTX28YkqgZyD2nF4YjVrX+g2gsAm9tONHKzUsg9VtYt6OpHDYRJrySlfgiksHqqEcq15QhawKEEiJx/RsVramAsThCFkEBfhKjivjiA9d9gI/o/LVPpSJita2N87aZ3dojvuoBep31shjJLhREQIDAQAB',
+    // Omit `key` for the Chrome Web Store build (mode 'cws'); keep it for
+    // dev + sideload so those load with the stable pinned extension ID.
+    ...(mode === 'cws' ? {} : { key: SIDELOAD_KEY }),
     permissions: ['storage', 'notifications', 'alarms', 'scripting', 'identity'],
     host_permissions: [
       'https://mail.google.com/*',
@@ -41,5 +50,5 @@ export default defineConfig({
         matches: ['https://mail.google.com/*'],
       },
     ],
-  },
+  }),
 })

@@ -14,15 +14,28 @@ and to pass Google OAuth **restricted-scope** verification.
 ## Build the upload zip
 
 ```
-pnpm -F @mailfalcon/extension build
-pnpm -F @mailfalcon/extension exec wxt zip
-# produces .output/mailfalcon-1.18.1-chrome.zip
+pnpm -F @mailfalcon/extension zip:cws
+# produces apps/extension/.output/mailfalconextension-1.18.1-chrome.zip
 ```
+
+Use **`zip:cws`** (`wxt zip --mode cws`), NOT plain `wxt zip`. The Chrome
+Web Store rejects a manifest `key` field ("key field is not allowed in
+manifest"); `--mode cws` strips the pinned sideload key so the upload
+succeeds. Plain `wxt zip` keeps the key (for stable sideload IDs) and will
+be rejected by the store.
 
 The manifest version is **1.18.1** (not 1.0.0). Each new upload must have a
 strictly higher version than the last; you cannot go back down.
 
 Upload that zip on the dev console "Package" step.
+
+> **Published extension ID differs from the sideload ID.** The store
+> assigns its own key/ID on publish, so the production ID will NOT be
+> `flimjkffmcjdmbppckejndmihbnflldm`. After creating the item, copy the
+> production extension ID from the dashboard and add
+> `https://<prod-id>.chromiumapp.org/` to the Google OAuth client's
+> authorized redirect URIs — otherwise the extension's anti-spoof Google
+> connect (`launchWebAuthFlow`) will fail in the published build.
 
 ## Store listing copy
 
