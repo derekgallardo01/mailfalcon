@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { and, asc, desc, eq, gt, gte, like, lte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, like, lte, sql } from 'drizzle-orm'
 import {
   events,
   recipients,
@@ -233,8 +233,10 @@ adminRouter.get('/emails', async (c) => {
   if (userFilter) filters.push(eq(trackedEmails.userId, userFilter))
   if (q.length > 0) {
     const needle = `%${sqlLikeEscape(q)}%`
-    // Admin q matches either subject OR sender email.
-    filters.push(or(like(trackedEmails.subject, needle), like(users.email, needle))!)
+    // Search by sender email only. We deliberately do NOT match against
+    // the message subject: subjects are Gmail-derived user content and
+    // Google's Limited Use policy prohibits operator/human access to it.
+    filters.push(like(users.email, needle))
   }
   if (Number.isFinite(from)) filters.push(gte(trackedEmails.sentAt, from))
   if (Number.isFinite(to)) filters.push(lte(trackedEmails.sentAt, to))
@@ -258,7 +260,6 @@ adminRouter.get('/emails', async (c) => {
       id: trackedEmails.id,
       userId: trackedEmails.userId,
       userEmail: users.email,
-      subject: trackedEmails.subject,
       sentAt: trackedEmails.sentAt,
       recipientCount: trackedEmails.recipientCount,
       privacyMode: trackedEmails.privacyMode,
@@ -280,7 +281,6 @@ adminRouter.get('/emails', async (c) => {
       id: r.id,
       userId: r.userId,
       userEmail: r.userEmail,
-      subject: r.subject,
       sentAt: r.sentAt,
       recipientCount: r.recipientCount,
       privacyMode: r.privacyMode === 1,
@@ -380,7 +380,6 @@ adminRouter.get('/users/:id', async (c) => {
     db
       .select({
         id: trackedEmails.id,
-        subject: trackedEmails.subject,
         sentAt: trackedEmails.sentAt,
         recipientCount: trackedEmails.recipientCount,
         privacyMode: trackedEmails.privacyMode,
@@ -485,7 +484,6 @@ adminRouter.get('/users/:id', async (c) => {
       : null,
     emails: emailsList.map((r) => ({
       id: r.id,
-      subject: r.subject,
       sentAt: r.sentAt,
       recipientCount: r.recipientCount,
       privacyMode: r.privacyMode === 1,

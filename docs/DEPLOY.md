@@ -28,6 +28,25 @@ Set each with `pnpm -F @mailfalcon/worker exec wrangler secret put <NAME>`.
 | `VAPID_PUBLIC_KEY` | Web Push public key | Push subscriptions endpoint returns empty body; toasts won't fire |
 | `VAPID_PRIVATE_KEY_JWK` | Web Push private key (JWK JSON string) | Same as above |
 | `VAPID_SUBJECT` | Web Push contact, e.g. `mailto:hello@mailfalcon.app` | Same as above |
+| `TOKEN_ENC_KEY` | AES-256-GCM key that encrypts Google OAuth refresh/access tokens at rest in D1 (`google_tokens`) | **Encryption is a no-op — tokens stored as plaintext.** Required for Google restricted-scope / CASA compliance. See below. |
+
+#### `TOKEN_ENC_KEY` — Google token encryption at rest
+
+Google OAuth tokens (`gmail.compose` / `gmail.readonly`) are encrypted at
+rest with AES-256-GCM before being written to D1. The key is a base64
+encoding of 32 random bytes. Generate one:
+
+```
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+then `wrangler secret put TOKEN_ENC_KEY`. Migration is automatic and
+zero-downtime: existing plaintext tokens keep working and are transparently
+re-encrypted the next time each user's access token refreshes (~hourly of
+use). Rotating the key invalidates all stored tokens (users must reconnect
+Gmail), so treat it as long-lived. **Without this secret set in production,
+tokens are stored in plaintext and the CASA "encryption at rest" control is
+not met.**
 
 ### Optional secrets
 

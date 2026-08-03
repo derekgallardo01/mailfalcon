@@ -65,7 +65,6 @@ export async function schedule(
     cc: record.cc,
     bcc: record.bcc,
     subject: record.subject,
-    bodyPreview: plaintextPreview(record.bodyHtml),
   })
   return record
 }
@@ -94,21 +93,6 @@ export async function clearLocalOnly(id: string): Promise<void> {
   if (typeof chrome !== 'undefined' && chrome.alarms) {
     await chrome.alarms.clear(`${ALARM_PREFIX}${id}`).catch(() => undefined)
   }
-}
-
-/** Strip HTML tags + collapse whitespace for the 200-char body preview
- *  we mirror to the server. Good enough for the dashboard's "what was
- *  this scheduled to say" column without storing the full body. */
-function plaintextPreview(html: string): string {
-  const text = html
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return text.slice(0, 200)
 }
 
 export async function get(id: string): Promise<ScheduledSend | null> {

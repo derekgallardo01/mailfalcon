@@ -4,6 +4,7 @@ import { eq, sql } from 'drizzle-orm'
 import {
   events,
   followUps,
+  googleTokens,
   links,
   notificationSubscriptions,
   recipients,
@@ -17,6 +18,7 @@ import {
 } from '@mailfalcon/db/schema'
 import type { Variables } from '../lib/auth-middleware'
 import { getDb } from '../lib/db'
+import { revokeGoogleGrant } from '../lib/google-tokens'
 import { createLogger, errorMeta } from '../lib/logger'
 import { sendDeleteCode } from '../lib/mailer'
 import { getUsage } from '../lib/usage'
@@ -26,6 +28,7 @@ type Bindings = {
   DB: D1Database
   KV: KVNamespace
   RESEND_API_KEY?: string
+  TOKEN_ENC_KEY?: string
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
 }
@@ -598,6 +601,10 @@ meRouter.delete('/', async (c) => {
     return c.json({ error: 'not_found' }, 404)
   }
 
+  // Best-effort revoke the Google grant at Google before we drop our
+  // stored tokens, so account deletion doesn't leave a live grant.
+  await revokeGoogleGrant(db, c.env, userId)
+
   await db.batch([
     db.delete(trackedEmails).where(eq(trackedEmails.userId, userId)),
     db.delete(templates).where(eq(templates.userId, userId)),
@@ -606,6 +613,9 @@ meRouter.delete('/', async (c) => {
       .delete(notificationSubscriptions)
       .where(eq(notificationSubscriptions.userId, userId)),
     db.delete(usageCounters).where(eq(usageCounters.userId, userId)),
+    // Explicit delete rather than relying solely on the FK cascade —
+    // OAuth tokens must not survive account deletion.
+    db.delete(googleTokens).where(eq(googleTokens.userId, userId)),
     db.delete(users).where(eq(users.id, userId)),
   ])
 

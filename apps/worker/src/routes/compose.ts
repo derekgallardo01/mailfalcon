@@ -15,6 +15,7 @@ import {
   GMAIL_COMPOSE_SCOPES,
   exchangeAndStoreGoogleTokens,
   getGoogleAccessToken,
+  revokeGoogleGrant,
 } from '../lib/google-tokens'
 import { createLogger, errorMeta } from '../lib/logger'
 import { base64UrlEncodeRfc5322, buildRfc5322 } from '../lib/rfc5322'
@@ -28,6 +29,7 @@ type Bindings = {
   HMAC_SECRET?: string
   GOOGLE_OAUTH_CLIENT_ID?: string
   GOOGLE_OAUTH_CLIENT_SECRET?: string
+  TOKEN_ENC_KEY?: string
   PUBLIC_WEB_URL?: string
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
@@ -159,12 +161,13 @@ composeRouter.get('/oauth/status', async (c) => {
   })
 })
 
-/** DELETE /v1/compose/oauth — disconnect Gmail. Deletes local tokens;
- *  doesn't call Google's revoke endpoint (user can revoke via Google
- *  account settings if they want to remove the grant entirely). */
+/** DELETE /v1/compose/oauth — disconnect Gmail. Revokes the grant at
+ *  Google (best-effort) so no live grant is left dangling, then deletes
+ *  our stored tokens. */
 composeRouter.delete('/oauth', async (c) => {
   const userId = c.get('userId')
   const db = getDb(c.env.DB)
+  await revokeGoogleGrant(db, c.env, userId)
   await db.delete(googleTokens).where(eq(googleTokens.userId, userId)).run()
   createLogger({ env: c.env }).info('gmail_disconnected', { userId })
   return c.json({ ok: true })
@@ -520,7 +523,6 @@ composeRouter.get('/thread/:emailId', async (c) => {
     const detail = await threadRes.text()
     createLogger({ env: c.env }).warn('gmail_thread_fetch_failed', {
       userId,
-      threadId: email.threadId,
       status: threadRes.status,
       detail: detail.slice(0, 200),
     })

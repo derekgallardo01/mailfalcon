@@ -22,7 +22,9 @@ const createSchema = z.object({
   cc: z.array(z.string().max(320)).max(50).default([]),
   bcc: z.array(z.string().max(320)).max(50).default([]),
   subject: z.string().max(998).default(''),
-  bodyPreview: z.string().max(400).optional(),
+  // bodyPreview intentionally omitted — we no longer store a body
+  // excerpt (data minimization for Google restricted-scope review). Any
+  // field sent by older extension builds is silently ignored by Zod.
 })
 
 const patchSchema = z.object({
@@ -73,7 +75,6 @@ scheduledRouter.get('/', async (c) => {
       cc: safeJsonArray(r.ccAddresses),
       bcc: safeJsonArray(r.bccAddresses),
       subject: r.subject,
-      bodyPreview: r.bodyPreview,
       status: r.status,
       firedAt: r.firedAt,
       firedEmailId: r.firedEmailId,
@@ -118,7 +119,7 @@ scheduledRouter.post('/', async (c) => {
       ccAddresses: JSON.stringify(parsed.data.cc),
       bccAddresses: JSON.stringify(parsed.data.bcc),
       subject: parsed.data.subject,
-      bodyPreview: parsed.data.bodyPreview ?? null,
+      bodyPreview: null,
       status: 'queued',
       firedAt: null,
       firedEmailId: null,

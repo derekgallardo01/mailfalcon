@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { googleTokens } from '@mailfalcon/db/schema'
 import type { DB } from './db'
+import { decryptToken, encryptToken, isEncrypted } from './crypto-tokens'
 import { createLogger, errorMeta } from './logger'
 
 /** Scopes the server-mediated compose flow needs. Union of:
@@ -23,6 +24,7 @@ interface OAuthEnv {
   ENVIRONMENT: string
   GOOGLE_OAUTH_CLIENT_ID?: string
   GOOGLE_OAUTH_CLIENT_SECRET?: string
+  TOKEN_ENC_KEY?: string
   AXIOM_TOKEN?: string
   AXIOM_DATASET?: string
 }
@@ -91,14 +93,18 @@ export async function getGoogleAccessToken(
       .where(eq(googleTokens.userId, userId))
       .run()
       .catch(() => undefined)
-    return { accessToken: row.accessToken, googleEmail: row.googleEmail }
+    return {
+      accessToken: await decryptToken(row.accessToken, env),
+      googleEmail: row.googleEmail,
+    }
   }
 
   if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) {
     throw new Error('oauth_not_configured')
   }
+  const refreshToken = await decryptToken(row.refreshToken, env)
   const params = new URLSearchParams({
-    refresh_token: row.refreshToken,
+    refresh_token: refreshToken,
     client_id: env.GOOGLE_OAUTH_CLIENT_ID,
     client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
     grant_type: 'refresh_token',
@@ -122,13 +128,25 @@ export async function getGoogleAccessToken(
   }
   const data = (await res.json()) as GoogleTokenResponse
   const newExpiresAt = Date.now() + data.expires_in * 1000
+  const updates: {
+    accessToken: string
+    accessTokenExpiresAt: number
+    lastUsedAt: number
+    refreshToken?: string
+  } = {
+    accessToken: await encryptToken(data.access_token, env),
+    accessTokenExpiresAt: newExpiresAt,
+    lastUsedAt: now,
+  }
+  // Lazily migrate a legacy plaintext refresh token to encrypted at rest
+  // now that we hold the plaintext in memory (Google does not return a
+  // new refresh token on refresh, so re-encrypt the existing one).
+  if (!isEncrypted(row.refreshToken)) {
+    updates.refreshToken = await encryptToken(refreshToken, env)
+  }
   await db
     .update(googleTokens)
-    .set({
-      accessToken: data.access_token,
-      accessTokenExpiresAt: newExpiresAt,
-      lastUsedAt: now,
-    })
+    .set(updates)
     .where(eq(googleTokens.userId, userId))
     .run()
   return { accessToken: data.access_token, googleEmail: row.googleEmail }
@@ -196,7 +214,7 @@ export async function exchangeAndStoreGoogleTokens(
       if (uiRes.ok) {
         const ui = (await uiRes.json()) as { email?: string }
         if (ui.email) {
-          return await persistTokens(db, args.userId, {
+          return await persistTokens(db, env, args.userId, {
             googleEmail: ui.email,
             refreshToken: data.refresh_token,
             accessToken: data.access_token,
@@ -210,7 +228,7 @@ export async function exchangeAndStoreGoogleTokens(
     }
     throw new Error('email_extract_failed')
   }
-  return await persistTokens(db, args.userId, {
+  return await persistTokens(db, env, args.userId, {
     googleEmail,
     refreshToken: data.refresh_token,
     accessToken: data.access_token,
@@ -221,6 +239,7 @@ export async function exchangeAndStoreGoogleTokens(
 
 async function persistTokens(
   db: DB,
+  env: OAuthEnv,
   userId: string,
   t: {
     googleEmail: string
@@ -231,13 +250,15 @@ async function persistTokens(
   },
 ): Promise<{ googleEmail: string; scopes: string }> {
   const now = Date.now()
+  const refreshToken = await encryptToken(t.refreshToken, env)
+  const accessToken = await encryptToken(t.accessToken, env)
   await db
     .insert(googleTokens)
     .values({
       userId,
       googleEmail: t.googleEmail,
-      refreshToken: t.refreshToken,
-      accessToken: t.accessToken,
+      refreshToken,
+      accessToken,
       accessTokenExpiresAt: now + t.expiresIn * 1000,
       scopes: t.scope,
       connectedAt: now,
@@ -247,8 +268,8 @@ async function persistTokens(
       target: googleTokens.userId,
       set: {
         googleEmail: t.googleEmail,
-        refreshToken: t.refreshToken,
-        accessToken: t.accessToken,
+        refreshToken,
+        accessToken,
         accessTokenExpiresAt: now + t.expiresIn * 1000,
         scopes: t.scope,
         connectedAt: now,
@@ -257,6 +278,41 @@ async function persistTokens(
     })
     .run()
   return { googleEmail: t.googleEmail, scopes: t.scope }
+}
+
+/**
+ * Best-effort revoke of a user's Google grant at Google's revoke
+ * endpoint, then always caller-deletes the row. Revoking the refresh
+ * token invalidates the whole grant. Called on disconnect + account
+ * deletion so we don't leave a live grant dangling after we drop our
+ * stored copy. Never throws — revocation is best-effort.
+ */
+export async function revokeGoogleGrant(
+  db: DB,
+  env: OAuthEnv,
+  userId: string,
+): Promise<void> {
+  const row = await db
+    .select({ refreshToken: googleTokens.refreshToken })
+    .from(googleTokens)
+    .where(eq(googleTokens.userId, userId))
+    .get()
+  if (!row) return
+  try {
+    const token = await decryptToken(row.refreshToken, env)
+    await fetch(
+      `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      },
+    )
+  } catch (err) {
+    createLogger({ env }).warn('google_revoke_failed', {
+      userId,
+      ...errorMeta(err),
+    })
+  }
 }
 
 /** Pull the `email` claim out of a Google id_token. The token is three

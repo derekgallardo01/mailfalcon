@@ -382,7 +382,6 @@ export async function mirrorScheduledSend(args: {
   cc: string[]
   bcc: string[]
   subject: string
-  bodyPreview?: string
 }): Promise<void> {
   const session = await loadSession()
   if (!session) return

@@ -298,8 +298,10 @@ export const scheduledSends = sqliteTable(
     ccAddresses: text('cc_addresses').notNull().default('[]'),
     bccAddresses: text('bcc_addresses').notNull().default('[]'),
     subject: text('subject').notNull(),
-    // First 200 chars of plaintext body, stored for visibility only.
-    // Disclosed in privacy policy.
+    // DEPRECATED — no longer written (always null) as of the Google
+    // restricted-scope data-minimization pass; existing values purged by
+    // migration 0018. Kept nullable for backward compat; drop later via
+    // drizzle-kit generate.
     bodyPreview: text('body_preview'),
     status: text('status', {
       enum: ['queued', 'fired', 'failed', 'cancelled', 'snoozed'],
