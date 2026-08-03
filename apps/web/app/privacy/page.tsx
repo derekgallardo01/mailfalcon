@@ -3,7 +3,7 @@ export const metadata = {
 }
 
 export default function PrivacyPage() {
-  const lastUpdated = '2026-06-15'
+  const lastUpdated = '2026-08-02'
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <a href="/" className="text-xs text-falcon-500 hover:text-falcon-700">
@@ -46,9 +46,17 @@ export default function PrivacyPage() {
         </ul>
         <p className="mt-3 leading-relaxed">
           We store the <strong>subject line</strong> of tracked emails so you
-          and MailFalcon administrators can identify them in the dashboard.
-          We do <strong>not</strong> store the body. We do not store your
-          recipients' email addresses — only a count.
+          can identify them in your dashboard. Subject lines are not visible to
+          MailFalcon administrators. We do <strong>not</strong> store the body.
+          For recipients, the standard tracking path stores a one-way hash of
+          each address plus a short display label (such as the recipient's name
+          or the part before the @) so you can recognize them in your dashboard,
+          along with a recipient count. Scheduled sends retain the full
+          recipient addresses until the message is dispatched.
+          If you enable open/click notifications by email, Slack, or Discord,
+          the subject line of the relevant email is included in that
+          notification and therefore passes through the corresponding provider
+          (our email provider, or the Slack/Discord webhook you configure).
         </p>
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">
@@ -147,25 +155,58 @@ export default function PrivacyPage() {
           Use of Google user data
         </h2>
         <p className="mt-2 leading-relaxed">
-          The Chrome extension reads the body of a Gmail compose window only at
-          the moment you click Send, and only to:
+          <strong>Core tracking (no Gmail API access).</strong> The Chrome
+          extension reads the body of a Gmail compose window only at the moment
+          you click Send, and only to insert a tracking pixel image and rewrite
+          outbound link URLs to pass through{' '}
+          <code className="mx-1 rounded bg-falcon-50 px-1 py-0.5 font-mono text-xs">
+            t.mailfalcon.app
+          </code>
+          . The modified body is then handed back to Gmail to send. On this
+          path the extension does <strong>not</strong> transmit your compose
+          text or body to our servers or to any third party.
+        </p>
+        <p className="mt-3 leading-relaxed">
+          <strong>Optional Google-account connection.</strong> If you connect
+          your Google account in Settings, MailFalcon requests two restricted
+          Gmail scopes and uses them only as follows:
         </p>
         <ul className="mt-2 list-inside list-disc space-y-1 leading-relaxed">
-          <li>insert a tracking pixel image at the end of the body, and</li>
           <li>
-            rewrite outbound link URLs to pass through{' '}
             <code className="mx-1 rounded bg-falcon-50 px-1 py-0.5 font-mono text-xs">
-              t.mailfalcon.app
-            </code>
-            .
+              gmail.compose
+            </code>{' '}
+            — to send a message you compose in MailFalcon on your behalf, after
+            inserting the tracking pixel and rewriting links. We do not
+            otherwise modify your mailbox.
+          </li>
+          <li>
+            <code className="mx-1 rounded bg-falcon-50 px-1 py-0.5 font-mono text-xs">
+              gmail.readonly
+            </code>{' '}
+            — for two features: (a) when you reply to a tracked email, our
+            server reads that email thread to build the quoted reply context;
+            this content is returned to your browser and is{' '}
+            <strong>not stored</strong>; and (b) the extension reads only the
+            authentication headers (Authentication-Results, From, Reply-To) of a
+            message on your device to show a sender-verification (SPF/DKIM/DMARC)
+            result. Those headers are processed locally and are{' '}
+            <strong>never sent to our servers</strong>.
           </li>
         </ul>
         <p className="mt-3 leading-relaxed">
-          The modified body is then handed back to Gmail to send. The
-          extension does not transmit your compose text, subject, recipient
-          addresses, or any other Gmail content to our servers or to any
-          third party. MailFalcon's use of information received from Google
-          APIs adheres to Google's{' '}
+          When you connect your account we store your connected Gmail address
+          and the OAuth tokens Google issues. Tokens are{' '}
+          <strong>encrypted at rest</strong>. We never store full Gmail message
+          bodies. You can disconnect at any time in Settings; disconnecting and
+          account deletion both revoke MailFalcon's access at Google and delete
+          the stored tokens.
+        </p>
+        <p className="mt-3 leading-relaxed">
+          No MailFalcon employee, contractor, or automated/AI system reads your
+          Gmail message content, and we never use Google user data for
+          advertising or sell it. MailFalcon's use and transfer of information
+          received from Google APIs adheres to Google's{' '}
           <a
             href="https://developers.google.com/terms/api-services-user-data-policy"
             target="_blank"
