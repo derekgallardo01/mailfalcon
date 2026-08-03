@@ -6,7 +6,7 @@ import './globals.css'
 const SITE_URL = 'https://app.mailfalcon.app'
 const TITLE = 'MailFalcon — Email tracking for Gmail'
 const DESCRIPTION =
-  'Know the moment your email is read. Real-time opens, clicks, and full device + location detail for Gmail.'
+  'MailFalcon adds real-time email open and click tracking to Gmail. Know the moment your email is read, with full device and location detail.'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

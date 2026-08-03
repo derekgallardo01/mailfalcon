@@ -21,12 +21,13 @@ function Hero() {
             Email tracking · Built for Gmail
           </span>
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-falcon-700 sm:text-5xl">
-            Know the moment your email is read.
+            MailFalcon — email open &amp; click tracking for Gmail
           </h1>
           <p className="mt-5 text-lg text-falcon-500">
-            MailFalcon adds open and link tracking to Gmail. Send like normal —
-            get a notification the instant a recipient opens, with full
-            browser, device and location detail.
+            Know the moment your email is read. MailFalcon adds open and link
+            tracking to Gmail — send like normal and get a notification the
+            instant a recipient opens, with full browser, device and location
+            detail.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <Link
