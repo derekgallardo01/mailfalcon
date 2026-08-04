@@ -103,6 +103,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             >
               hello@mailfalcon.app
             </a>
+            <span className="mx-2">·</span>
+            <a
+              href="https://kinetichelix.io"
+              target="_blank"
+              rel="noopener"
+              className="hover:text-falcon-700"
+            >
+              Built by Kinetic Helix
+            </a>
           </footer>
         </div>
       </body>
