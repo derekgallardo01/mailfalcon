@@ -149,7 +149,7 @@ export function renderDigestHtml(args: {
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
         <tr><td style="padding:28px 28px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">MailFalcon</p>
+          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">Mail Falcon</p>
         </td></tr>
         <tr><td style="padding:0 28px;">
           <h1 style="margin:8px 0 4px;font-size:20px;font-weight:600;color:#0f1a2e;">Your daily summary</h1>
@@ -204,7 +204,7 @@ export function renderDigestText(stats: DigestStats, webUrl: string): string {
     .map((e, i) => `  ${i + 1}. ${e.subject ?? '(no subject)'} — ${e.opens} opens, ${e.clicks} clicks`)
     .join('\n')
   return [
-    'MailFalcon — your daily summary',
+    'Mail Falcon — your daily summary',
     '',
     `Emails sent: ${stats.emailsSent}`,
     `Opens: ${stats.humanOpens} (excluding ${stats.opens - stats.humanOpens} bot opens)`,
@@ -234,9 +234,9 @@ export async function sendDigestViaResend(args: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'MailFalcon <hello@mailfalcon.app>',
+      from: 'Mail Falcon <hello@mailfalcon.app>',
       to: args.email,
-      subject: 'Your MailFalcon daily summary',
+      subject: 'Your Mail Falcon daily summary',
       text: args.text,
       html: args.html,
     }),
@@ -262,7 +262,7 @@ export async function sendDailyDigests(db: DB, env: DigestEnv): Promise<{
   failed: number
 }> {
   const today = todayKey()
-  const webUrl = env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app'
+  const webUrl = env.PUBLIC_WEB_URL ?? 'https://mailfalcon.app'
 
   // Digest is a Pro feature. Free users see an upgrade CTA in /settings
   // instead of the toggle. tier='admin' still gets the user digest in

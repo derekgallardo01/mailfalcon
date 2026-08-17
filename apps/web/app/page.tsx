@@ -21,10 +21,10 @@ function Hero() {
             Email tracking · Built for Gmail
           </span>
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-falcon-700 sm:text-5xl">
-            MailFalcon — email open &amp; click tracking for Gmail
+            Mail Falcon — email open &amp; click tracking for Gmail
           </h1>
           <p className="mt-5 text-lg text-falcon-500">
-            Know the moment your email is read. MailFalcon adds open and link
+            Know the moment your email is read. Mail Falcon adds open and link
             tracking to Gmail — send like normal and get a notification the
             instant a recipient opens, with full browser, device and location
             detail.
@@ -34,7 +34,7 @@ function Hero() {
               href="/sign-in"
               className="rounded bg-falcon-500 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-falcon-600"
             >
-              Sign in to MailFalcon
+              Sign in to Mail Falcon
             </Link>
             <Link
               href="/dashboard"
@@ -87,7 +87,7 @@ function Features() {
           Everything you need to know who opened
         </h2>
         <p className="mx-auto mt-3 max-w-2xl text-center text-falcon-500">
-          MailFalcon runs end-to-end on Cloudflare with signed tracking IDs and
+          Mail Falcon runs end-to-end on Cloudflare with signed tracking IDs and
           per-email salts. No third-party analytics, no resold data.
         </p>
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -113,7 +113,7 @@ function HowItWorks() {
     {
       n: '1',
       title: 'Install the extension',
-      body: 'Once approved on the Chrome Web Store, install MailFalcon and sign in. Until then it can be sideloaded — ask us for the build.',
+      body: 'Once approved on the Chrome Web Store, install Mail Falcon and sign in. Until then it can be sideloaded — ask us for the build.',
     },
     {
       n: '2',
@@ -123,7 +123,7 @@ function HowItWorks() {
     {
       n: '3',
       title: 'Watch the dashboard',
-      body: 'Opens and clicks stream in live at app.mailfalcon.app/dashboard. Get a notification toast the moment a recipient opens.',
+      body: 'Opens and clicks stream in live at mailfalcon.app/dashboard. Get a notification toast the moment a recipient opens.',
     },
   ]
   return (
@@ -250,11 +250,11 @@ function FAQ() {
   const items = [
     {
       q: 'Does the recipient know they’re being tracked?',
-      a: 'MailFalcon does not show a banner or watermark on outgoing email — it’s the same behavior as Mailtrack, HubSpot Sales, Streak and other Gmail trackers. If you’d rather a particular email not be tracked, tick the privacy-mode checkbox in the Gmail compose area before sending.',
+      a: 'Mail Falcon does not show a banner or watermark on outgoing email — it’s the same behavior as Mailtrack, HubSpot Sales, Streak and other Gmail trackers. If you’d rather a particular email not be tracked, tick the privacy-mode checkbox in the Gmail compose area before sending.',
     },
     {
       q: 'What about Gmail’s image proxy?',
-      a: 'Gmail proxies inline images through its own servers, which can cause one early "prefetch" open. MailFalcon marks that bot-class open separately from human opens — the dashboard shows both numbers so you can trust the human count.',
+      a: 'Gmail proxies inline images through its own servers, which can cause one early "prefetch" open. Mail Falcon marks that bot-class open separately from human opens — the dashboard shows both numbers so you can trust the human count.',
     },
     {
       q: 'How does click tracking work?',
@@ -262,7 +262,7 @@ function FAQ() {
     },
     {
       q: 'Can I disable tracking per email?',
-      a: 'Yes. The privacy-mode checkbox sits in the Gmail compose area. Tick it to send without a tracking pixel or link rewrites for that single message — nothing is sent to MailFalcon.',
+      a: 'Yes. The privacy-mode checkbox sits in the Gmail compose area. Tick it to send without a tracking pixel or link rewrites for that single message — nothing is sent to Mail Falcon.',
     },
     {
       q: 'What about my data?',
@@ -270,7 +270,7 @@ function FAQ() {
     },
     {
       q: 'Outlook, Apple Mail, mobile?',
-      a: 'MailFalcon is Gmail-only today (Chrome on desktop, via the extension). Outlook + mobile are on the post-launch roadmap.',
+      a: 'Mail Falcon is Gmail-only today (Chrome on desktop, via the extension). Outlook + mobile are on the post-launch roadmap.',
     },
   ]
   return (

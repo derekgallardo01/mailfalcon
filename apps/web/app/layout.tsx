@@ -3,19 +3,19 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import './globals.css'
 
-const SITE_URL = 'https://app.mailfalcon.app'
-const TITLE = 'MailFalcon — Email tracking for Gmail'
+const SITE_URL = 'https://mailfalcon.app'
+const TITLE = 'Mail Falcon — Email tracking for Gmail'
 const DESCRIPTION =
-  'MailFalcon adds real-time email open and click tracking to Gmail. Know the moment your email is read, with full device and location detail.'
+  'Mail Falcon adds real-time email open and click tracking to Gmail. Know the moment your email is read, with full device and location detail.'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: TITLE,
-    template: '%s · MailFalcon',
+    template: '%s · Mail Falcon',
   },
   description: DESCRIPTION,
-  applicationName: 'MailFalcon',
+  applicationName: 'Mail Falcon',
   keywords: [
     'email tracking',
     'gmail tracking',
@@ -23,12 +23,12 @@ export const metadata: Metadata = {
     'click tracking',
     'mailtrack alternative',
   ],
-  authors: [{ name: 'MailFalcon' }],
+  authors: [{ name: 'Mail Falcon' }],
   alternates: { canonical: SITE_URL },
   openGraph: {
     type: 'website',
     url: SITE_URL,
-    siteName: 'MailFalcon',
+    siteName: 'Mail Falcon',
     title: TITLE,
     description: DESCRIPTION,
     images: [
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
         url: '/icon.png',
         width: 512,
         height: 512,
-        alt: 'MailFalcon',
+        alt: 'Mail Falcon',
       },
     ],
   },
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: 'MailFalcon',
+    title: 'Mail Falcon',
     statusBarStyle: 'default',
   },
 }
@@ -74,7 +74,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <div className="flex-1">{children}</div>
           <footer className="border-t border-falcon-200 bg-white py-4 text-center text-xs text-falcon-500">
             <Link href="/" className="hover:text-falcon-700">
-              MailFalcon
+              Mail Falcon
             </Link>
             <span className="mx-2">·</span>
             <Link href="/templates" className="hover:text-falcon-700">

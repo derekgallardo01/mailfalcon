@@ -4,4 +4,4 @@ Disallow: /dashboard/
 Disallow: /admin/
 Disallow: /settings/
 
-Sitemap: https://app.mailfalcon.app/sitemap.xml
+Sitemap: https://mailfalcon.app/sitemap.xml

@@ -102,7 +102,7 @@ export async function resetOnboarding(): Promise<void> {
   await chrome.storage.local.remove(ONBOARDING_KEY)
 }
 
-/** First-send tour: spotlight tooltip on the MailFalcon compose bar
+/** First-send tour: spotlight tooltip on the Mail Falcon compose bar
  *  shown once to brand-new users who haven't sent a tracked email yet.
  *  Marked seen on first dismiss or first send. */
 export async function hasSeenFirstSendTour(): Promise<boolean> {

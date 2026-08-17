@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Refund & Cancellation Policy — MailFalcon',
+  title: 'Refund & Cancellation Policy — Mail Falcon',
 }
 
 export default function RefundsPage() {
@@ -7,15 +7,15 @@ export default function RefundsPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <a href="/" className="text-xs text-falcon-500 hover:text-falcon-700">
-        ← MailFalcon
+        ← Mail Falcon
       </a>
       <h1 className="mt-2 text-2xl font-semibold text-falcon-700">Refund &amp; Cancellation Policy</h1>
       <p className="mt-1 text-xs text-falcon-500">Last updated {lastUpdated}</p>
 
       <section className="prose mt-8 text-sm text-falcon-700">
         <p className="leading-relaxed">
-          MailFalcon is operated by Kinetic Helix LLC. This policy explains how cancellations and refunds work for paid
-          MailFalcon subscriptions.
+          Mail Falcon is operated by Kinetic Helix LLC. This policy explains how cancellations and refunds work for paid
+          Mail Falcon subscriptions.
         </p>
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">Cancel anytime</h2>
@@ -40,7 +40,7 @@ export default function RefundsPage() {
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">How to cancel</h2>
         <p className="mt-2 leading-relaxed">
-          Open your billing settings in the MailFalcon dashboard, or email{' '}
+          Open your billing settings in the Mail Falcon dashboard, or email{' '}
           <a href="mailto:hello@mailfalcon.app" className="text-falcon-600 underline hover:text-falcon-700">
             hello@mailfalcon.app
           </a>{' '}

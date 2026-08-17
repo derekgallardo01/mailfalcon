@@ -1,10 +1,10 @@
-# Chrome Web Store submission — MailFalcon 1.18.1
+# Chrome Web Store submission — Mail Falcon 1.18.1
 
 Everything needed to publish the extension at
 [chrome.google.com/webstore/devconsole](https://chrome.google.com/webstore/devconsole)
 and to pass Google OAuth **restricted-scope** verification.
 
-> **IMPORTANT — restricted scopes.** MailFalcon uses two restricted Gmail
+> **IMPORTANT — restricted scopes.** Mail Falcon uses two restricted Gmail
 > scopes (`gmail.compose`, `gmail.readonly`). This triggers full Google OAuth
 > verification **plus a CASA Tier 2 security assessment**. The Limited Use
 > disclosure below and the Chrome "Data safety" form must be **accurate** —
@@ -41,7 +41,7 @@ Upload that zip on the dev console "Package" step.
 
 ### Title
 
-`MailFalcon — Email tracking for Gmail`
+`Mail Falcon — Email tracking for Gmail`
 
 ### Short description (≤ 132 chars)
 
@@ -54,7 +54,7 @@ device intel, privacy mode per email. Free tier included.`
 
 > **Know the moment your email is read.**
 >
-> MailFalcon adds open and link tracking to Gmail. Send like normal — get
+> Mail Falcon adds open and link tracking to Gmail. Send like normal — get
 > a notification the instant a recipient opens, with full browser, device
 > and location detail.
 >
@@ -68,7 +68,7 @@ device intel, privacy mode per email. Free tier included.`
 >   type, IP /24 prefix, city, region, postal code and timezone.
 > - **Privacy mode per email.** A checkbox in the Gmail compose area lets
 >   you skip tracking on any individual message — no pixel, no link
->   rewrite, nothing sent to MailFalcon.
+>   rewrite, nothing sent to Mail Falcon.
 > - **Optional Gmail connection.** Connect your Google account to send
 >   tracked mail server-side (with reply context) and to verify sender
 >   authentication (SPF/DKIM/DMARC) on incoming mail. This is optional and
@@ -85,7 +85,7 @@ device intel, privacy mode per email. Free tier included.`
 >    compose body with a "Privacy mode" checkbox — leave it unchecked to
 >    track this send.
 > 3. Send. Open and click events stream to
->    [app.mailfalcon.app/dashboard](https://app.mailfalcon.app/dashboard).
+>    [mailfalcon.app/dashboard](https://mailfalcon.app/dashboard).
 >
 > ## Pricing
 >
@@ -96,13 +96,13 @@ device intel, privacy mode per email. Free tier included.`
 >
 > Core tracking (pixel + link rewrite) runs entirely in your browser and
 > does **not** use the Gmail API — the composed body is never sent to
-> MailFalcon servers on that path.
+> Mail Falcon servers on that path.
 >
-> If you connect your Google account (optional), MailFalcon uses the
+> If you connect your Google account (optional), Mail Falcon uses the
 > `gmail.compose` and `gmail.readonly` scopes to send tracked mail on your
 > behalf and to read message headers/threads for reply context and sender
 > verification. Full details in the Limited Use disclosure below and at
-> [app.mailfalcon.app/privacy](https://app.mailfalcon.app/privacy).
+> [mailfalcon.app/privacy](https://mailfalcon.app/privacy).
 >
 > Export all your data as JSON or delete your account self-serve in
 > Settings.
@@ -122,7 +122,7 @@ English
 ### Single purpose
 
 > Add open and click tracking to outgoing Gmail messages and surface the
-> resulting open/click events on the user's MailFalcon dashboard. The
+> resulting open/click events on the user's Mail Falcon dashboard. The
 > optional Google-account connection supports this purpose by sending
 > tracked messages and by verifying sender authentication and providing
 > reply context for the same mail.
@@ -156,7 +156,7 @@ actually declared.
 
 ### `scripting`
 
-> Used by InboxSDK's compose hooks to attach the MailFalcon status bar
+> Used by InboxSDK's compose hooks to attach the Mail Falcon status bar
 > above the Gmail compose area — how the user sees and toggles the
 > per-email "Privacy mode" checkbox.
 
@@ -165,7 +165,7 @@ actually declared.
 > Used to run the Google OAuth sign-in flow for the optional Gmail
 > connection via `chrome.identity.launchWebAuthFlow`
 > (redirect URI `https://<extension-id>.chromiumapp.org/`). This is how the
-> user grants MailFalcon access to verify sender authentication on incoming
+> user grants Mail Falcon access to verify sender authentication on incoming
 > mail. The authorization code is exchanged for tokens **server-side**; the
 > client secret never ships in the extension.
 
@@ -187,7 +187,7 @@ actually declared.
 
 ### Host permission: `https://*.mailfalcon.app/*`
 
-> The extension talks to MailFalcon's own API at api.mailfalcon.app
+> The extension talks to Mail Falcon's own API at api.mailfalcon.app
 > (email sign-in, minting tracking IDs, server-side OAuth token exchange,
 > fetching dashboard data) and uses t.mailfalcon.app for click redirects.
 > Host permission is needed for these CORS-restricted fetches from the
@@ -202,7 +202,7 @@ scope will not work**.
 ### `https://www.googleapis.com/auth/gmail.compose` (restricted)
 
 > Required to send tracked email on the user's behalf. After the user
-> composes a message in MailFalcon's compose flow, the server inserts a 1px
+> composes a message in Mail Falcon's compose flow, the server inserts a 1px
 > open-tracking pixel and rewrites outbound links through signed redirects,
 > assembles the RFC 5322 message, and calls `users.messages.send`. A
 > narrower scope is insufficient: `gmail.send` cannot create/read the draft
@@ -232,7 +232,7 @@ scope will not work**.
 
 The single most important section. This must match the code exactly.
 
-> MailFalcon's use of and transfer of information received from Google APIs
+> Mail Falcon's use of and transfer of information received from Google APIs
 > adheres to the
 > [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy),
 > and the
@@ -244,32 +244,32 @@ The single most important section. This must match the code exactly.
 > identify the connected Gmail address. Core open/click tracking does not
 > use any Gmail API scope.
 >
-> - **Read.** With `gmail.readonly` MailFalcon (a) reads message
+> - **Read.** With `gmail.readonly` Mail Falcon (a) reads message
 >   **metadata headers only** (`Authentication-Results`, `From`,
 >   `Reply-To`; `format=metadata`) on-device in the extension to compute a
 >   sender-authentication verdict — this header data is cached only in the
 >   browser (`chrome.storage.session`) and is **never transmitted to
->   MailFalcon servers**; and (b) on the server, fetches a source thread to
+>   Mail Falcon servers**; and (b) on the server, fetches a source thread to
 >   build reply context. Reply-context content is returned to the user's
 >   own client transiently and is **not stored**.
-> - **Send/Modify.** With `gmail.compose` MailFalcon sends messages the
+> - **Send/Modify.** With `gmail.compose` Mail Falcon sends messages the
 >   user composes, after inserting an open-tracking pixel and rewriting
 >   outbound links through signed redirects scoped to that message. It does
 >   not otherwise modify the user's mailbox.
-> - **Store.** MailFalcon stores: the connected Gmail address; OAuth access
+> - **Store.** Mail Falcon stores: the connected Gmail address; OAuth access
 >   and refresh tokens; and, for tracking, the message **subject line**,
 >   the Gmail **thread/message IDs**, and outbound **link URLs**. Recipient
 >   addresses are SHA-256 hashed in the tracking path. Scheduled sends
 >   temporarily store recipient addresses and a short body preview until
 >   the scheduled send executes, then follow normal retention. **Full
 >   message bodies are never stored.**
-> - **Transfer.** MailFalcon does not sell Google user data and does not
+> - **Transfer.** Mail Falcon does not sell Google user data and does not
 >   use it for advertising. Subject lines are transmitted to third-party
 >   notification providers (Resend for email-to-self digests; Slack/Discord
 >   webhooks) **only when the user explicitly enables** those channels.
 >   Operational error logs (Axiom) may include a Gmail `threadId` and
 >   truncated Google API error text, but never subjects or message bodies.
-> - **Human/AI access.** No MailFalcon employee, contractor, or AI/ML model
+> - **Human/AI access.** No Mail Falcon employee, contractor, or AI/ML model
 >   reads Gmail message bodies, and no human-review pipeline exists. The
 >   operator admin console does not display Gmail-derived message content
 >   (subject lines were removed and are not searchable).
@@ -313,7 +313,7 @@ CASA Tier 2 assessors and Google's reviewer will check these. Tracking:
   `gmail_thread_fetch_failed` warn log (`compose.ts`).
 - [x] **6. Explicit `google_tokens` deletion** — added to the account
   deletion batch (`me.ts`), not just FK cascade.
-- [ ] **7. Privacy policy** — ensure app.mailfalcon.app/privacy states the
+- [ ] **7. Privacy policy** — ensure mailfalcon.app/privacy states the
   Gmail scopes, server-side token storage, third-party subject sharing, and
   the deletion path, and includes the Limited Use statement. *(Still to
   verify on the live page.)*
@@ -329,11 +329,11 @@ CASA Tier 2 assessors and Google's reviewer will check these. Tracking:
 
 Unlisted YouTube video. Must show, on screen:
 
-1. The OAuth consent screen with the verified app name **MailFalcon** and
+1. The OAuth consent screen with the verified app name **Mail Falcon** and
    the exact Gmail permissions being requested.
 2. The in-app "Connect Google account" action that triggers that consent.
 3. Each restricted scope actually being used:
-   - `gmail.compose`: composing in MailFalcon and sending; show the sent
+   - `gmail.compose`: composing in Mail Falcon and sending; show the sent
      message in Gmail.
    - `gmail.readonly`: the sender-verification badge on a message, and (if
      kept) reply context populating.
@@ -343,11 +343,11 @@ Unlisted YouTube video. Must show, on screen:
 
 Capture five if possible:
 
-1. Gmail compose window with the MailFalcon "Privacy mode" status bar
+1. Gmail compose window with the Mail Falcon "Privacy mode" status bar
    pinned above the body.
 2. Chrome notification toast firing the moment a recipient opens
    ("Opened by — desktop · Safari · United States").
-3. Dashboard list view at app.mailfalcon.app/dashboard with several
+3. Dashboard list view at mailfalcon.app/dashboard with several
    tracked emails, opens and clicks visible.
 4. Per-email detail page showing the event timeline with
    browser/OS/location for each open.
@@ -391,7 +391,7 @@ node scripts/gen-promo-frames.mjs <tmpdir>  # 1080p video scene frames
 
 ## Privacy policy URL
 
-`https://app.mailfalcon.app/privacy`
+`https://mailfalcon.app/privacy`
 
 (Already live — confirm it covers the Gmail scopes per remediation item 7.)
 
@@ -399,7 +399,7 @@ node scripts/gen-promo-frames.mjs <tmpdir>  # 1080p video scene frames
 
 - [ ] Pre-verification remediation items above addressed (or consciously
   deferred with disclosures updated to match)
-- [ ] `homepage_url` set to `https://app.mailfalcon.app`
+- [ ] `homepage_url` set to `https://mailfalcon.app`
   (done in `apps/extension/wxt.config.ts`)
 - [ ] Built zip with `pnpm exec wxt zip` (v1.18.1) → uploaded
 - [ ] Pasted short + long description above
@@ -429,6 +429,6 @@ accordingly.
   resubmit.
 - Update [docs/SIDELOAD.md](SIDELOAD.md) to point at the CWS install URL
   instead of unpacked-load once published.
-- Update the landing page hero CTA from "Sign in to MailFalcon" to
-  "Add MailFalcon to Chrome" with the CWS link.
+- Update the landing page hero CTA from "Sign in to Mail Falcon" to
+  "Add Mail Falcon to Chrome" with the CWS link.
 </content>

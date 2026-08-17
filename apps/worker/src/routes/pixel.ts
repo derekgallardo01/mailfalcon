@@ -8,7 +8,14 @@ import { createLogger, errorMeta } from '../lib/logger'
 import { fanoutPush } from '../lib/push-fanout'
 import { rateLimit } from '../lib/rate-limit'
 import { getHmacSecret } from '../lib/secrets'
-import { extractCfGeo, hashUa, parseUa, truncateIpV4, type UaDetails } from '../lib/ua'
+import {
+  classifyProxyType,
+  extractCfGeo,
+  hashUa,
+  parseUa,
+  truncateIpV4,
+  type UaDetails,
+} from '../lib/ua'
 
 /** SHA-256 hex of the lowercased address. Matches the extension's
  *  `sha256Hex(r.address.toLowerCase())` used at mint time, so a
@@ -245,7 +252,11 @@ pixelRouter.get('/:idWithExt', async (c) => {
         typeof cf.asOrganization === 'string'
           ? (cf.asOrganization as string).toLowerCase()
           : ''
+      const proxyType = classifyProxyType(ua, asOrg, asn)
+      const isMpp = proxyType === 'apple_mpp'
       const isDatacenterFetch =
+        proxyType === 'datacenter' ||
+        proxyType === 'google_proxy' ||
         asn === 15169 || // Google
         asn === 8075 || // Microsoft
         asn === 32934 || // Facebook
@@ -257,12 +268,13 @@ pixelRouter.get('/:idWithExt', async (c) => {
         asOrg.includes('amazon') ||
         asOrg.includes('facebook')
 
-      // Notification gate: 'bot' + 'unknown' UAs + datacenter fetches
+      // Notification gate: 'bot' + 'unknown' UAs + datacenter / MPP proxy fetches
       // all suppress. Real browsers with real UAs from real networks
       // are the only class that triggers notifications.
       const humanLike =
         (uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile') &&
-        !isDatacenterFetch
+        !isDatacenterFetch &&
+        !isMpp
 
       // Sender-IP guard. Some Gmail configs send Referrer-Policy:
       // no-referrer, stripping the referer that isSenderGmailContext
@@ -367,6 +379,8 @@ pixelRouter.get('/:idWithExt', async (c) => {
           deviceVendor: uaDetails.deviceVendor,
           deviceModel: uaDetails.deviceModel,
           isFirstOpen,
+          isMpp: isMpp ? 1 : 0,
+          proxyType,
           notificationSuppressed: notificationSuppressed ? 1 : 0,
         })
         .run()

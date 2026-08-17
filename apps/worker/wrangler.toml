@@ -13,7 +13,7 @@ routes = [
 
 [vars]
 ENVIRONMENT = "production"
-PUBLIC_WEB_URL = "https://app.mailfalcon.app"
+PUBLIC_WEB_URL = "https://mailfalcon.app"
 
 [[d1_databases]]
 binding = "DB"

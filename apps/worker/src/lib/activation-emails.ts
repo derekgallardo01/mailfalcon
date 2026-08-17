@@ -30,7 +30,7 @@ export async function sendActivationEmails(
   db: Db,
   env: Env,
 ): Promise<{ welcome: number; reminder: number }> {
-  const webUrl = env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app'
+  const webUrl = env.PUBLIC_WEB_URL ?? 'https://mailfalcon.app'
   const now = Date.now()
 
   // Pass 1 — welcome.

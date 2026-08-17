@@ -109,17 +109,16 @@ export function AppHeader({ liveCount = 0 }: Props) {
   return (
     <header className="flex flex-col gap-3 border-b border-falcon-200 pb-4 md:flex-row md:items-center md:justify-between">
       <div className="flex items-center gap-3">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2.5">
           <img
-            src="/falcon.png"
-            alt=""
-            width={28}
-            height={28}
-            className="h-7 w-7 rounded"
-            aria-hidden="true"
+            src="/icon.png"
+            alt="Mail Falcon"
+            width={30}
+            height={30}
+            className="h-7 w-7 rounded-lg shadow-sm"
           />
-          <span className="text-lg font-semibold text-falcon-700">
-            MailFalcon
+          <span className="text-lg font-bold tracking-tight text-falcon-800">
+            Mail Falcon
           </span>
         </Link>
         {tierLabel && tierClass && (
@@ -141,7 +140,7 @@ export function AppHeader({ liveCount = 0 }: Props) {
           <WorkspaceSwitcher me={me} />
         )}
         {liveCount > 0 && (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+          <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-800 animate-pulse">
             live · {liveCount} new
           </span>
         )}
@@ -159,12 +158,13 @@ export function AppHeader({ liveCount = 0 }: Props) {
       <nav className="flex flex-wrap items-center gap-1">
         <Link
           href="/compose"
-          className="mr-1 flex items-center gap-1 rounded-md bg-falcon-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-falcon-600"
+          className="mr-1 flex items-center gap-1 rounded-md bg-falcon-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-falcon-700 transition-colors"
         >
           <span>✍</span>
           Compose
         </Link>
         {navLink('/dashboard', 'Dashboard')}
+        {navLink('/sequences', 'Sequences')}
         {navLink('/dashboard/scheduled', 'Scheduled')}
         {navLink('/dashboard/contacts', 'Contacts')}
         {navLink('/templates', 'Templates')}

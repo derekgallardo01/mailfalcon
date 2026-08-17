@@ -104,6 +104,7 @@ export interface TrackingSummary {
   humanOpens: number
   clicks: number
   replies: number
+  totalOpens?: number
 }
 
 /**

@@ -853,7 +853,7 @@ function CustomDomainPanel({ meTier }: { meTier: string }) {
           <code className="mx-1 rounded bg-falcon-50 px-1 py-0.5 font-mono text-xs">
             t.acmecorp.com
           </code>
-          instead of t.mailfalcon.app. Hides MailFalcon branding from recipients.
+          instead of t.mailfalcon.app. Hides Mail Falcon branding from recipients.
         </p>
         <button
           type="button"
@@ -1008,7 +1008,7 @@ function BrandingPanel() {
     <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
       <h2 className="text-base font-semibold text-falcon-700">Branding</h2>
       <p className="mt-1 text-xs text-falcon-500">
-        Shown on HTML/PDF reports. Leave blank to fall back to the MailFalcon
+        Shown on HTML/PDF reports. Leave blank to fall back to the Mail Falcon
         brand.
       </p>
       <div className="mt-4 space-y-3 text-sm">
@@ -1195,7 +1195,7 @@ function GmailComposePanel() {
   }
 
   async function disconnect() {
-    if (!window.confirm('Disconnect Gmail? MailFalcon will stop being able to send from your account.')) {
+    if (!window.confirm('Disconnect Gmail? Mail Falcon will stop being able to send from your account.')) {
       return
     }
     setBusy(true)
@@ -1217,8 +1217,8 @@ function GmailComposePanel() {
     <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
       <h2 className="text-base font-semibold text-falcon-700">Mobile compose</h2>
       <p className="mt-1 text-xs text-falcon-500">
-        Connect your Gmail account so MailFalcon can send tracked emails from
-        any device via <a href="/compose/" className="text-falcon-600 underline">app.mailfalcon.app/compose</a>.
+        Connect your Gmail account so Mail Falcon can send tracked emails from
+        any device via <a href="/compose/" className="text-falcon-600 underline">mailfalcon.app/compose</a>.
         Works on phones + tablets without installing anything — the Chrome extension is still required for tracking sends from Gmail on desktop.
       </p>
 
@@ -1254,7 +1254,7 @@ function GmailComposePanel() {
           </div>
           {status.scopesUpToDate === false && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              MailFalcon needs additional Gmail permissions. Disconnect and reconnect to grant them.
+              Mail Falcon needs additional Gmail permissions. Disconnect and reconnect to grant them.
             </div>
           )}
         </div>

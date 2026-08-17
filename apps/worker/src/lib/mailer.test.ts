@@ -98,7 +98,7 @@ describe('sendFollowupReminder', () => {
       subject: 'Following up',
       emailId: 'abc123',
       sentAt: Date.now(),
-      webUrl: 'https://app.mailfalcon.app',
+      webUrl: 'https://mailfalcon.app',
       env: { ENVIRONMENT: 'production', RESEND_API_KEY: 'key' },
     })
     const body = JSON.parse(
@@ -117,7 +117,7 @@ describe('sendFollowupReminder', () => {
       subject: null,
       emailId: 'abc123',
       sentAt: Date.now(),
-      webUrl: 'https://app.mailfalcon.app',
+      webUrl: 'https://mailfalcon.app',
       env: { ENVIRONMENT: 'production', RESEND_API_KEY: 'key' },
     })
     expect(spy).toHaveBeenCalledOnce()
@@ -133,7 +133,7 @@ describe('sendWorkspaceInvite', () => {
       to: 'newbie@example.com',
       workspaceName: 'Acme Co',
       inviterEmail: 'owner@example.com',
-      acceptUrl: 'https://app.mailfalcon.app/workspaces/accept?token=xyz',
+      acceptUrl: 'https://mailfalcon.app/workspaces/accept?token=xyz',
       env: { ENVIRONMENT: 'production', RESEND_API_KEY: 'key' },
     })
     const body = JSON.parse(
@@ -155,7 +155,7 @@ describe('sendWorkspaceInvite', () => {
       to: 'x@example.com',
       workspaceName: '<script>alert(1)</script>',
       inviterEmail: 'owner@example.com',
-      acceptUrl: 'https://app.mailfalcon.app/accept?t=1',
+      acceptUrl: 'https://mailfalcon.app/accept?t=1',
       env: { ENVIRONMENT: 'production', RESEND_API_KEY: 'key' },
     })
     const body = JSON.parse(

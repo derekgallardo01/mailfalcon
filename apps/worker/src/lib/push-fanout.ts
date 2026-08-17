@@ -271,7 +271,7 @@ export async function fanoutPush(
             latitude: payload.latitude,
             longitude: payload.longitude,
             isVpnLikely: payload.isVpnLikely,
-            webUrl: env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app',
+            webUrl: env.PUBLIC_WEB_URL ?? 'https://mailfalcon.app',
             env,
           })
           emailNotified++

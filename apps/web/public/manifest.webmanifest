@@ -1,6 +1,6 @@
 {
-  "name": "MailFalcon",
-  "short_name": "MailFalcon",
+  "name": "Mail Falcon",
+  "short_name": "Mail Falcon",
   "description": "Email tracking for Gmail — send tracked emails from any device.",
   "start_url": "/compose/",
   "scope": "/",

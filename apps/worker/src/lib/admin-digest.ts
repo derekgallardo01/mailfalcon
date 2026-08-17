@@ -601,7 +601,7 @@ function renderAdminHtml(args: { stats: AdminStats; webUrl: string }): string {
       <!-- Brand pill -->
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 14px;">
         <tr><td style="padding:6px 14px;background:#264168;border-radius:999px;font-size:11px;font-weight:700;color:#ffffff;letter-spacing:0.08em;text-transform:uppercase;">
-          MailFalcon · admin
+          Mail Falcon · admin
         </td></tr>
       </table>
 
@@ -886,7 +886,7 @@ function renderAdminText(stats: AdminStats, webUrl: string): string {
       : `${Math.round((dev.desktop / devTotal) * 100)}% desktop, ${Math.round((dev.mobile / devTotal) * 100)}% mobile, ${Math.round((dev.other / devTotal) * 100)}% other`
 
   return [
-    'MailFalcon · admin daily report',
+    'Mail Falcon · admin daily report',
     '',
     stats.alerts.length > 0
       ? 'Needs attention:\n' + stats.alerts.map((a) => `  - ${a}`).join('\n') + '\n'
@@ -977,9 +977,9 @@ async function sendAdminDigestViaResend(args: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'MailFalcon Admin <hello@mailfalcon.app>',
+      from: 'Mail Falcon Admin <hello@mailfalcon.app>',
       to: args.email,
-      subject: `MailFalcon admin report — ${new Date().toUTCString().slice(0, 16)}`,
+      subject: `Mail Falcon admin report — ${new Date().toUTCString().slice(0, 16)}`,
       text: args.text,
       html: args.html,
     }),
@@ -999,7 +999,7 @@ export async function sendAdminDigests(
   sent: number
   failed: number
 }> {
-  const webUrl = env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app'
+  const webUrl = env.PUBLIC_WEB_URL ?? 'https://mailfalcon.app'
 
   const admins = await db
     .select({ id: users.id, email: users.email })

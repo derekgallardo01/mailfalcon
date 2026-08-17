@@ -45,7 +45,7 @@ export async function sendMiddayDigests(
   failed: number
 }> {
   const today = todayKey()
-  const webUrl = env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app'
+  const webUrl = env.PUBLIC_WEB_URL ?? 'https://mailfalcon.app'
 
   const candidates = await db
     .select({

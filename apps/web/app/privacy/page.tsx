@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Privacy policy — MailFalcon',
+  title: 'Privacy policy — Mail Falcon',
 }
 
 export default function PrivacyPage() {
@@ -7,17 +7,17 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <a href="/" className="text-xs text-falcon-500 hover:text-falcon-700">
-        ← MailFalcon
+        ← Mail Falcon
       </a>
       <h1 className="mt-2 text-2xl font-semibold text-falcon-700">Privacy policy</h1>
       <p className="mt-1 text-xs text-falcon-500">Last updated {lastUpdated}</p>
 
       <section className="prose mt-8 text-sm text-falcon-700">
         <h2 className="mt-6 text-base font-semibold text-falcon-700">
-          What MailFalcon does
+          What Mail Falcon does
         </h2>
         <p className="mt-2 leading-relaxed">
-          MailFalcon is a Chrome extension and web dashboard that lets a sender
+          Mail Falcon is a Chrome extension and web dashboard that lets a sender
           (you) see when emails you've sent through Gmail are opened, and
           whether recipients click links inside them. It works by injecting a
           1×1 transparent image and rewriting outbound links to pass through
@@ -47,7 +47,7 @@ export default function PrivacyPage() {
         <p className="mt-3 leading-relaxed">
           We store the <strong>subject line</strong> of tracked emails so you
           can identify them in your dashboard. Subject lines are not visible to
-          MailFalcon administrators. We do <strong>not</strong> store the body.
+          Mail Falcon administrators. We do <strong>not</strong> store the body.
           For recipients, the standard tracking path stores a one-way hash of
           each address plus a short display label (such as the recipient's name
           or the part before the @) so you can recognize them in your dashboard,
@@ -90,7 +90,7 @@ export default function PrivacyPage() {
               192.168.1.0
             </code>
             ) for aggregate statistics and the full IP for abuse
-            investigation. The full IP is only accessible to MailFalcon
+            investigation. The full IP is only accessible to Mail Falcon
             administrators and is deleted on the standard retention schedule.
           </li>
         </ul>
@@ -106,7 +106,7 @@ export default function PrivacyPage() {
         </h2>
         <p className="mt-2 leading-relaxed">
           Every Gmail compose window has a "Privacy mode" checkbox added by the
-          MailFalcon extension. When checked, no pixel is injected, no links
+          Mail Falcon extension. When checked, no pixel is injected, no links
           are rewritten, and no record of the send is created on our servers.
           That email is, from our perspective, completely untracked.
         </p>
@@ -168,7 +168,7 @@ export default function PrivacyPage() {
         </p>
         <p className="mt-3 leading-relaxed">
           <strong>Optional Google-account connection.</strong> If you connect
-          your Google account in Settings, MailFalcon requests two restricted
+          your Google account in Settings, Mail Falcon requests two restricted
           Gmail scopes and uses them only as follows:
         </p>
         <ul className="mt-2 list-inside list-disc space-y-1 leading-relaxed">
@@ -176,7 +176,7 @@ export default function PrivacyPage() {
             <code className="mx-1 rounded bg-falcon-50 px-1 py-0.5 font-mono text-xs">
               gmail.compose
             </code>{' '}
-            — to send a message you compose in MailFalcon on your behalf, after
+            — to send a message you compose in Mail Falcon on your behalf, after
             inserting the tracking pixel and rewriting links. We do not
             otherwise modify your mailbox.
           </li>
@@ -199,13 +199,13 @@ export default function PrivacyPage() {
           and the OAuth tokens Google issues. Tokens are{' '}
           <strong>encrypted at rest</strong>. We never store full Gmail message
           bodies. You can disconnect at any time in Settings; disconnecting and
-          account deletion both revoke MailFalcon's access at Google and delete
+          account deletion both revoke Mail Falcon's access at Google and delete
           the stored tokens.
         </p>
         <p className="mt-3 leading-relaxed">
-          No MailFalcon employee, contractor, or automated/AI system reads your
+          No Mail Falcon employee, contractor, or automated/AI system reads your
           Gmail message content, and we never use Google user data for
-          advertising or sell it. MailFalcon's use and transfer of information
+          advertising or sell it. Mail Falcon's use and transfer of information
           received from Google APIs adheres to Google's{' '}
           <a
             href="https://developers.google.com/terms/api-services-user-data-policy"
@@ -229,7 +229,7 @@ export default function PrivacyPage() {
           replies and filter out auto-responders ("out of office",
           "vacation responder"). If the message is a real reply, the
           extension sends only the Gmail thread ID and message ID to
-          MailFalcon — never the body, never the sender address — so the
+          Mail Falcon — never the body, never the sender address — so the
           dashboard can show "Alice replied" alongside the open and
           click events for that email. If reply detection is undesirable,
           tick the privacy-mode checkbox at compose time; no threadId is

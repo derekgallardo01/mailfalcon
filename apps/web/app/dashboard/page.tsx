@@ -16,6 +16,8 @@ import { AppHeader } from '../../lib/AppHeader'
 import { clearSession, getSession, type Session } from '../../lib/auth-store'
 import { config } from '../../lib/config'
 import { formatLocalShort } from '../../lib/format'
+import { LiveWorldMap, type MapEvent } from '../../lib/LiveWorldMap'
+import { SendTimeHeatmap } from '../../lib/SendTimeHeatmap'
 
 const WEEKDAY_FMT = new Intl.DateTimeFormat('en-US', { weekday: 'short' })
 const MONTHDAY_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
@@ -90,6 +92,9 @@ function DashboardInner() {
   const [qInput, setQInput] = useState(urlQ)
   const [tagOptions, setTagOptions] = useState<string[]>([])
 
+  const [viewTab, setViewTab] = useState<'emails' | 'map' | 'heatmap'>('emails')
+  const [liveEvents, setLiveEvents] = useState<MapEvent[]>([])
+
   // Keep the search box in sync if URL changes (e.g. via "Clear filters").
   useEffect(() => {
     setQInput(urlQ)
@@ -155,8 +160,14 @@ function DashboardInner() {
     url.searchParams.set('token', s.token)
     const es = new EventSource(url.toString())
     esRef.current = es
-    es.addEventListener('event', () => {
+    es.addEventListener('event', (evt: MessageEvent) => {
       setLiveCount((c) => c + 1)
+      try {
+        const parsed = JSON.parse(evt.data)
+        if (parsed?.data) {
+          setLiveEvents((prev) => [parsed.data, ...prev.slice(0, 40)])
+        }
+      } catch {}
       void refresh()
     })
     es.addEventListener('error', () => {
@@ -226,7 +237,60 @@ function DashboardInner() {
         <StatCard label="Clicks" value={stats.clicks} accent={stats.clicks > 0} />
       </section>
 
-      <div className="mt-6 flex flex-wrap items-center gap-2 rounded-lg border border-falcon-200 bg-white px-3 py-2">
+      {/* View Mode Switcher */}
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-xl border border-falcon-200 bg-white p-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setViewTab('emails')}
+            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+              viewTab === 'emails'
+                ? 'bg-falcon-700 text-white shadow-sm'
+                : 'text-falcon-600 hover:bg-falcon-50'
+            }`}
+          >
+            <span>📋</span> Emails Feed
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewTab('map')}
+            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+              viewTab === 'map'
+                ? 'bg-falcon-700 text-white shadow-sm'
+                : 'text-falcon-600 hover:bg-falcon-50'
+            }`}
+          >
+            <span>🌍</span> Live World Map
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewTab('heatmap')}
+            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+              viewTab === 'heatmap'
+                ? 'bg-falcon-700 text-white shadow-sm'
+                : 'text-falcon-600 hover:bg-falcon-50'
+            }`}
+          >
+            <span>📊</span> Send-Time Heatmap
+          </button>
+        </div>
+      </div>
+
+      {viewTab === 'map' && (
+        <div className="mt-6">
+          <LiveWorldMap events={liveEvents} activeNowCount={liveCount} />
+        </div>
+      )}
+
+      {viewTab === 'heatmap' && (
+        <div className="mt-6">
+          <SendTimeHeatmap apiHost={config.apiHost} token={session?.token || ''} />
+        </div>
+      )}
+
+      {viewTab === 'emails' && (
+        <>
+          <div className="mt-6 flex flex-wrap items-center gap-2 rounded-lg border border-falcon-200 bg-white px-3 py-2">
         <div className="relative min-w-[220px] flex-1">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -464,7 +528,15 @@ function DashboardInner() {
                         >
                           {e.humanOpenCount}
                         </span>
-                        {botOpens > 0 && (
+                        {botOpens > 0 && !opened && (
+                          <span
+                            className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-600"
+                            title="Detected Apple Privacy Protection or proxy pre-fetch"
+                          >
+                             Cached
+                          </span>
+                        )}
+                        {botOpens > 0 && opened && (
                           <span className="ml-1 text-[10px] text-falcon-300">
                             +{botOpens} bot
                           </span>
@@ -506,6 +578,8 @@ function DashboardInner() {
           </div>
         )}
       </main>
+      </>
+      )}
     </div>
   )
 }

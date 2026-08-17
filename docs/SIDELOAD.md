@@ -55,7 +55,7 @@ On sign-in the extension also:
    clicking any link triggers the redirect
 6. Within ~5 seconds:
    - `chrome.notifications` toast pops up on your machine
-   - https://app.mailfalcon.app/dashboard updates the table
+   - https://mailfalcon.app/dashboard updates the table
 
 ## Common gotchas
 

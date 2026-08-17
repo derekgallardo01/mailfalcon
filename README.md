@@ -47,5 +47,5 @@ Resend, Stripe, and InboxSDK.
 
 - API: https://api.mailfalcon.app
 - Tracker: https://t.mailfalcon.app
-- Dashboard: https://app.mailfalcon.app
-- Privacy policy: https://app.mailfalcon.app/privacy/
+- Dashboard: https://mailfalcon.app
+- Privacy policy: https://mailfalcon.app/privacy/

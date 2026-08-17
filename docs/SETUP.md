@@ -4,7 +4,7 @@ What's already wired (no action needed):
 - Cloudflare Worker at `api.mailfalcon.app` and `t.mailfalcon.app`
 - D1 + KV + R2 created and bound
 - HMAC_SECRET + JWT_SECRET uploaded as Worker secrets
-- Cloudflare Pages site at `app.mailfalcon.app` (static export of `apps/web`)
+- Cloudflare Pages site at `mailfalcon.app` (static export of `apps/web`)
 - DNS managed by Cloudflare Registrar (mailfalcon.app)
 - Derek's account promoted to `tier=admin` in prod D1
 
@@ -100,11 +100,11 @@ developer fee, ~2 week review for extensions that touch Gmail.
 curl https://api.mailfalcon.app/health
 # → {"ok":true,"env":"production",...}
 
-curl https://app.mailfalcon.app/
+curl https://mailfalcon.app/
 # → returns HTML with "mailfalcon" landing page
 
 # In a browser:
-# 1. https://app.mailfalcon.app/sign-in → enter your email
+# 1. https://mailfalcon.app/sign-in → enter your email
 # 2. wrangler tail in another shell, copy the 6-digit code
 #    (or check Resend Logs once that's wired)
 # 3. Verify code → /dashboard renders

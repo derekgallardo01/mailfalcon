@@ -62,7 +62,7 @@ function AcceptInner() {
       <div className="rounded-lg border border-falcon-200 bg-white p-6">
         <div className="flex items-center gap-2">
           <img src="/falcon.png" alt="" width={28} height={28} className="h-7 w-7 rounded" />
-          <span className="text-lg font-semibold text-falcon-700">MailFalcon</span>
+          <span className="text-lg font-semibold text-falcon-700">Mail Falcon</span>
         </div>
 
         {loading && <p className="mt-6 text-sm text-falcon-500">Loading invite…</p>}

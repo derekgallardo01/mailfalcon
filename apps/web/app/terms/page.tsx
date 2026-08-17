@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Terms of Service — MailFalcon',
+  title: 'Terms of Service — Mail Falcon',
 }
 
 export default function TermsPage() {
@@ -7,17 +7,17 @@ export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <a href="/" className="text-xs text-falcon-500 hover:text-falcon-700">
-        ← MailFalcon
+        ← Mail Falcon
       </a>
       <h1 className="mt-2 text-2xl font-semibold text-falcon-700">Terms of Service</h1>
       <p className="mt-1 text-xs text-falcon-500">Last updated {lastUpdated}</p>
 
       <section className="prose mt-8 text-sm text-falcon-700">
         <p className="leading-relaxed">
-          These Terms of Service (&ldquo;Terms&rdquo;) govern your use of MailFalcon, an email open- and click-tracking
-          Chrome extension and web dashboard for Gmail. MailFalcon is operated by Kinetic Helix LLC (&ldquo;we,&rdquo;
-          &ldquo;us&rdquo;), which is the provider and merchant of record for MailFalcon subscriptions. By creating an
-          account or using MailFalcon, you agree to these Terms.
+          These Terms of Service (&ldquo;Terms&rdquo;) govern your use of Mail Falcon, an email open- and click-tracking
+          Chrome extension and web dashboard for Gmail. Mail Falcon is operated by Kinetic Helix LLC (&ldquo;we,&rdquo;
+          &ldquo;us&rdquo;), which is the provider and merchant of record for Mail Falcon subscriptions. By creating an
+          account or using Mail Falcon, you agree to these Terms.
         </p>
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">Accounts &amp; eligibility</h2>
@@ -28,7 +28,7 @@ export default function TermsPage() {
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">Subscriptions &amp; billing</h2>
         <p className="mt-2 leading-relaxed">
-          MailFalcon offers a free plan and paid plans billed on a recurring monthly basis through our payment
+          Mail Falcon offers a free plan and paid plans billed on a recurring monthly basis through our payment
           processor, Stripe. Current prices are shown on our homepage. Paid subscriptions renew automatically at the
           then-current price until you cancel, and you authorize us to charge your payment method for each renewal.
           Prices are exclusive of any applicable taxes.
@@ -46,7 +46,7 @@ export default function TermsPage() {
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">Acceptable use</h2>
         <p className="mt-2 leading-relaxed">
-          Use MailFalcon lawfully. Do not use it to send spam or unsolicited email, to harass or deceive recipients, to
+          Use Mail Falcon lawfully. Do not use it to send spam or unsolicited email, to harass or deceive recipients, to
           infringe others&rsquo; rights, or to attempt to disrupt or reverse-engineer the service. You are responsible
           for complying with laws that apply to tracking the emails you send.
         </p>
@@ -57,12 +57,12 @@ export default function TermsPage() {
           <a href="/privacy" className="text-falcon-600 underline hover:text-falcon-700">
             Privacy Policy
           </a>
-          . MailFalcon integrates with Gmail; your use of Google services is subject to Google&rsquo;s terms.
+          . Mail Falcon integrates with Gmail; your use of Google services is subject to Google&rsquo;s terms.
         </p>
 
         <h2 className="mt-6 text-base font-semibold text-falcon-700">Disclaimers &amp; liability</h2>
         <p className="mt-2 leading-relaxed">
-          MailFalcon is provided &ldquo;as is&rdquo; without warranties of any kind to the fullest extent permitted by
+          Mail Falcon is provided &ldquo;as is&rdquo; without warranties of any kind to the fullest extent permitted by
           law. To the maximum extent permitted by law, our total liability for any claim relating to the service is
           limited to the amount you paid us for it in the twelve months before the claim.
         </p>

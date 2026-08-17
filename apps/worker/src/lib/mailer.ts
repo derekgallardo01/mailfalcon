@@ -12,7 +12,7 @@ function renderHtml(code: string): string {
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
         <tr><td style="padding:32px 32px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">MailFalcon</p>
+          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">Mail Falcon</p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
           <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">Your sign-in code is:</p>
@@ -24,7 +24,7 @@ function renderHtml(code: string): string {
           <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">This code expires in 15 minutes. If you didn't request it, you can safely ignore this email.</p>
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">MailFalcon &middot; email tracking for Gmail</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">Mail Falcon &middot; email tracking for Gmail</p>
     </td></tr>
   </table>
 </body>
@@ -44,10 +44,10 @@ export async function sendCode({ email, code, env }: SendCodeArgs): Promise<void
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'MailFalcon <hello@mailfalcon.app>',
+      from: 'Mail Falcon <hello@mailfalcon.app>',
       to: email,
-      subject: 'Your MailFalcon sign-in code',
-      text: `Your sign-in code is ${code}.\n\nThis code expires in 15 minutes. If you didn't request it, you can safely ignore this email.\n\nMailFalcon`,
+      subject: 'Your Mail Falcon sign-in code',
+      text: `Your sign-in code is ${code}.\n\nThis code expires in 15 minutes. If you didn't request it, you can safely ignore this email.\n\nMail Falcon`,
       html: renderHtml(code),
     }),
   })
@@ -64,7 +64,7 @@ function renderDeleteHtml(code: string): string {
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
         <tr><td style="padding:32px 32px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#b91c1c;letter-spacing:0.02em;">MailFalcon &middot; delete account</p>
+          <p style="margin:0;font-size:14px;font-weight:600;color:#b91c1c;letter-spacing:0.02em;">Mail Falcon &middot; delete account</p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
           <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">Your account-deletion confirmation code is:</p>
@@ -76,7 +76,7 @@ function renderDeleteHtml(code: string): string {
           <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">Paste this code in the Settings page to confirm. <strong>This deletes every tracked email, event, push subscription, and your user record</strong>. It expires in 15 minutes. If you didn't request this, you can safely ignore the email and nothing happens.</p>
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">MailFalcon</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">Mail Falcon</p>
     </td></tr>
   </table>
 </body>
@@ -96,10 +96,10 @@ export async function sendDeleteCode({ email, code, env }: SendCodeArgs): Promis
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'MailFalcon <hello@mailfalcon.app>',
+      from: 'Mail Falcon <hello@mailfalcon.app>',
       to: email,
-      subject: 'Confirm account deletion — MailFalcon',
-      text: `Your account-deletion confirmation code is ${code}.\n\nPaste it in the Settings page to confirm. This permanently deletes every tracked email, event, push subscription, and your user record. The code expires in 15 minutes.\n\nIf you didn't request this, ignore this email.\n\nMailFalcon`,
+      subject: 'Confirm account deletion — Mail Falcon',
+      text: `Your account-deletion confirmation code is ${code}.\n\nPaste it in the Settings page to confirm. This permanently deletes every tracked email, event, push subscription, and your user record. The code expires in 15 minutes.\n\nIf you didn't request this, ignore this email.\n\nMail Falcon`,
       html: renderDeleteHtml(code),
     }),
   })
@@ -132,7 +132,7 @@ function renderFollowupHtml(args: {
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
         <tr><td style="padding:32px 32px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">MailFalcon &middot; follow-up reminder</p>
+          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">Mail Falcon &middot; follow-up reminder</p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
           <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">You asked us to remind you about a tracked email that hadn't been opened.</p>
@@ -145,7 +145,7 @@ function renderFollowupHtml(args: {
           <a href="${detailUrl}" style="display:inline-block;background:#3b6cb7;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:6px;font-size:14px;font-weight:500;">View on dashboard</a>
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">MailFalcon</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">Mail Falcon</p>
     </td></tr>
   </table>
 </body>
@@ -173,10 +173,10 @@ export async function sendFollowupReminder({
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'MailFalcon <hello@mailfalcon.app>',
+      from: 'Mail Falcon <hello@mailfalcon.app>',
       to,
       subject: `No opens yet: "${safeSubject}"`,
-      text: `Your tracked email "${safeSubject}" hasn't been opened.\n\nView details: ${webUrl}/dashboard/email/?id=${encodeURIComponent(emailId)}\n\nMailFalcon`,
+      text: `Your tracked email "${safeSubject}" hasn't been opened.\n\nView details: ${webUrl}/dashboard/email/?id=${encodeURIComponent(emailId)}\n\nMail Falcon`,
       html: renderFollowupHtml({
         subject: safeSubject,
         webUrl,
@@ -216,7 +216,7 @@ function renderInviteHtml({
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
         <tr><td style="padding:32px 32px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">MailFalcon &middot; workspace invite</p>
+          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">Mail Falcon &middot; workspace invite</p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
           <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">
@@ -232,10 +232,10 @@ function renderInviteHtml({
           <a href="${acceptUrl}" style="display:inline-block;background:#3b6cb7;color:#fff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">Accept invite</a>
         </td></tr>
         <tr><td style="padding:8px 32px 32px;">
-          <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.6;">This invite expires in 7 days. If you don't have a MailFalcon account yet, the accept link will sign you in first.</p>
+          <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.6;">This invite expires in 7 days. If you don't have a Mail Falcon account yet, the accept link will sign you in first.</p>
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">MailFalcon &middot; email tracking for Gmail</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">Mail Falcon &middot; email tracking for Gmail</p>
     </td></tr>
   </table>
 </body>
@@ -257,14 +257,14 @@ function renderWelcomeHtml(args: { trialDaysRemaining: number; webUrl: string })
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
         <tr><td style="padding:32px 32px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">MailFalcon</p>
+          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">Mail Falcon</p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
           <p style="margin:0;font-size:16px;font-weight:600;color:#0f1a2e;">You're all set 🎉</p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
           <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">
-            The MailFalcon extension is installed and ready. Compose a new email in Gmail, hit Send, and we'll start tracking opens, clicks, and replies in real time.
+            The Mail Falcon extension is installed and ready. Compose a new email in Gmail, hit Send, and we'll start tracking opens, clicks, and replies in real time.
           </p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
@@ -277,11 +277,11 @@ function renderWelcomeHtml(args: { trialDaysRemaining: number; webUrl: string })
         </td></tr>
         <tr><td style="padding:8px 32px 32px;">
           <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.6;">
-            Quick start: open Gmail → click Compose → look for the MailFalcon bar above the body → hit Send. Watch the dashboard for live opens.
+            Quick start: open Gmail → click Compose → look for the Mail Falcon bar above the body → hit Send. Watch the dashboard for live opens.
           </p>
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">MailFalcon · email tracking for Gmail</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">Mail Falcon · email tracking for Gmail</p>
     </td></tr>
   </table>
 </body>
@@ -305,10 +305,10 @@ export async function sendWelcomeEmail({
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'MailFalcon <hello@mailfalcon.app>',
+      from: 'Mail Falcon <hello@mailfalcon.app>',
       to,
-      subject: `Welcome to MailFalcon — ${trialDaysRemaining}-day Pro trial active`,
-      text: `Your MailFalcon extension is installed and ready.\n\nCompose a new email in Gmail, hit Send, and we'll start tracking opens, clicks, and replies.\n\nYour ${trialDaysRemaining}-day Pro trial is active — no card required.\n\nDashboard: ${webUrl}/dashboard`,
+      subject: `Welcome to Mail Falcon — ${trialDaysRemaining}-day Pro trial active`,
+      text: `Your Mail Falcon extension is installed and ready.\n\nCompose a new email in Gmail, hit Send, and we'll start tracking opens, clicks, and replies.\n\nYour ${trialDaysRemaining}-day Pro trial is active — no card required.\n\nDashboard: ${webUrl}/dashboard`,
       html: renderWelcomeHtml({ trialDaysRemaining, webUrl }),
     }),
   })
@@ -332,14 +332,14 @@ function renderActivationHtml(args: { trialDaysRemaining: number; webUrl: string
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
         <tr><td style="padding:32px 32px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">MailFalcon</p>
+          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">Mail Falcon</p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
           <p style="margin:0;font-size:16px;font-weight:600;color:#0f1a2e;">Send your first tracked email</p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
           <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">
-            MailFalcon's installed but you haven't sent a tracked email yet. It takes one click — compose like normal in Gmail, hit Send, and the dashboard fills with opens, clicks, and replies as they happen.
+            Mail Falcon's installed but you haven't sent a tracked email yet. It takes one click — compose like normal in Gmail, hit Send, and the dashboard fills with opens, clicks, and replies as they happen.
           </p>
         </td></tr>
         <tr><td style="padding:8px 32px 8px;">
@@ -356,7 +356,7 @@ function renderActivationHtml(args: { trialDaysRemaining: number; webUrl: string
           </p>
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">MailFalcon</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">Mail Falcon</p>
     </td></tr>
   </table>
 </body>
@@ -380,10 +380,10 @@ export async function sendActivationReminder({
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'MailFalcon <hello@mailfalcon.app>',
+      from: 'Mail Falcon <hello@mailfalcon.app>',
       to,
       subject: 'Quick nudge — send your first tracked email',
-      text: `MailFalcon's installed but you haven't sent a tracked email yet. Compose in Gmail, hit Send, and the dashboard starts filling.\n\nGmail compose: https://mail.google.com/mail/u/0/?compose=1\n\n${trialDaysRemaining} days left on your Pro trial.`,
+      text: `Mail Falcon's installed but you haven't sent a tracked email yet. Compose in Gmail, hit Send, and the dashboard starts filling.\n\nGmail compose: https://mail.google.com/mail/u/0/?compose=1\n\n${trialDaysRemaining} days left on your Pro trial.`,
       html: renderActivationHtml({ trialDaysRemaining, webUrl }),
     }),
   })
@@ -557,7 +557,7 @@ function renderEventNotificationHtml(args: RenderArgs): string {
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
         <tr><td style="padding:28px 32px 8px;">
-          <p style="margin:0;font-size:12px;font-weight:600;color:${color};letter-spacing:0.05em;text-transform:uppercase;">MailFalcon</p>
+          <p style="margin:0;font-size:12px;font-weight:600;color:${color};letter-spacing:0.05em;text-transform:uppercase;">Mail Falcon</p>
         </td></tr>
         <tr><td style="padding:4px 32px 4px;">
           <p style="margin:0;font-size:17px;font-weight:600;color:#0f1a2e;">${safeWho} ${verb}</p>
@@ -573,7 +573,7 @@ function renderEventNotificationHtml(args: RenderArgs): string {
           <a href="${detailUrl}" style="display:inline-block;background:${color};color:#fff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">Open in dashboard</a>
         </td></tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">MailFalcon &middot; manage these alerts in <a href="${args.webUrl}/settings" style="color:#9ca3af;">Settings</a></p>
+      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">Mail Falcon &middot; manage these alerts in <a href="${args.webUrl}/settings" style="color:#9ca3af;">Settings</a></p>
     </td></tr>
   </table>
 </body>
@@ -652,7 +652,7 @@ export async function sendEventNotification(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'MailFalcon <hello@mailfalcon.app>',
+      from: 'Mail Falcon <hello@mailfalcon.app>',
       to,
       subject: mailSubject,
       text: textLines.join('\n'),
@@ -701,10 +701,10 @@ export async function sendWorkspaceInvite({
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'MailFalcon <hello@mailfalcon.app>',
+      from: 'Mail Falcon <hello@mailfalcon.app>',
       to,
-      subject: `${inviterEmail} invited you to "${workspaceName}" on MailFalcon`,
-      text: `${inviterEmail} invited you to join the "${workspaceName}" workspace on MailFalcon.\n\nAccept here: ${acceptUrl}\n\nThis invite expires in 7 days.`,
+      subject: `${inviterEmail} invited you to "${workspaceName}" on Mail Falcon`,
+      text: `${inviterEmail} invited you to join the "${workspaceName}" workspace on Mail Falcon.\n\nAccept here: ${acceptUrl}\n\nThis invite expires in 7 days.`,
       html: renderInviteHtml({ workspaceName, inviterEmail, acceptUrl }),
     }),
   })

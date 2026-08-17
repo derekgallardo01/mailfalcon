@@ -145,7 +145,7 @@ webhooksRouter.post('/:id/test', async (c) => {
 
   const isDiscord = row.url.includes('discord.com/api/webhooks')
   const text =
-    '🦅 Test from MailFalcon — if you see this, your webhook is wired correctly.'
+    '🦅 Test from Mail Falcon — if you see this, your webhook is wired correctly.'
   const body = isDiscord ? { content: text } : { text }
   const res = await fetch(row.url, {
     method: 'POST',

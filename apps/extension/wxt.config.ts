@@ -13,10 +13,10 @@ const SIDELOAD_KEY =
 
 export default defineConfig({
   manifest: ({ mode }) => ({
-    name: 'MailFalcon',
+    name: 'Mail Falcon',
     description:
       'Email tracking for Gmail — opens, clicks, real-time notifications.',
-    homepage_url: 'https://app.mailfalcon.app',
+    homepage_url: 'https://mailfalcon.app',
     // Omit `key` for the Chrome Web Store build (mode 'cws'); keep it for
     // dev + sideload so those load with the stable pinned extension ID.
     ...(mode === 'cws' ? {} : { key: SIDELOAD_KEY }),
@@ -33,7 +33,7 @@ export default defineConfig({
       128: 'icon/128.png',
     },
     action: {
-      default_title: 'MailFalcon',
+      default_title: 'Mail Falcon',
       default_icon: {
         16: 'icon/16.png',
         32: 'icon/32.png',

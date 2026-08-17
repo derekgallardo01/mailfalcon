@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { classifyUa, extractCfGeo, hashUa, parseUa, truncateIpV4 } from './ua'
+import {
+  classifyProxyType,
+  classifyUa,
+  detectAppleMpp,
+  extractCfGeo,
+  hashUa,
+  parseUa,
+  truncateIpV4,
+} from './ua'
 
 describe('parseUa', () => {
   it('returns "unknown" for null/empty', () => {
@@ -139,3 +147,48 @@ describe('extractCfGeo', () => {
     expect(geo.city).toBe('Miami')
   })
 })
+
+describe('detectAppleMpp', () => {
+  it('detects Apple MPP from Apple ASN and Safari UA', () => {
+    const ua =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)'
+    expect(detectAppleMpp(ua, 'Apple Inc.', 714)).toBe(true)
+    expect(detectAppleMpp(ua, 'iCloud Private Relay', null)).toBe(true)
+  })
+
+  it('rejects regular human browsers on non-Apple ASNs', () => {
+    const ua =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    expect(detectAppleMpp(ua, 'Comcast Cable', 7922)).toBe(false)
+  })
+})
+
+describe('classifyProxyType', () => {
+  it('classifies Apple MPP proxy', () => {
+    const ua =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)'
+    expect(classifyProxyType(ua, 'Apple Inc.', 714)).toBe('apple_mpp')
+  })
+
+  it('classifies Google proxy', () => {
+    expect(classifyProxyType('GoogleImageProxy/1.0', 'Google LLC', 15169)).toBe(
+      'google_proxy',
+    )
+  })
+
+  it('classifies datacenter ASNs', () => {
+    expect(classifyProxyType('Mozilla/5.0', 'Amazon.com Inc.', 14618)).toBe(
+      'datacenter',
+    )
+    expect(classifyProxyType('Mozilla/5.0', 'DigitalOcean, LLC', null)).toBe(
+      'datacenter',
+    )
+  })
+
+  it('classifies standard residential ISP as none', () => {
+    const ua =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    expect(classifyProxyType(ua, 'Verizon Fios', 701)).toBe('none')
+  })
+})
+

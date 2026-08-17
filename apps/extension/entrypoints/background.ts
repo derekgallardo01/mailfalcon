@@ -78,7 +78,7 @@ function notifFor(ev: StreamEvent): Notif {
 }
 
 function deepLink(emailId: string): string {
-  return `https://app.mailfalcon.app/dashboard/email?id=${encodeURIComponent(emailId)}`
+  return `https://mailfalcon.app/dashboard/email?id=${encodeURIComponent(emailId)}`
 }
 
 export default defineBackground(() => {
@@ -122,7 +122,7 @@ export default defineBackground(() => {
       title,
       message: body,
       priority: 1,
-      buttons: [{ title: 'Mute this email' }],
+      buttons: [{ title: 'View Details' }, { title: 'Mute Email' }],
     })
     // Remember which email this notif belongs to so the click handler
     // can deep-link to its detail page AND the button handler can mute
@@ -143,7 +143,7 @@ export default defineBackground(() => {
     const sw = self as unknown as ServiceWorkerGlobalScope
     const session = await getSession()
     if (!session) {
-      await sw.registration.showNotification('MailFalcon', {
+      await sw.registration.showNotification('Mail Falcon', {
         body: 'Sign in to see new activity.',
         icon: NOTIF_ICON_PATH,
         tag: 'mf-signed-out',
@@ -214,7 +214,7 @@ export default defineBackground(() => {
     (event) => {
       const url =
         (event.notification.data as { url?: string } | undefined)?.url ??
-        'https://app.mailfalcon.app/dashboard'
+        'https://mailfalcon.app/dashboard'
       event.notification.close()
       event.waitUntil(
         (async () => {
@@ -258,7 +258,7 @@ export default defineBackground(() => {
     }
     const url = changeInfo.url
     if (!url) return
-    if (url.startsWith('https://app.mailfalcon.app/dashboard')) {
+    if (url.startsWith('https://mailfalcon.app/dashboard')) {
       void clearBadge()
     }
   })
@@ -362,19 +362,29 @@ export default defineBackground(() => {
     return false
   })
 
-  // "Mute this email" button on SSE-driven notifications. Looks up the
-  // emailId we stashed in session storage and PATCHes the email muted.
+  // Interactive buttons on SSE-driven notifications.
+  // Button 0: View Details (opens dashboard)
+  // Button 1: Mute Email (patches email muted)
   chrome.notifications.onButtonClicked.addListener(async (notifId, btnIdx) => {
     if (!notifId.startsWith(NOTIF_PREFIX)) return
-    if (btnIdx !== 0) return
-    const key = `mf.notifEmail:${notifId}`
+    const keyEmail = `mf.notifEmail:${notifId}`
+    const keyLink = `mf.notifLink:${notifId}`
     try {
-      const stored = await chrome.storage.session?.get(key)
-      const emailId = stored?.[key]
-      if (typeof emailId !== 'string') return
-      await muteEmail(emailId, true)
+      if (btnIdx === 0) {
+        // Open Dashboard
+        const stored = await chrome.storage.session?.get(keyLink)
+        const link = stored?.[keyLink] ?? 'https://mailfalcon.app/dashboard'
+        chrome.tabs.create({ url: String(link) })
+      } else if (btnIdx === 1) {
+        // Mute Email
+        const stored = await chrome.storage.session?.get(keyEmail)
+        const emailId = stored?.[keyEmail]
+        if (typeof emailId === 'string') {
+          await muteEmail(emailId, true)
+        }
+      }
     } catch (err) {
-      console.warn('[mailfalcon] mute via notification failed:', err)
+      console.warn('[mailfalcon] notification button click handler failed:', err)
     } finally {
       chrome.notifications.clear(notifId)
     }
@@ -386,7 +396,7 @@ export default defineBackground(() => {
   chrome.notifications.onClicked.addListener(async (notifId) => {
     if (!notifId.startsWith(NOTIF_PREFIX)) return
     const key = `mf.notifLink:${notifId}`
-    let url = 'https://app.mailfalcon.app/dashboard'
+    let url = 'https://mailfalcon.app/dashboard'
     try {
       const stored = await chrome.storage.session?.get(key)
       const stashed = stored?.[key]

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Renders 1920x1080 promo-video scene frames (no alpha) for MailFalcon.
+// Renders 1920x1080 promo-video scene frames (no alpha) for Mail Falcon.
 // Usage: node scripts/gen-promo-frames.mjs <outDir>
 import sharp from 'sharp'
 import { mkdir } from 'node:fs/promises'
@@ -16,18 +16,37 @@ const F = {
 const FONT = 'Arial, Helvetica, sans-serif'
 
 const logo = (x, y, s) => `<svg x="${x}" y="${y}" width="${s}" height="${s}" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="22" fill="${F[500]}"/>
-  <g fill="#ffffff">
-    <path d="M 56 56 L 106 22 Q 114 22 112 30 L 90 52 L 74 64 Z"/>
-    <ellipse cx="46" cy="66" rx="26" ry="11"/><ellipse cx="22" cy="60" rx="12" ry="10"/>
-    <path d="M 12 60 Q 4 58 4 64 Q 6 70 14 68 L 14 64 Z"/>
-    <path d="M 70 72 L 104 92 Q 108 96 104 98 L 72 82 Z"/>
-  </g><circle cx="22" cy="58" r="2.5" fill="${F[500]}"/></svg>`
+  <defs>
+    <linearGradient id="mf-bg-${x}-${y}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f1a2e"/>
+      <stop offset="100%" stop-color="#1e3a68"/>
+    </linearGradient>
+    <linearGradient id="mf-wing-${x}-${y}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00d4ff"/>
+      <stop offset="100%" stop-color="#3b6cb7"/>
+    </linearGradient>
+    <linearGradient id="mf-cyan-${x}-${y}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="url(#mf-bg-${x}-${y})"/>
+  <circle cx="64" cy="64" r="44" fill="#00d4ff" opacity="0.12"/>
+  <path d="M 22 36 L 56 52 L 28 62 Z" fill="url(#mf-wing-${x}-${y})" opacity="0.85"/>
+  <path d="M 26 48 L 62 62 L 34 72 Z" fill="url(#mf-wing-${x}-${y})" opacity="0.95"/>
+  <path d="M 32 60 L 68 70 L 42 80 Z" fill="url(#mf-wing-${x}-${y})"/>
+  <path d="M 44 58 L 88 58 L 88 92 L 44 92 Z" fill="#162b4d" stroke="#3b6cb7" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M 44 58 L 66 75 L 88 58" fill="none" stroke="#3b6cb7" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M 76 66 L 98 42 C 104 38 112 44 110 50 L 102 56 C 104 56 108 55 106 58 C 102 64 96 68 86 74 Z" fill="url(#mf-cyan-${x}-${y})"/>
+  <circle cx="100" cy="48" r="2.2" fill="#0f1a2e"/>
+  <path d="M 52 74 L 64 86 L 96 46" fill="none" stroke="#00d4ff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 42 74 L 52 84 L 74 58" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+</svg>`
 
 const t = (x, y, s, fill, c, w = '400', a = 'start') =>
   `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${s}" font-weight="${w}" fill="${fill}" text-anchor="${a}">${c}</text>`
 
-const footer = t(960, 1010, 30, F[300], 'app.mailfalcon.app', '700', 'middle')
+const footer = t(960, 1010, 30, F[300], 'mailfalcon.app', '700', 'middle')
 
 async function frame(name, inner) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
@@ -42,7 +61,7 @@ async function frame(name, inner) {
 // 0 — intro
 await frame('f0.png',
   logo(830, 300, 260) +
-  t(960, 700, 128, '#ffffff', 'MailFalcon', '700', 'middle') +
+  t(960, 700, 128, '#ffffff', 'Mail Falcon', '700', 'middle') +
   t(960, 772, 40, F[300], 'Open &amp; click tracking for Gmail', '400', 'middle'))
 
 // 1 — opens
@@ -85,7 +104,7 @@ await frame('f3.png',
 // 4 — outro
 await frame('f4.png',
   logo(860, 300, 200) +
-  t(960, 640, 96, '#ffffff', 'MailFalcon', '700', 'middle') +
+  t(960, 640, 96, '#ffffff', 'Mail Falcon', '700', 'middle') +
   t(960, 706, 36, F[300], 'Free tier included · Built for Gmail', '400', 'middle') +
   `<rect x="760" y="770" width="400" height="82" rx="41" fill="${F[500]}"/>` +
   t(960, 823, 34, '#ffffff', 'Add to Chrome', '700', 'middle') +

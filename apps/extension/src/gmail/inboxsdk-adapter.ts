@@ -71,9 +71,9 @@ function buildStatusBarHtml(): string {
   // popover anchored to the button so the compose bar stays quiet.
   return `
     <div class="mf-bar" style="position:relative;display:flex;align-items:center;gap:10px;width:100%;">
-      <button class="mf-options" type="button" title="MailFalcon tracking options" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid #c4d0e3;background:#fff;border-radius:4px;cursor:pointer;font:inherit;color:#264168;line-height:1.2;">
+      <button class="mf-options" type="button" title="Mail Falcon tracking options" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid #c4d0e3;background:#fff;border-radius:4px;cursor:pointer;font:inherit;color:#264168;line-height:1.2;">
         <img class="mf-options-icon" alt="" width="14" height="14" style="display:block;border-radius:2px;">
-        <span style="font-weight:600;">MailFalcon</span>
+        <span style="font-weight:600;">Mail Falcon</span>
         <span style="opacity:0.55;font-size:10px;">▾</span>
       </button>
       <span class="mf-summary" style="font-size:11px;color:#6886b1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;"></span>
@@ -132,7 +132,7 @@ async function populateTemplateSelect(
     return []
   }
   if (list.length === 0) {
-    select.innerHTML = '<option value="">no templates — make some at app.mailfalcon.app/templates</option>'
+    select.innerHTML = '<option value="">no templates — make some at mailfalcon.app/templates</option>'
     select.disabled = true
     return []
   }
@@ -279,7 +279,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
                 ? chrome.runtime.getURL('icon/32.png')
                 : undefined
             view.addButton?.({
-              title: 'MailFalcon tracking options',
+              title: 'Mail Falcon tracking options',
               iconUrl,
               type: 'MODIFIER',
               orderHint: 100,
@@ -289,7 +289,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             /* compose toolbar button is best-effort — status bar still works */
           }
 
-          // First-send tour: spotlight the MailFalcon button once for
+          // First-send tour: spotlight the Mail Falcon button once for
           // brand-new users to surface what we do without forcing them
           // through a modal.
           void (async () => {
@@ -526,7 +526,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       // PLACE before the picker opens, then let the picker proceed —
       // Gmail queues the already-tracked body.
       //
-      // Trade-offs vs. MailFalcon's own scheduled-send queue:
+      // Trade-offs vs. Mail Falcon's own scheduled-send queue:
       //   • No reply detection — Gmail owns the messageId, released
       //     server-side hours later in a context we can't observe.
       //   • No mail-merge — Gmail's picker sends a single message.
@@ -540,7 +540,7 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
 
         // Wrapper mirrors the presending wrapper but with the branches
         // that don't apply to native scheduled send disabled:
-        //   - getScheduledAt → null, so MailFalcon's own queue skips
+        //   - getScheduledAt → null, so Mail Falcon's own queue skips
         //   - isMailMerge → false, dispatch loop skips
         //   - close/cancel → no-ops, we don't want to kill the picker
         //   - onSent → no-op, we don't get a `sent` event for this path
@@ -677,16 +677,39 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       const opens = summary.humanOpens
       const clicks = summary.clicks
       const replies = summary.replies
+      const totalOpens = summary.totalOpens ?? summary.humanOpens
       const total = opens + clicks + replies
+
+      if (total === 0) {
+        if (totalOpens > 0) {
+          // Detected Apple MPP cached prefetch only
+          row.addLabel({
+            title: '✓  Cached',
+            foregroundColor: '#4b5563',
+            backgroundColor: '#f3f4f6',
+          })
+        } else {
+          // Sent & tracked, not yet opened
+          row.addLabel({
+            title: '✓ Sent',
+            foregroundColor: '#64748b',
+            backgroundColor: '#f1f5f9',
+          })
+        }
+        return
+      }
+
+      // Read / Opened / Clicked / Replied: Double Blue Checkmark (✓✓)
       const parts: string[] = []
       if (opens > 0) parts.push(`${opens} open${opens === 1 ? '' : 's'}`)
       if (clicks > 0) parts.push(`${clicks} click${clicks === 1 ? '' : 's'}`)
       if (replies > 0) parts.push(`${replies} repl${replies === 1 ? 'y' : 'ies'}`)
-      const title = total === 0 ? '✓ tracked' : parts.join(' · ')
+
+      const title = `✓✓ ${parts.join(' · ')}`
       row.addLabel({
         title,
-        foregroundColor: '#065f46',
-        backgroundColor: '#d1fae5',
+        foregroundColor: '#1d4ed8',
+        backgroundColor: '#dbeafe',
       })
     }
 

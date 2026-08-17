@@ -186,3 +186,63 @@ export function extractCfGeo(req: Request): CfGeo {
     timezone: get('timezone'),
   }
 }
+
+/** Apple Mail Privacy Protection (MPP) detection based on Apple ASN/Proxy + WebKit UA */
+export function detectAppleMpp(
+  ua: string | undefined | null,
+  asOrg: string | undefined | null,
+  asn: number | null,
+): boolean {
+  if (!asOrg && !ua && !asn) return false
+  const lowerUa = (ua ?? '').toLowerCase()
+  const lowerOrg = (asOrg ?? '').toLowerCase()
+
+  const isAppleAsn = asn === 714 || asn === 6185 || asn === 36183
+  const isAppleOrg =
+    lowerOrg.includes('apple') ||
+    lowerOrg.includes('icloud') ||
+    lowerOrg.includes('private relay')
+
+  const isAppleWebKit =
+    lowerUa.includes('applewebkit') &&
+    (lowerUa.includes('macintosh') ||
+      lowerUa.includes('iphone') ||
+      lowerUa.includes('ipad') ||
+      lowerUa.includes('safari'))
+
+  return (isAppleAsn || isAppleOrg) && isAppleWebKit
+}
+
+export function classifyProxyType(
+  ua: string | undefined | null,
+  asOrg: string | undefined | null,
+  asn: number | null,
+): 'apple_mpp' | 'google_proxy' | 'datacenter' | 'none' {
+  const lowerUa = (ua ?? '').toLowerCase()
+  const lowerOrg = (asOrg ?? '').toLowerCase()
+
+  if (detectAppleMpp(ua, asOrg, asn)) return 'apple_mpp'
+  if (
+    lowerUa.includes('googleimageproxy') ||
+    asn === 15169 ||
+    lowerOrg.includes('google')
+  ) {
+    return 'google_proxy'
+  }
+  const isDatacenter =
+    asn === 8075 || // Microsoft
+    asn === 32934 || // Facebook
+    asn === 14618 || // Amazon EC2
+    asn === 16509 || // Amazon
+    asn === 13335 || // Cloudflare
+    lowerOrg.includes('microsoft') ||
+    lowerOrg.includes('amazon') ||
+    lowerOrg.includes('digitalocean') ||
+    lowerOrg.includes('ovh') ||
+    lowerOrg.includes('hetzner') ||
+    lowerOrg.includes('linode')
+
+  if (isDatacenter) return 'datacenter'
+  return 'none'
+}
+

@@ -31,7 +31,7 @@ export async function evaluateFollowups(
   env: FollowupEnv,
 ): Promise<{ considered: number; sent: number; failed: number }> {
   const log = createLogger({ env })
-  const webUrl = env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app'
+  const webUrl = env.PUBLIC_WEB_URL ?? 'https://mailfalcon.app'
   const now = Date.now()
 
   const due = await db

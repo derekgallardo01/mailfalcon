@@ -288,7 +288,7 @@ workspacesRouter.post('/:id/invites', async (c) => {
     })
     .run()
 
-  const webBase = c.env.PUBLIC_WEB_URL ?? 'https://app.mailfalcon.app'
+  const webBase = c.env.PUBLIC_WEB_URL ?? 'https://mailfalcon.app'
   const acceptUrl = `${webBase}/workspaces/accept?token=${encodeURIComponent(token)}`
   try {
     await sendWorkspaceInvite({

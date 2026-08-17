@@ -1,4 +1,4 @@
-# MailFalcon — Production deploy & secrets
+# Mail Falcon — Production deploy & secrets
 
 How to deploy the worker, the web app, and what secrets each needs.
 
@@ -57,7 +57,7 @@ not met.**
 | `STRIPE_PRICE_ID_PRO` | Pro tier Stripe price ID ($7/mo) | Checkout returns 503 |
 | `STRIPE_PRICE_ID_TEAM` | Team tier Stripe price ID ($15/seat/mo) | Team checkout returns 503 |
 | `KH_METRICS_KEY` | Kinetic Helix command center reads `GET /metrics` with this `X-KH-Key` | `/metrics` returns 401 (KH tile shows "not connected") |
-| `KH_INGEST_KEY` | Outbound key for the SSE presence heartbeat to KH `/api/ingest/presence` | No presence heartbeat sent (KH "online now" for MailFalcon stays 0) |
+| `KH_INGEST_KEY` | Outbound key for the SSE presence heartbeat to KH `/api/ingest/presence` | No presence heartbeat sent (KH "online now" for Mail Falcon stays 0) |
 | `KH_MRR_PRO_CENTS` | Pro monthly price in cents (`700`) — the MRR figure in `/metrics` | MRR contribution from Pro subs is `0` |
 | `KH_MRR_TEAM_CENTS` | Team monthly price in cents (`1500`) — the MRR figure in `/metrics` | MRR contribution from Team subs is `0` |
 | `AXIOM_TOKEN` | Error + warn forwarder bearer | Worker logs to Cloudflare console only (still visible via `wrangler tail`) |

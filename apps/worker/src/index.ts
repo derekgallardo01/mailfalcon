@@ -22,6 +22,9 @@ import { scheduledRouter } from './routes/scheduled'
 import { streamRouter } from './routes/stream'
 import { stripeWebhookRouter } from './routes/stripe-webhook'
 import { customDomainRouter } from './routes/custom-domain'
+import { preflightRouter } from './routes/preflight'
+import { sequencesRouter } from './routes/sequences'
+import { analyticsRouter } from './routes/analytics'
 import { templatesRouter } from './routes/templates'
 import { webhooksRouter } from './routes/webhooks'
 import { workspacesRouter } from './routes/workspaces'
@@ -73,7 +76,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 function originPolicy(origin: string | undefined): string {
   if (!origin) return ''
   if (origin === 'https://mail.google.com') return origin
-  if (origin === 'https://app.mailfalcon.app') return origin
+  if (origin === 'https://mailfalcon.app') return origin
   if (origin.startsWith('chrome-extension://')) return origin
   if (origin.startsWith('http://localhost')) return origin
   return ''
@@ -179,6 +182,9 @@ app.route('/v1/workspaces', workspacesRouter)
 app.route('/v1/extension', extensionRouter)
 app.route('/v1/webhooks', webhooksRouter)
 app.route('/v1/me/custom-domain', customDomainRouter)
+app.route('/v1/compose/preflight', preflightRouter)
+app.route('/v1/sequences', sequencesRouter)
+app.route('/v1/analytics', analyticsRouter)
 
 app.use(
   '/stream',
@@ -216,6 +222,8 @@ import { sendDailyDigests } from './lib/digest'
 import { evaluateFollowups } from './lib/followups'
 import { evaluateHotLeads } from './lib/hot-leads'
 import { sendMiddayDigests } from './lib/midday-digest'
+import { evaluateSequences } from './lib/sequences'
+import { dispatchDueScheduledSends } from './lib/scheduled-dispatch'
 
 export default {
   fetch: app.fetch,
@@ -268,7 +276,7 @@ export default {
       return
     }
 
-    // Activation-emails cron runs every 10 minutes.
+    // Activation-emails & scheduled dispatch cron runs every 10 minutes.
     if (event.cron === '*/10 * * * *') {
       ctx.waitUntil(
         (async () => {
@@ -277,6 +285,18 @@ export default {
             log.info('cron_activation_emails', { cron: event.cron, ...out })
           } catch (err) {
             log.error('cron_activation_emails_failed', errorMeta(err))
+          }
+          try {
+            const sch = await dispatchDueScheduledSends(db, env)
+            log.info('cron_scheduled_dispatch', { cron: event.cron, ...sch })
+          } catch (err) {
+            log.error('cron_scheduled_dispatch_failed', errorMeta(err))
+          }
+          try {
+            const seq = await evaluateSequences(db, env)
+            log.info('cron_sequences', { cron: event.cron, ...seq })
+          } catch (err) {
+            log.error('cron_sequences_failed', errorMeta(err))
           }
         })(),
       )

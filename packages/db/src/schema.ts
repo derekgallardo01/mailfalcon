@@ -61,7 +61,7 @@ export const users = sqliteTable('users', {
   customTrackerHost: text('custom_tracker_host'),
   customTrackerVerifiedAt: integer('custom_tracker_verified_at'),
   customTrackerToken: text('custom_tracker_token'),
-  // Branded PDF/HTML reports — agency-friendly. Falls back to MailFalcon
+  // Branded PDF/HTML reports — agency-friendly. Falls back to Mail Falcon
   // brand when null.
   companyName: text('company_name'),
   companyLogoUrl: text('company_logo_url'),
@@ -166,6 +166,14 @@ export const events = sqliteTable(
     deviceVendor: text('device_vendor'),
     deviceModel: text('device_model'),
     isFirstOpen: integer('is_first_open').notNull().default(0),
+    // 1 = Apple Mail Privacy Protection (MPP) proxy prefetch.
+    isMpp: integer('is_mpp').notNull().default(0),
+    // Proxy categorization: 'apple_mpp', 'google_proxy', 'datacenter', 'none'
+    proxyType: text('proxy_type', {
+      enum: ['apple_mpp', 'google_proxy', 'datacenter', 'none'],
+    })
+      .notNull()
+      .default('none'),
     // 1 = event is real (bot fetch, sender-context render, self-recipient
     // preview, muted email) but should NOT trigger any notification
     // channel (Web Push, chrome.notifications via SSE, email-to-self,
@@ -269,6 +277,11 @@ export const eventWebhooks = sqliteTable(
     notifyReply: integer('notify_reply').notNull().default(1),
     notifyHotLead: integer('notify_hot_lead').notNull().default(1),
     enabled: integer('enabled').notNull().default(1),
+    crmType: text('crm_type', {
+      enum: ['generic', 'hubspot', 'zapier'],
+    })
+      .notNull()
+      .default('generic'),
     createdAt: integer('created_at').notNull(),
     lastFiredAt: integer('last_fired_at'),
     lastStatus: text('last_status'),
@@ -465,3 +478,81 @@ export const workspaceInvites = sqliteTable(
     emailIdx: index('workspace_invites_email_idx').on(table.email),
   }),
 )
+
+/** Multi-stage automated follow-up sequences */
+export const sequences = sqliteTable(
+  'sequences',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id'),
+    name: text('name').notNull(),
+    status: text('status', { enum: ['active', 'paused', 'archived'] })
+      .notNull()
+      .default('active'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => ({
+    userIdx: index('sequences_user_idx').on(table.userId),
+  }),
+)
+
+export const sequenceSteps = sqliteTable(
+  'sequence_steps',
+  {
+    id: text('id').primaryKey(),
+    sequenceId: text('sequence_id')
+      .notNull()
+      .references(() => sequences.id, { onDelete: 'cascade' }),
+    stepNumber: integer('step_number').notNull(),
+    delayDays: integer('delay_days').notNull(),
+    condition: text('condition', { enum: ['no_reply', 'no_open', 'always'] })
+      .notNull()
+      .default('no_reply'),
+    templateId: text('template_id').references(() => templates.id),
+    subject: text('subject').notNull(),
+    bodyHtml: text('body_html').notNull(),
+  },
+  (table) => ({
+    sequenceStepIdx: index('sequence_steps_seq_idx').on(
+      table.sequenceId,
+      table.stepNumber,
+    ),
+  }),
+)
+
+export const sequenceEnrollments = sqliteTable(
+  'sequence_enrollments',
+  {
+    id: text('id').primaryKey(),
+    sequenceId: text('sequence_id')
+      .notNull()
+      .references(() => sequences.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    recipientEmail: text('recipient_email').notNull(),
+    currentStep: integer('current_step').notNull().default(1),
+    status: text('status', {
+      enum: ['active', 'completed', 'cancelled_replied', 'paused'],
+    })
+      .notNull()
+      .default('active'),
+    lastStepAt: integer('last_step_at'),
+    nextStepAt: integer('next_step_at').notNull(),
+    initialEmailId: text('initial_email_id').references(() => trackedEmails.id),
+  },
+  (table) => ({
+    userSeqIdx: index('sequence_enrollments_user_idx').on(
+      table.userId,
+      table.status,
+    ),
+    nextStepIdx: index('sequence_enrollments_next_step_idx').on(
+      table.status,
+      table.nextStepAt,
+    ),
+  }),
+)
+

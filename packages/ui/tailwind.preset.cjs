@@ -15,6 +15,12 @@ module.exports = {
           800: '#1a2e4a',
           900: '#0f1a2e',
         },
+        electric: {
+          cyan: '#00d4ff',
+          blue: '#2563eb',
+          sky: '#38bdf8',
+          teal: '#14b8a6',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
