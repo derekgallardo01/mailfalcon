@@ -1,4 +1,4 @@
-# Chrome Web Store submission — Mail Falcon 1.18.1
+# Chrome Web Store submission — Mail Falcon 1.19.1
 
 Everything needed to publish the extension at
 [chrome.google.com/webstore/devconsole](https://chrome.google.com/webstore/devconsole)
@@ -15,7 +15,7 @@ and to pass Google OAuth **restricted-scope** verification.
 
 ```
 pnpm -F @mailfalcon/extension zip:cws
-# produces apps/extension/.output/mailfalconextension-1.18.1-chrome.zip
+# produces apps/extension/.output/mailfalconextension-1.19.1-chrome.zip
 ```
 
 Use **`zip:cws`** (`wxt zip --mode cws`), NOT plain `wxt zip`. The Chrome
@@ -24,7 +24,7 @@ manifest"); `--mode cws` strips the pinned sideload key so the upload
 succeeds. Plain `wxt zip` keeps the key (for stable sideload IDs) and will
 be rejected by the store.
 
-The manifest version is **1.18.1** (not 1.0.0). Each new upload must have a
+The manifest version is **1.19.1** (not 1.0.0). Each new upload must have a
 strictly higher version than the last; you cannot go back down.
 
 Upload that zip on the dev console "Package" step.

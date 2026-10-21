@@ -21,7 +21,7 @@ import { getDb } from '../lib/db'
 import { revokeGoogleGrant } from '../lib/google-tokens'
 import { createLogger, errorMeta } from '../lib/logger'
 import { sendDeleteCode } from '../lib/mailer'
-import { getUsage } from '../lib/usage'
+import { getDbUsage } from '../lib/usage'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -156,7 +156,7 @@ meRouter.get('/', async (c) => {
     ? Math.ceil((row.trialEndsAt! - now) / 86_400_000)
     : 0
 
-  const usage = await getUsage(c.env.KV, userId)
+  const usage = await getDbUsage(db, userId)
   return c.json({
     id: row.id,
     email: row.email,
@@ -629,4 +629,58 @@ meRouter.delete('/', async (c) => {
       ? 'Cancel the Stripe subscription manually in the dashboard.'
       : null,
   })
+})
+
+/**
+ * POST /v1/me/tracker-verify — verifies the CNAME/TXT record for a custom
+ * tracking domain. Generates a token if one doesn't exist, and checks
+ * Cloudflare DNS for the TXT record.
+ */
+meRouter.post('/tracker-verify', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const host = body?.host
+  if (!host || typeof host !== 'string') return c.json({ error: 'invalid_host' }, 400)
+
+  const userId = c.get('userId')
+  const db = getDb(c.env.DB)
+
+  const user = await db.select().from(users).where(eq(users.id, userId)).get()
+  if (!user) return c.json({ error: 'not_found' }, 404)
+  if (tierRank(user.tier) < tierRank('pro')) {
+    return c.json({ error: 'requires_pro' }, 403)
+  }
+
+  let token = user.customTrackerToken
+  if (!token || user.customTrackerHost !== host) {
+    token = 'mf-verify-' + crypto.randomUUID()
+    await db
+      .update(users)
+      .set({ customTrackerToken: token, customTrackerHost: host, customTrackerVerifiedAt: null })
+      .where(eq(users.id, userId))
+      .run()
+  }
+
+  try {
+    const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=TXT`, {
+      headers: { Accept: 'application/dns-json' },
+    })
+    if (res.ok) {
+      const data = (await res.json()) as any
+      const records = data.Answer || []
+      const isVerified = records.some((r: any) => r.data.includes(token))
+
+      if (isVerified) {
+        await db
+          .update(users)
+          .set({ customTrackerVerifiedAt: Date.now() })
+          .where(eq(users.id, userId))
+          .run()
+        return c.json({ ok: true, verified: true })
+      }
+    }
+  } catch (err) {
+    createLogger({ env: c.env }).error('tracker_verify_dns_failed', errorMeta(err))
+  }
+
+  return c.json({ ok: true, verified: false, token })
 })

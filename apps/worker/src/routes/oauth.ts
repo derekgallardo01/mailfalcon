@@ -27,6 +27,7 @@ const DEFAULT_REDIRECT_URI =
 const exchangeSchema = z.object({
   code: z.string().min(1).max(2000),
   codeVerifier: z.string().min(43).max(128),
+  redirectUri: z.string().url().max(500).optional(),
 })
 
 interface GoogleTokenResponse {
@@ -51,13 +52,18 @@ oauthRouter.post('/google/exchange', async (c) => {
   const parsed = exchangeSchema.safeParse(body)
   if (!parsed.success) return c.json({ error: 'invalid_body' }, 400)
 
+  const redirectUri =
+    parsed.data.redirectUri ??
+    c.env.GOOGLE_OAUTH_REDIRECT_URI ??
+    DEFAULT_REDIRECT_URI
+
   const params = new URLSearchParams({
     code: parsed.data.code,
     client_id: c.env.GOOGLE_OAUTH_CLIENT_ID,
     client_secret: c.env.GOOGLE_OAUTH_CLIENT_SECRET,
     code_verifier: parsed.data.codeVerifier,
     grant_type: 'authorization_code',
-    redirect_uri: c.env.GOOGLE_OAUTH_REDIRECT_URI ?? DEFAULT_REDIRECT_URI,
+    redirect_uri: redirectUri,
   })
 
   const res = await fetch('https://oauth2.googleapis.com/token', {

@@ -18,13 +18,13 @@ import {
 function tierColor(tier: AdminUserDetail['user']['tier']): string {
   switch (tier) {
     case 'free':
-      return 'bg-falcon-100 text-falcon-700'
+      return 'bg-slate-800/80 text-slate-300 border border-slate-700/60'
     case 'pro':
-      return 'bg-emerald-100 text-emerald-800'
+      return 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60'
     case 'team':
-      return 'bg-blue-100 text-blue-800'
+      return 'bg-cyan-950/80 text-cyan-300 border border-cyan-700/60'
     case 'admin':
-      return 'bg-amber-100 text-amber-800'
+      return 'bg-amber-950/80 text-amber-300 border border-amber-700/60'
   }
 }
 
@@ -77,8 +77,8 @@ function AdminUserInner() {
   if (error || !data) {
     return (
       <main className="mx-auto max-w-6xl px-6 py-8">
-        <p className="text-sm text-red-700">{error ?? 'unknown'}</p>
-        <Link href="/admin" className="mt-4 inline-block text-sm text-falcon-500 hover:text-falcon-700">
+        <p className="text-sm text-rose-400">{error ?? 'unknown'}</p>
+        <Link href="/admin" className="mt-4 inline-block text-sm text-falcon-400 hover:text-white transition-colors">
           ← Back to admin
         </Link>
       </main>
@@ -117,7 +117,7 @@ function AdminUserInner() {
       </section>
 
       <section className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-falcon-200 bg-white p-5">
+        <div className="rounded-lg border border-falcon-200 bg-falcon-100 p-5">
           <p className="text-xs font-medium uppercase tracking-wide text-falcon-500">
             Account
           </p>
@@ -149,7 +149,7 @@ function AdminUserInner() {
             />
           </dl>
         </div>
-        <div className="rounded-lg border border-falcon-200 bg-white p-5">
+        <div className="rounded-lg border border-falcon-200 bg-falcon-100 p-5">
           <p className="text-xs font-medium uppercase tracking-wide text-falcon-500">
             Feature adoption
           </p>

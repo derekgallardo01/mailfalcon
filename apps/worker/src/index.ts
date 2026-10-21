@@ -28,12 +28,15 @@ import { analyticsRouter } from './routes/analytics'
 import { templatesRouter } from './routes/templates'
 import { webhooksRouter } from './routes/webhooks'
 import { workspacesRouter } from './routes/workspaces'
-import { eq } from 'drizzle-orm'
+import { gmailWebhookRouter } from './routes/gmail-webhook'
+import { eq, gt, sql } from 'drizzle-orm'
 import {
+  uninstallFeedback,
   users as usersTable,
   workspaceInvites,
   workspaces as workspacesTable,
 } from '@mailfalcon/db/schema'
+import { z } from 'zod'
 import { getDb } from './lib/db'
 
 type Bindings = {
@@ -111,6 +114,7 @@ app.get('/health', (c) =>
   c.json({ ok: true, env: c.env.ENVIRONMENT, ts: Date.now() }),
 )
 
+
 // Durable metrics pull for the Kinetic Helix command center. Gated by a
 // static `X-KH-Key` header (constant-time compared to KH_METRICS_KEY) rather
 // than an expiring session JWT, so the connection never drops. Returns the
@@ -121,8 +125,8 @@ app.get('/metrics', async (c) => {
   if (!expected || !timingSafeEqual(provided, expected)) {
     return c.json({ error: 'unauthorized' }, 401)
   }
-  const { computeStats } = await import('./routes/admin')
-  return c.json(await computeStats(getDb(c.env.DB), c.env))
+  const { getCachedStats } = await import('./routes/admin')
+  return c.json(await getCachedStats(getDb(c.env.DB), c.env, c.executionCtx))
 })
 
 app.get('/vapid-public-key', (c) =>
@@ -162,6 +166,60 @@ app.get('/workspace-invites/:token', async (c) => {
     inviteEmail: row.email,
   })
 })
+
+// Unauthed uninstall survey — posted from the /uninstall goodbye page
+// the extension opens via chrome.runtime.setUninstallURL. The user has
+// already uninstalled, so there is never a session to authenticate.
+const countSql = sql<number>`count(*)`
+const uninstallFeedbackSchema = z.object({
+  reason: z.enum([
+    'not_useful',
+    'too_expensive',
+    'privacy',
+    'buggy',
+    'switched',
+    'temporary',
+    'other',
+  ]),
+  comment: z.string().max(2000).optional(),
+  installId: z.string().max(60).optional(),
+  version: z.string().max(40).optional(),
+})
+app.use(
+  '/uninstall-feedback',
+  cors({ origin: originPolicy, credentials: false, allowHeaders: ['Content-Type'] }),
+)
+app.post('/uninstall-feedback', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const parsed = uninstallFeedbackSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: 'invalid_body' }, 400)
+
+  const db = getDb(c.env.DB)
+  const now = Date.now()
+
+  // Anti-abuse: hard-cap rows per day so an unauthenticated endpoint
+  // can't be used to flood D1.
+  const dayAgo = now - 24 * 60 * 60 * 1000
+  const recent = await db
+    .select({ n: countSql })
+    .from(uninstallFeedback)
+    .where(gt(uninstallFeedback.createdAt, dayAgo))
+    .get()
+  if ((recent?.n ?? 0) >= 500) return c.json({ ok: true })
+
+  await db.insert(uninstallFeedback).values({
+    id: crypto.randomUUID(),
+    installId: parsed.data.installId ?? null,
+    extensionVersion: parsed.data.version ?? null,
+    reason: parsed.data.reason,
+    comment: parsed.data.comment?.trim() || null,
+    createdAt: now,
+  })
+  return c.json({ ok: true })
+})
+
+// Unauthed webhook endpoint for Gmail Push Notifications
+app.route('/v1/webhooks/gmail', gmailWebhookRouter)
 
 app.use('/v1/*', authMiddleware)
 app.use('/v1/admin/*', adminMiddleware)

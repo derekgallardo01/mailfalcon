@@ -121,13 +121,13 @@ export default function TemplatesPage() {
         <button
           type="button"
           onClick={startNew}
-          className="rounded bg-falcon-500 px-4 py-2 text-sm font-medium text-white hover:bg-falcon-600"
+          className="rounded-lg bg-electric-cyan px-4 py-2 text-sm font-bold text-falcon-50 hover:bg-electric-sky transition-colors shadow-sm"
         >
-          New template
+          + New template
         </button>
       </div>
 
-      {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
+      {error && <p className="mt-4 text-sm text-rose-400">{error}</p>}
 
       <div className="mt-6 grid gap-6 md:grid-cols-[280px_1fr]">
         <aside className="space-y-2">
@@ -135,7 +135,7 @@ export default function TemplatesPage() {
             Your templates
           </h2>
           {list.length === 0 ? (
-            <p className="rounded border border-dashed border-falcon-200 bg-white p-4 text-xs text-falcon-500">
+            <p className="rounded border border-dashed border-falcon-200 bg-falcon-100 p-4 text-xs text-falcon-500">
               No templates yet. Click "New template" to create one.
             </p>
           ) : (
@@ -148,14 +148,14 @@ export default function TemplatesPage() {
                     className={`flex w-full flex-col items-start gap-0.5 rounded border px-3 py-2 text-left text-sm ${
                       selectedId === t.id
                         ? 'border-falcon-500 bg-falcon-50 text-falcon-700'
-                        : 'border-falcon-200 bg-white text-falcon-700 hover:bg-falcon-50'
+                        : 'border-falcon-200 bg-falcon-100 text-falcon-700 hover:bg-falcon-50'
                     }`}
                   >
                     <span className="flex w-full items-center gap-1.5">
                       <span className="font-medium">{t.name}</span>
                       {t.scope === 'workspace' && (
                         <span
-                          className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700"
+                          className="rounded-full bg-emerald-950/80 border border-emerald-700/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-300"
                           title={`Shared with ${t.workspaceName ?? 'workspace'}`}
                         >
                           team
@@ -172,7 +172,7 @@ export default function TemplatesPage() {
           )}
         </aside>
 
-        <section className="rounded-lg border border-falcon-200 bg-white p-6">
+        <section className="rounded-lg border border-falcon-200 bg-falcon-100 p-6">
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-medium uppercase tracking-wide text-falcon-500">
@@ -255,15 +255,15 @@ export default function TemplatesPage() {
                 type="button"
                 onClick={save}
                 disabled={saving}
-                className="rounded bg-falcon-500 px-4 py-2 text-sm font-medium text-white hover:bg-falcon-600 disabled:opacity-50"
+                className="rounded-lg bg-electric-cyan px-4 py-2 text-sm font-bold text-falcon-50 hover:bg-electric-sky transition-colors disabled:opacity-50"
               >
-                {saving ? 'Saving…' : selectedId ? 'Save changes' : 'Create'}
+                {saving ? 'Saving…' : selectedId ? 'Save changes' : 'Create template'}
               </button>
               {selectedId && (
                 <button
                   type="button"
                   onClick={() => remove(selectedId)}
-                  className="text-sm text-red-700 hover:text-red-900"
+                  className="text-sm text-rose-400 hover:text-rose-300 transition-colors"
                 >
                   Delete
                 </button>

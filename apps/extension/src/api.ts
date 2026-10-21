@@ -424,3 +424,46 @@ export async function removeScheduled(id: string): Promise<void> {
     headers: { Authorization: `Bearer ${session.token}` },
   }).catch(() => undefined)
 }
+
+export interface UserMe {
+  tier: string
+  trackerHost: string
+}
+
+const ME_CACHE_KEY = 'mf.meCache'
+const ME_CACHE_TTL_MS = 60 * 60 * 1000
+
+export async function getMe(): Promise<UserMe | null> {
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    try {
+      const stored = await chrome.storage.local.get(ME_CACHE_KEY)
+      const cache = stored[ME_CACHE_KEY]
+      if (cache && Date.now() - cache.fetchedAt < ME_CACHE_TTL_MS) {
+        return cache.data
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const res = await fetch(`${config.apiHost}/v1/me`, {
+    headers: { ...(await authHeader()) },
+  })
+  if (!res.ok) return null
+  const data = await res.json() as UserMe
+
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    try {
+      await chrome.storage.local.set({
+        [ME_CACHE_KEY]: {
+          fetchedAt: Date.now(),
+          data: { tier: data.tier, trackerHost: data.trackerHost },
+        },
+      })
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return data
+}

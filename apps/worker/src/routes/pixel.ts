@@ -6,7 +6,7 @@ import { getDb } from '../lib/db'
 import { getClientIp } from '../lib/ip'
 import { createLogger, errorMeta } from '../lib/logger'
 import { fanoutPush } from '../lib/push-fanout'
-import { rateLimit } from '../lib/rate-limit'
+import { rateLimitMemory } from '../lib/rate-limit'
 import { getHmacSecret } from '../lib/secrets'
 import {
   classifyProxyType,
@@ -174,7 +174,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
   // serve the GIF (so attacker can't tell), but skip the DB write so a
   // bot can't amplify event volume.
   const ip = getClientIp(c)
-  const ipLimit = await rateLimit(c.env.KV, `pix:${ip}`, 60, 60)
+  const ipLimit = rateLimitMemory(`pix:${ip}`, 60, 60)
   if (!ipLimit.allowed) {
     createLogger({ env: c.env }).warn('pixel_ip_throttle', { ip, id })
     return gif()
@@ -208,12 +208,19 @@ pixelRouter.get('/:idWithExt', async (c) => {
   //   - Non-Gmail recipients (Outlook, Apple Mail, mobile clients):
   //     no mail.google.com referer at all.
   // So a mail.google.com referer is unambiguously the sender's own
-  // Gmail — suppress the notification, keep the event record for
-  // dashboard totals.
+  // Gmail — drop immediately without recording any fake recipient open.
   const referer = c.req.header('Referer') ?? c.req.header('Referrer') ?? ''
   const isSenderGmailContext =
     referer.startsWith('https://mail.google.com') ||
     referer.startsWith('http://mail.google.com')
+
+  if (isSenderGmailContext) {
+    createLogger({ env: c.env }).info('pixel_sender_gmail_context_ignored', {
+      emailId: row.id,
+      referer: referer.slice(0, 60),
+    })
+    return gif()
+  }
 
   const ua = c.req.header('User-Agent') ?? ''
   const uaDetails = parseUa(ua)
@@ -229,10 +236,17 @@ pixelRouter.get('/:idWithExt', async (c) => {
   const nonceKey = recipientId
     ? `nonce:${id}:${recipientId}:${uaHash}`
     : `nonce:${id}:${uaHash}`
-  const seen = await c.env.KV.get(nonceKey)
+  let seen: string | null = null
+  try {
+    seen = await c.env.KV.get(nonceKey)
+  } catch {
+    seen = null
+  }
   const isFirstOpen = seen ? 0 : 1
   if (!seen) {
-    c.executionCtx.waitUntil(c.env.KV.put(nonceKey, '1', { expirationTtl: 86400 }))
+    c.executionCtx.waitUntil(
+      c.env.KV.put(nonceKey, '1', { expirationTtl: 86400 }).catch(() => {}),
+    )
   }
 
   c.executionCtx.waitUntil(
@@ -360,7 +374,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
           type: 'open',
           linkId: null,
           ts: Date.now(),
-          uaClass: uaDetails.uaClass,
+          uaClass: isDatacenterFetch ? 'bot' : uaDetails.uaClass,
           ipPrefix,
           ipFull,
           country,
@@ -426,7 +440,7 @@ pixelRouter.get('/:idWithExt', async (c) => {
           return
         }
         c.executionCtx.waitUntil(
-          c.env.KV.put(notifDedupeKey, '1', { expirationTtl: 300 }),
+          c.env.KV.put(notifDedupeKey, '1', { expirationTtl: 300 }).catch(() => {}),
         )
       } catch {
         /* fail-open: still notify on KV blip */

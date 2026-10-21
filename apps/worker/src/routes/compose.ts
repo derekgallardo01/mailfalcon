@@ -20,7 +20,7 @@ import {
 import { createLogger, errorMeta } from '../lib/logger'
 import { base64UrlEncodeRfc5322, buildRfc5322 } from '../lib/rfc5322'
 import { getHmacSecret } from '../lib/secrets'
-import { checkAndIncrementUsage } from '../lib/usage'
+import { checkDbUsage } from '../lib/usage'
 
 type Bindings = {
   ENVIRONMENT: string
@@ -244,7 +244,7 @@ composeRouter.post('/send', async (c) => {
     .get()
   if (!user) return c.json({ error: 'not_found' }, 404)
 
-  const usage = await checkAndIncrementUsage(c.env.KV, userId, user.tier ?? 'free')
+  const usage = await checkDbUsage(db, userId, user.tier ?? 'free')
   if (!usage.allowed) {
     return c.json(
       {
@@ -399,65 +399,77 @@ composeRouter.post('/send', async (c) => {
     references: parsed.data.references,
     attachments: parsed.data.attachments,
   })
-  const encoded = base64UrlEncodeRfc5322(raw)
 
+  try {
+    const gmailData = await sendGmailMessage({
+      accessToken,
+      rawRfc5322: raw,
+      threadId: parsed.data.threadId,
+    })
+
+    // Backfill Gmail's threadId + messageId so reply detection can
+    // correlate inbound messages against this send.
+    await db
+      .update(trackedEmails)
+      .set({
+        threadId: gmailData.threadId,
+        messageId: gmailData.id,
+      })
+      .where(eq(trackedEmails.id, id))
+      .run()
+
+    createLogger({ env: c.env }).info('compose_sent', {
+      userId,
+      emailId: id,
+      gmailMessageId: gmailData.id,
+      threadId: gmailData.threadId,
+      recipientCount: allAddresses.length,
+      linkCount: originalLinks.length,
+    })
+
+    return c.json({
+      ok: true,
+      emailId: id,
+      gmailMessageId: gmailData.id,
+      threadId: gmailData.threadId,
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    createLogger({ env: c.env }).warn('gmail_send_failed', {
+      userId,
+      detail: msg.slice(0, 300),
+    })
+    return c.json({ error: 'gmail_send_failed', detail: msg.slice(0, 300) }, 502)
+  }
+})
+
+export async function sendGmailMessage(args: {
+  accessToken: string
+  rawRfc5322: string
+  threadId?: string
+}): Promise<GmailSendResponse> {
+  const encoded = base64UrlEncodeRfc5322(args.rawRfc5322)
   const gmailBody: { raw: string; threadId?: string } = { raw: encoded }
-  if (parsed.data.threadId) gmailBody.threadId = parsed.data.threadId
+  if (args.threadId) gmailBody.threadId = args.threadId
 
   const gmailRes = await fetch(
     'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${args.accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(gmailBody),
-    },
+    }
   )
 
   if (!gmailRes.ok) {
     const text = await gmailRes.text()
-    createLogger({ env: c.env }).warn('gmail_send_failed', {
-      userId,
-      status: gmailRes.status,
-      detail: text.slice(0, 300),
-    })
-    // Best-effort rollback: leave the tracked_email row; user might
-    // retry and we want the tracking to fire once the send does. But
-    // do return a specific error so the UI can surface it.
-    return c.json({ error: 'gmail_send_failed', detail: text.slice(0, 300) }, 502)
+    throw new Error(`Gmail API error ${gmailRes.status}: ${text}`)
   }
-
-  const gmailData = (await gmailRes.json()) as GmailSendResponse
-
-  // Backfill Gmail's threadId + messageId so reply detection can
-  // correlate inbound messages against this send.
-  await db
-    .update(trackedEmails)
-    .set({
-      threadId: gmailData.threadId,
-      messageId: gmailData.id,
-    })
-    .where(eq(trackedEmails.id, id))
-    .run()
-
-  createLogger({ env: c.env }).info('compose_sent', {
-    userId,
-    emailId: id,
-    gmailMessageId: gmailData.id,
-    threadId: gmailData.threadId,
-    recipientCount: allAddresses.length,
-    linkCount: originalLinks.length,
-  })
-
-  return c.json({
-    ok: true,
-    emailId: id,
-    gmailMessageId: gmailData.id,
-    threadId: gmailData.threadId,
-  })
-})
+  return (await gmailRes.json()) as GmailSendResponse
+}
 
 async function sha256HexLower(address: string): Promise<string> {
   const buf = await crypto.subtle.digest(

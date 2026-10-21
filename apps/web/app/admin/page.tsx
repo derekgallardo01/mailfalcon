@@ -225,9 +225,9 @@ export default function AdminPage() {
     return (
       <main className="mx-auto max-w-6xl px-6 py-6">
         <AppHeader />
-        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-6">
-          <h1 className="text-base font-semibold text-falcon-700">Admin</h1>
-          <p className="mt-1 text-sm text-red-700">
+        <div className="mt-6 rounded-lg border border-rose-800/60 bg-rose-950/40 p-6">
+          <h1 className="text-base font-semibold text-white">Admin</h1>
+          <p className="mt-1 text-sm text-rose-300">
             Your account does not have admin access.
           </p>
         </div>
@@ -259,10 +259,10 @@ export default function AdminPage() {
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize ${
+            className={`px-4 py-2 text-sm font-semibold capitalize transition-colors ${
               tab === t
-                ? 'border-b-2 border-falcon-500 text-falcon-700'
-                : 'text-falcon-500 hover:text-falcon-700'
+                ? 'border-b-2 border-electric-cyan text-electric-cyan'
+                : 'text-falcon-400 hover:text-falcon-600'
             }`}
           >
             {t}
@@ -271,7 +271,7 @@ export default function AdminPage() {
       </nav>
 
       <main className="mt-6">
-        {error && <p className="mb-4 text-sm text-red-700">{error}</p>}
+        {error && <p className="mb-4 text-sm text-rose-400">{error}</p>}
 
         {tab === 'stats' && stats && (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -287,7 +287,7 @@ export default function AdminPage() {
             />
             <StatCard label="Activated" value={stats.telemetry.activated} />
             <StatCard label="Active in 7d" value={stats.telemetry.active7d} />
-            <div className="col-span-2 rounded-lg border border-falcon-200 bg-white p-4 md:col-span-3">
+            <div className="col-span-2 rounded-lg border border-falcon-200 bg-falcon-100 p-4 md:col-span-3">
               <p className="text-xs uppercase tracking-wide text-falcon-500">
                 Users by tier
               </p>
@@ -312,7 +312,7 @@ export default function AdminPage() {
               <select
                 value={userStatusFilter}
                 onChange={(e) => setUserStatusFilter(e.target.value as typeof userStatusFilter)}
-                className="rounded border border-falcon-200 bg-white px-3 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
+                className="rounded border border-falcon-200 bg-falcon-100 px-3 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
               >
                 <option value="all">All ({users.length})</option>
                 <option value="installed">Installed, never sent</option>
@@ -321,7 +321,7 @@ export default function AdminPage() {
                 <option value="dormant">Dormant</option>
               </select>
             </div>
-            <div className="overflow-hidden rounded-lg border border-falcon-200 bg-white">
+            <div className="overflow-hidden rounded-lg border border-falcon-200 bg-falcon-100">
               <table className="w-full text-sm">
                 <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
                   <tr>
@@ -398,12 +398,12 @@ export default function AdminPage() {
                 value={emailQInput}
                 onChange={(e) => setEmailQInput(e.target.value)}
                 placeholder="Search by sender email…"
-                className="min-w-[240px] flex-1 rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+                className="min-w-[240px] flex-1 rounded border border-falcon-200 bg-falcon-100 px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
               />
               <select
                 value={emailSort}
                 onChange={(e) => setEmailSort(e.target.value as EmailSort)}
-                className="rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+                className="rounded border border-falcon-200 bg-falcon-100 px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
               >
                 {ADMIN_SORT_OPTIONS.map((o) => (
                   <option key={o.key} value={o.key}>
@@ -411,7 +411,7 @@ export default function AdminPage() {
                   </option>
                 ))}
               </select>
-              <div className="inline-flex overflow-hidden rounded border border-falcon-200 bg-white text-xs">
+              <div className="inline-flex overflow-hidden rounded border border-falcon-200 bg-falcon-100 text-xs">
                 {ADMIN_DATE_PRESETS.map((p, i) => (
                   <button
                     key={p.key}
@@ -444,13 +444,13 @@ export default function AdminPage() {
             </div>
 
             {emails.length === 0 ? (
-              <div className="rounded border border-dashed border-falcon-200 bg-white p-8 text-center text-sm text-falcon-500">
+              <div className="rounded border border-dashed border-falcon-200 bg-falcon-100 p-8 text-center text-sm text-falcon-500">
                 {hasEmailFilters
                   ? 'No emails match these filters.'
                   : 'No emails yet.'}
               </div>
             ) : (
-              <div className="overflow-hidden rounded-lg border border-falcon-200 bg-white">
+              <div className="overflow-hidden rounded-lg border border-falcon-200 bg-falcon-100">
                 <table className="w-full text-sm">
                   <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
                     <tr>
@@ -512,7 +512,7 @@ export default function AdminPage() {
         )}
 
         {tab === 'events' && (
-          <div className="overflow-x-auto rounded-lg border border-falcon-200 bg-white">
+          <div className="overflow-x-auto rounded-lg border border-falcon-200 bg-falcon-100">
             <table className="w-full text-sm">
               <thead className="bg-falcon-50 text-xs uppercase text-falcon-500">
                 <tr>
@@ -593,7 +593,7 @@ export default function AdminPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-falcon-200 bg-white p-4">
+    <div className="rounded-lg border border-falcon-200 bg-falcon-100 p-4">
       <p className="text-xs uppercase tracking-wide text-falcon-500">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-falcon-700">
         {value.toLocaleString()}
@@ -604,14 +604,14 @@ function StatCard({ label, value }: { label: string; value: number }) {
 
 function TierBadge({ tier }: { tier: AdminUser['tier'] }) {
   const colors: Record<AdminUser['tier'], string> = {
-    free: 'bg-falcon-100 text-falcon-700',
-    pro: 'bg-emerald-100 text-emerald-800',
-    team: 'bg-blue-100 text-blue-800',
-    admin: 'bg-amber-100 text-amber-800',
+    free: 'bg-slate-800/80 text-slate-300 border border-slate-700/60',
+    pro: 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60',
+    team: 'bg-cyan-950/80 text-cyan-300 border border-cyan-700/60',
+    admin: 'bg-amber-950/80 text-amber-300 border border-amber-700/60',
   }
   return (
     <span
-      className={`rounded px-2 py-0.5 text-xs font-medium ${colors[tier]}`}
+      className={`rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${colors[tier]}`}
     >
       {tier}
     </span>
@@ -620,14 +620,14 @@ function TierBadge({ tier }: { tier: AdminUser['tier'] }) {
 
 function StatusBadge({ status }: { status: AdminUser['status'] }) {
   const meta: Record<AdminUser['status'], { label: string; cls: string }> = {
-    never_installed: { label: 'no install', cls: 'bg-slate-100 text-slate-600' },
-    installed: { label: 'installed', cls: 'bg-amber-100 text-amber-800' },
-    activated: { label: 'activated', cls: 'bg-blue-100 text-blue-800' },
-    active: { label: 'active', cls: 'bg-emerald-100 text-emerald-800' },
-    dormant: { label: 'dormant', cls: 'bg-rose-100 text-rose-800' },
+    never_installed: { label: 'no install', cls: 'bg-slate-800/80 text-slate-300 border border-slate-700/60' },
+    installed: { label: 'installed', cls: 'bg-amber-950/80 text-amber-300 border border-amber-700/60' },
+    activated: { label: 'activated', cls: 'bg-cyan-950/80 text-cyan-300 border border-cyan-700/60' },
+    active: { label: 'active', cls: 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60' },
+    dormant: { label: 'dormant', cls: 'bg-rose-950/80 text-rose-300 border border-rose-700/60' },
   }
   const m = meta[status]
-  return <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${m.cls}`}>{m.label}</span>
+  return <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${m.cls}`}>{m.label}</span>
 }
 
 function LiveStatus({
@@ -662,10 +662,10 @@ function LiveStatus({
         <button
           type="button"
           onClick={onToggle}
-          className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+          className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
             autoRefresh
-              ? 'bg-emerald-100 text-emerald-800'
-              : 'bg-slate-100 text-slate-600'
+              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60'
+              : 'bg-slate-800/80 text-slate-300 border border-slate-700/60'
           }`}
           title={autoRefresh ? 'Auto-refresh on — click to pause' : 'Paused — click to resume'}
         >
@@ -684,7 +684,7 @@ function LiveStatus({
           type="button"
           onClick={onRefreshNow}
           disabled={refreshing}
-          className="rounded border border-falcon-300 bg-white px-2 py-0.5 text-[10px] font-medium text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+          className="rounded border border-falcon-300 bg-falcon-100 px-2 py-0.5 text-[10px] font-medium text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
         >
           {refreshing ? 'Refreshing…' : 'Refresh now'}
         </button>

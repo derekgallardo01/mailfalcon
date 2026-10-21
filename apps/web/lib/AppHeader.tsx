@@ -79,9 +79,9 @@ export function AppHeader({ liveCount = 0 }: Props) {
   const tierLabel = me?.tier
   const tierClass =
     tierLabel === 'admin'
-      ? 'bg-amber-100 text-amber-800'
+      ? 'bg-amber-950/80 text-amber-300 border border-amber-700/60'
       : tierLabel === 'pro' || tierLabel === 'team'
-      ? 'bg-emerald-100 text-emerald-800'
+      ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60'
       : null
 
   const navLink = (href: string, label: string) => {
@@ -95,10 +95,10 @@ export function AppHeader({ liveCount = 0 }: Props) {
     return (
       <Link
         href={href}
-        className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+        className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
           active
-            ? 'bg-falcon-100 text-falcon-700'
-            : 'text-falcon-500 hover:bg-falcon-50 hover:text-falcon-700'
+            ? 'bg-falcon-100 text-electric-cyan shadow-sm border border-falcon-200'
+            : 'text-falcon-400 hover:bg-falcon-100/60 hover:text-falcon-700'
         }`}
       >
         {label}
@@ -108,7 +108,7 @@ export function AppHeader({ liveCount = 0 }: Props) {
 
   return (
     <header className="flex flex-col gap-3 border-b border-falcon-200 pb-4 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/" className="flex items-center gap-2.5">
           <img
             src="/icon.png"
@@ -117,7 +117,7 @@ export function AppHeader({ liveCount = 0 }: Props) {
             height={30}
             className="h-7 w-7 rounded-lg shadow-sm"
           />
-          <span className="text-lg font-bold tracking-tight text-falcon-800">
+          <span className="text-lg font-bold tracking-tight text-white">
             Mail Falcon
           </span>
         </Link>
@@ -130,7 +130,7 @@ export function AppHeader({ liveCount = 0 }: Props) {
         )}
         {me?.trialActive && me.trialDaysRemaining > 0 && (
           <span
-            className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800"
+            className="rounded-full bg-amber-950/80 border border-amber-700/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
             title={`Pro trial — ${me.trialDaysRemaining} day${me.trialDaysRemaining === 1 ? '' : 's'} left`}
           >
             Trial · {me.trialDaysRemaining}d
@@ -140,14 +140,14 @@ export function AppHeader({ liveCount = 0 }: Props) {
           <WorkspaceSwitcher me={me} />
         )}
         {liveCount > 0 && (
-          <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-800 animate-pulse">
+          <span className="rounded-full bg-cyan-950/80 border border-cyan-700/60 px-2 py-0.5 text-[11px] font-medium text-cyan-300 animate-pulse">
             live · {liveCount} new
           </span>
         )}
         {me?.quietStartMinute != null && me?.quietEndMinute != null && (
           <Link
             href="/settings"
-            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-200"
+            className="rounded-full bg-falcon-100 border border-falcon-200 px-2.5 py-0.5 text-[11px] font-medium text-falcon-400 hover:bg-falcon-200 hover:text-falcon-600 transition-colors"
             title="Push notifications are muted during your quiet hours window. Click to manage."
           >
             🌙 Quiet {minutesToHHMM(me.quietStartMinute)}–{minutesToHHMM(me.quietEndMinute)}
@@ -158,7 +158,7 @@ export function AppHeader({ liveCount = 0 }: Props) {
       <nav className="flex flex-wrap items-center gap-1">
         <Link
           href="/compose"
-          className="mr-1 flex items-center gap-1 rounded-md bg-falcon-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-falcon-700 transition-colors"
+          className="mr-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-electric-cyan px-3 py-1.5 text-sm font-bold text-falcon-50 shadow-sm hover:bg-electric-sky transition-colors"
         >
           <span>✍</span>
           Compose
@@ -178,38 +178,38 @@ export function AppHeader({ liveCount = 0 }: Props) {
             <button
               type="button"
               onClick={() => setShowTierPicker((v) => !v)}
-              className="rounded bg-falcon-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-falcon-600"
+              className="rounded-lg bg-electric-cyan px-3 py-1.5 text-xs font-bold text-falcon-50 hover:bg-electric-sky transition-colors"
             >
               Upgrade ▾
             </button>
             {showTierPicker && (
               <div
-                className="absolute right-0 top-full z-30 mt-1 w-72 rounded-md border border-falcon-200 bg-white p-3 shadow-lg"
+                className="absolute right-0 top-full z-30 mt-1 w-72 rounded-lg border border-falcon-200 bg-falcon-100 p-3 shadow-2xl backdrop-blur-md"
                 onMouseLeave={() => setShowTierPicker(false)}
               >
                 <button
                   type="button"
                   onClick={() => handleUpgrade('pro')}
-                  className="w-full rounded-md border border-falcon-200 px-3 py-2 text-left hover:bg-falcon-50"
+                  className="w-full rounded-lg border border-falcon-200 px-3 py-2 text-left hover:bg-falcon-50 transition-colors"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-falcon-700">Pro</span>
-                    <span className="text-xs font-medium text-falcon-500">$10/mo</span>
+                    <span className="text-sm font-semibold text-white">Pro</span>
+                    <span className="text-xs font-medium text-electric-cyan">$10/mo</span>
                   </div>
-                  <p className="mt-1 text-[11px] text-falcon-500">
+                  <p className="mt-1 text-[11px] text-falcon-400">
                     Unlimited tracking, digest, scheduled sends, mail-merge.
                   </p>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleUpgrade('team')}
-                  className="mt-2 w-full rounded-md border border-falcon-200 px-3 py-2 text-left hover:bg-falcon-50"
+                  className="mt-2 w-full rounded-lg border border-falcon-200 px-3 py-2 text-left hover:bg-falcon-50 transition-colors"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-falcon-700">Team</span>
-                    <span className="text-xs font-medium text-falcon-500">$25/mo</span>
+                    <span className="text-sm font-semibold text-white">Team</span>
+                    <span className="text-xs font-medium text-electric-cyan">$25/mo</span>
                   </div>
-                  <p className="mt-1 text-[11px] text-falcon-500">
+                  <p className="mt-1 text-[11px] text-falcon-400">
                     Everything in Pro plus shared workspace, team analytics, inherited tier for members.
                   </p>
                 </button>
@@ -221,7 +221,7 @@ export function AppHeader({ liveCount = 0 }: Props) {
           <button
             type="button"
             onClick={handleManageBilling}
-            className="text-xs text-falcon-500 hover:text-falcon-700"
+            className="text-xs text-falcon-400 hover:text-white transition-colors"
           >
             Manage billing
           </button>
@@ -232,7 +232,7 @@ export function AppHeader({ liveCount = 0 }: Props) {
         <button
           type="button"
           onClick={handleLogout}
-          className="text-xs text-falcon-500 hover:text-falcon-700"
+          className="text-xs text-falcon-400 hover:text-rose-400 transition-colors"
         >
           Sign out
         </button>
@@ -269,7 +269,7 @@ function WorkspaceSwitcher({ me }: { me: MeResponse }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 rounded-md border border-falcon-200 bg-white px-2 py-1 text-xs font-medium text-falcon-700 hover:bg-falcon-50"
+        className="flex items-center gap-1 rounded-md border border-falcon-200 bg-falcon-100 px-2.5 py-1 text-xs font-medium text-falcon-600 hover:bg-falcon-200 hover:text-white transition-colors"
         title="Active workspace"
       >
         <span className="truncate max-w-[140px]">{me.activeWorkspaceName}</span>
@@ -277,7 +277,7 @@ function WorkspaceSwitcher({ me }: { me: MeResponse }) {
       </button>
       {open && (
         <div
-          className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-falcon-200 bg-white py-1 shadow-lg"
+          className="absolute left-0 top-full z-20 mt-1 w-56 rounded-lg border border-falcon-200 bg-falcon-100 py-1 shadow-2xl backdrop-blur-md"
           onMouseLeave={() => setOpen(false)}
         >
           {me.workspaces.map((w) => (
@@ -286,8 +286,8 @@ function WorkspaceSwitcher({ me }: { me: MeResponse }) {
               type="button"
               disabled={busy}
               onClick={() => pick(w.id)}
-              className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-falcon-50 ${
-                w.id === me.activeWorkspaceId ? 'font-semibold text-falcon-700' : 'text-falcon-600'
+              className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-falcon-50 transition-colors ${
+                w.id === me.activeWorkspaceId ? 'font-semibold text-electric-cyan' : 'text-falcon-500'
               }`}
             >
               <span className="truncate">{w.name}</span>
@@ -296,11 +296,11 @@ function WorkspaceSwitcher({ me }: { me: MeResponse }) {
               </span>
             </button>
           ))}
-          <div className="my-1 border-t border-falcon-100" />
+          <div className="my-1 border-t border-falcon-200" />
           <Link
             href="/workspaces"
             onClick={() => setOpen(false)}
-            className="block px-3 py-1.5 text-xs text-falcon-600 hover:bg-falcon-50"
+            className="block px-3 py-1.5 text-xs text-falcon-400 hover:text-white hover:bg-falcon-50 transition-colors"
           >
             Manage workspaces
           </Link>

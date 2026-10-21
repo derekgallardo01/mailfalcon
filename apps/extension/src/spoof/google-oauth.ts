@@ -99,7 +99,11 @@ export async function connectGoogle(): Promise<StoredTokens> {
   const res = await fetch(`${config.apiHost}/v1/oauth/google/exchange`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await mailfalconAuthHeader()) },
-    body: JSON.stringify({ code, codeVerifier: verifier }),
+    body: JSON.stringify({
+      code,
+      codeVerifier: verifier,
+      redirectUri: REDIRECT_URI,
+    }),
   })
   if (!res.ok) {
     const detail = await res.text().catch(() => '')

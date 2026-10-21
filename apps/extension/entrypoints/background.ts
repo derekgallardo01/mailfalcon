@@ -54,9 +54,11 @@ function buildBody(ev: StreamEvent): string {
   return loc || dev || ''
 }
 
-function notifFor(ev: StreamEvent): Notif {
+function notifFor(ev: StreamEvent, userEmail?: string): Notif {
   const subject = ev.subject?.trim() || '(no subject)'
   const who = ev.recipientLabel?.trim() || 'Someone'
+
+  const isSelf = userEmail && (who.toLowerCase() === userEmail.toLowerCase() || who.toLowerCase() === 'me' || who === userEmail.split('@')[0])
 
   if (ev.type === 'reply') {
     return {
@@ -71,6 +73,12 @@ function notifFor(ev: StreamEvent): Notif {
     }
   }
   // open
+  if (isSelf && ev.isFirstOpen) {
+    return {
+      title: '✓✓ You just opened your tracked email!',
+      body: buildBody(ev) || 'First open detected',
+    }
+  }
   return {
     title: truncate(`${who} opened: ${subject}`, TITLE_MAX_LEN),
     body: buildBody(ev) || (ev.isFirstOpen ? 'First open detected' : 'Opened again'),
@@ -114,26 +122,28 @@ export default defineBackground(() => {
     if (client) client.noteEventTs(ev.ts)
     if (ev.uaClass === 'bot') return
 
-    const { title, body } = notifFor(ev)
-    const notifId = `${NOTIF_PREFIX}${ev.id}`
-    chrome.notifications.create(notifId, {
-      type: 'basic',
-      iconUrl: chrome.runtime.getURL(NOTIF_ICON_PATH),
-      title,
-      message: body,
-      priority: 1,
-      buttons: [{ title: 'View Details' }, { title: 'Mute Email' }],
-    })
-    // Remember which email this notif belongs to so the click handler
-    // can deep-link to its detail page AND the button handler can mute
-    // the right email.
-    void chrome.storage.session
-      ?.set({
-        [`mf.notifLink:${notifId}`]: deepLink(ev.emailId),
-        [`mf.notifEmail:${notifId}`]: ev.emailId,
+    void getSession().then((session) => {
+      const { title, body } = notifFor(ev, session?.email)
+      const notifId = `${NOTIF_PREFIX}${ev.id}`
+      chrome.notifications.create(notifId, {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL(NOTIF_ICON_PATH),
+        title,
+        message: body,
+        priority: 1,
+        buttons: [{ title: 'View Details' }, { title: 'Mute Email' }],
       })
-      .catch(() => undefined)
-    void bumpBadge()
+      // Remember which email this notif belongs to so the click handler
+      // can deep-link to its detail page AND the button handler can mute
+      // the right email.
+      void chrome.storage.session
+        ?.set({
+          [`mf.notifLink:${notifId}`]: deepLink(ev.emailId),
+          [`mf.notifEmail:${notifId}`]: ev.emailId,
+        })
+        .catch(() => undefined)
+      void bumpBadge()
+    })
   }
 
   // Push-delivered events MUST call self.registration.showNotification()
@@ -189,7 +199,7 @@ export default defineBackground(() => {
     } else {
       // Show one notification per event so users can see what happened.
       for (const ev of surfaced) {
-        const { title, body } = notifFor(ev)
+        const { title, body } = notifFor(ev, session.email)
         await sw.registration.showNotification(title, {
           body,
           icon: NOTIF_ICON_PATH,
@@ -239,13 +249,38 @@ export default defineBackground(() => {
     }
   }
 
+  /**
+   * Point Chrome at the goodbye/feedback page when the user uninstalls.
+   * Carries version + installId so real signed-in churn can be told
+   * apart from drive-by installs in the survey data.
+   */
+  async function setUninstallUrl(): Promise<void> {
+    try {
+      const installId = await ensureInstallId()
+      const version = chrome.runtime.getManifest().version
+      const url = new URL('https://mailfalcon.app/uninstall')
+      url.searchParams.set('v', version)
+      url.searchParams.set('iid', installId)
+      await chrome.runtime.setUninstallURL(url.toString())
+    } catch {
+      /* non-critical */
+    }
+  }
+
   chrome.runtime.onStartup.addListener(() => {
     void start()
     void ping()
+    void setUninstallUrl()
   })
-  chrome.runtime.onInstalled.addListener(() => {
+  chrome.runtime.onInstalled.addListener((details) => {
     void start()
     void ping()
+    void setUninstallUrl()
+    if (details.reason === 'install') {
+      void chrome.tabs.create({
+        url: `${config.publicWebUrl}/welcome`,
+      })
+    }
     // Daily heartbeat for long-running sessions where the SW doesn't
     // restart for days.
     void chrome.alarms.create('mf-ping', { periodInMinutes: 24 * 60 })

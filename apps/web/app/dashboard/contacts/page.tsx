@@ -40,10 +40,10 @@ function classify(c: ContactListItem): Heat {
 }
 
 const HEAT_STYLE: Record<Heat, string> = {
-  hot: 'bg-red-100 text-red-700',
-  warm: 'bg-amber-100 text-amber-700',
-  cold: 'bg-slate-100 text-slate-600',
-  dormant: 'bg-slate-100 text-slate-400',
+  hot: 'bg-rose-950/80 text-rose-300 border border-rose-700/60',
+  warm: 'bg-amber-950/80 text-amber-300 border border-amber-700/60',
+  cold: 'bg-slate-800/80 text-slate-300 border border-slate-700/60',
+  dormant: 'bg-slate-900/90 text-slate-400 border border-slate-800/60',
 }
 
 export default function ContactsPage() {
@@ -127,13 +127,13 @@ export default function ContactsPage() {
           <input
             type="search"
             placeholder="Search by name or address label…"
-            className="min-w-0 flex-1 rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
+            className="min-w-0 flex-1 rounded-md border border-falcon-200 bg-falcon-100 px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
             onChange={(e) => onQueryChange(e.target.value)}
           />
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as ContactSort)}
-            className="rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm"
+            className="rounded-md border border-falcon-200 bg-falcon-100 px-3 py-2 text-sm"
           >
             {SORT_OPTIONS.map((s) => (
               <option key={s.key} value={s.key}>
@@ -144,7 +144,7 @@ export default function ContactsPage() {
         </div>
 
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="rounded-md border border-rose-800/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-300">
             Failed to load: {error}
           </div>
         )}
@@ -152,7 +152,7 @@ export default function ContactsPage() {
         {loading ? (
           <p className="text-sm text-falcon-500">Loading contacts…</p>
         ) : contacts.length === 0 ? (
-          <div className="rounded-lg border border-falcon-200 bg-white px-6 py-12 text-center">
+          <div className="rounded-lg border border-falcon-200 bg-falcon-100 px-6 py-12 text-center">
             <p className="text-sm font-medium text-falcon-700">
               No contacts yet
             </p>
@@ -168,7 +168,7 @@ export default function ContactsPage() {
             </Link>
           </div>
         ) : (
-          <div className="divide-y divide-falcon-200 overflow-hidden rounded-lg border border-falcon-200 bg-white">
+          <div className="divide-y divide-falcon-200 overflow-hidden rounded-lg border border-falcon-200 bg-falcon-100">
             {contacts.map((c) => {
               const heat = classify(c)
               const openRate = c.sends > 0 ? Math.round((100 * c.humanOpens) / c.sends) : 0
@@ -216,7 +216,7 @@ export default function ContactsPage() {
             type="button"
             onClick={loadMore}
             disabled={loadingMore}
-            className="mx-auto block rounded-md border border-falcon-200 bg-white px-4 py-2 text-sm font-medium text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+            className="mx-auto block rounded-md border border-falcon-200 bg-falcon-100 px-4 py-2 text-sm font-medium text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
           >
             {loadingMore ? 'Loading…' : 'Load more'}
           </button>
@@ -238,7 +238,7 @@ function StatCard({
   accent?: boolean
 }) {
   return (
-    <div className="rounded-lg border border-falcon-200 bg-white px-4 py-3">
+    <div className="rounded-lg border border-falcon-200 bg-falcon-100 px-4 py-3">
       <p className="text-[11px] font-medium uppercase tracking-wide text-falcon-500">
         {label}
       </p>

@@ -19,7 +19,7 @@ export function Sparkline({
   const n = points.length
   if (n === 0) {
     return (
-      <div className="rounded-md border border-falcon-200 bg-white px-3 py-4 text-center text-xs text-falcon-400">
+      <div className="rounded-md border border-falcon-200 bg-falcon-100 px-3 py-4 text-center text-xs text-falcon-400">
         no data
       </div>
     )
@@ -28,7 +28,7 @@ export function Sparkline({
   const dayMs = 86_400_000
 
   return (
-    <div className="rounded-md border border-falcon-200 bg-white p-3">
+    <div className="rounded-md border border-falcon-200 bg-falcon-100 p-3">
       {label && (
         <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-falcon-500">
           {label}

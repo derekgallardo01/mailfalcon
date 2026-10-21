@@ -59,7 +59,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#3b6cb7',
+  themeColor: '#070c18',
   width: 'device-width',
   initialScale: 1,
   // Prevent auto-zoom when tapping the address / body inputs on iOS.
@@ -68,47 +68,47 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-falcon-50 text-falcon-900 font-sans antialiased">
+    <html lang="en" className="dark">
+      <body className="min-h-screen bg-falcon-50 text-falcon-600 font-sans antialiased selection:bg-electric-cyan selection:text-falcon-50">
         <div className="flex min-h-screen flex-col">
           <div className="flex-1">{children}</div>
-          <footer className="border-t border-falcon-200 bg-white py-4 text-center text-xs text-falcon-500">
-            <Link href="/" className="hover:text-falcon-700">
+          <footer className="border-t border-falcon-200 bg-falcon-100/80 py-5 text-center text-xs text-falcon-400">
+            <Link href="/" className="hover:text-electric-cyan transition-colors">
               Mail Falcon
             </Link>
-            <span className="mx-2">·</span>
-            <Link href="/templates" className="hover:text-falcon-700">
+            <span className="mx-2 text-falcon-300">·</span>
+            <Link href="/templates" className="hover:text-electric-cyan transition-colors">
               Templates
             </Link>
-            <span className="mx-2">·</span>
-            <Link href="/settings" className="hover:text-falcon-700">
+            <span className="mx-2 text-falcon-300">·</span>
+            <Link href="/settings" className="hover:text-electric-cyan transition-colors">
               Settings
             </Link>
-            <span className="mx-2">·</span>
-            <Link href="/privacy" className="hover:text-falcon-700">
+            <span className="mx-2 text-falcon-300">·</span>
+            <Link href="/privacy" className="hover:text-electric-cyan transition-colors">
               Privacy
             </Link>
-            <span className="mx-2">·</span>
-            <Link href="/terms" className="hover:text-falcon-700">
+            <span className="mx-2 text-falcon-300">·</span>
+            <Link href="/terms" className="hover:text-electric-cyan transition-colors">
               Terms
             </Link>
-            <span className="mx-2">·</span>
-            <Link href="/refunds" className="hover:text-falcon-700">
+            <span className="mx-2 text-falcon-300">·</span>
+            <Link href="/refunds" className="hover:text-electric-cyan transition-colors">
               Refunds
             </Link>
-            <span className="mx-2">·</span>
+            <span className="mx-2 text-falcon-300">·</span>
             <a
               href="mailto:hello@mailfalcon.app"
-              className="hover:text-falcon-700"
+              className="hover:text-electric-cyan transition-colors"
             >
               hello@mailfalcon.app
             </a>
-            <span className="mx-2">·</span>
+            <span className="mx-2 text-falcon-300">·</span>
             <a
               href="https://kinetichelix.io"
               target="_blank"
               rel="noopener"
-              className="hover:text-falcon-700"
+              className="hover:text-electric-cyan transition-colors"
             >
               Built by Kinetic Helix
             </a>

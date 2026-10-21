@@ -4,7 +4,29 @@ import { events, recipients, sessions, trackedEmails } from '@mailfalcon/db/sche
 import { getDb } from '../lib/db'
 import { getJwtSecret, verifyJwt } from '../lib/jwt'
 import { createLogger, errorMeta } from '../lib/logger'
-import { concurrentDec, concurrentInc } from '../lib/rate-limit'
+
+const STREAM_MAX_PER_USER = 3
+
+// In-memory active stream counter per worker isolate.
+// Tracks concurrent SSE streams with zero KV reads and zero KV writes!
+const activeStreamsPerUser = new Map<string, number>()
+
+function incStreamCount(userId: string): number {
+  const cur = activeStreamsPerUser.get(userId) ?? 0
+  const next = cur + 1
+  activeStreamsPerUser.set(userId, next)
+  return next
+}
+
+function decStreamCount(userId: string): void {
+  const cur = activeStreamsPerUser.get(userId) ?? 0
+  if (cur <= 1) {
+    activeStreamsPerUser.delete(userId)
+  } else {
+    activeStreamsPerUser.set(userId, cur - 1)
+  }
+}
+
 
 type Bindings = {
   ENVIRONMENT: string
@@ -17,12 +39,6 @@ type Bindings = {
   KH_INGEST_KEY?: string
   KH_INGEST_URL?: string
 }
-
-const STREAM_MAX_PER_USER = 3
-// Stream max duration is 60s so this TTL only covers an outlier where
-// the decrement never runs — KV reaps the stale counter.
-const STREAM_TTL_SEC = 120
-
 
 export const streamRouter = new Hono<{ Bindings: Bindings }>()
 
@@ -62,10 +78,9 @@ streamRouter.get('/', async (c) => {
   // Cap concurrent SSE connections per user. Stops one bad client from
   // burning worker concurrency or our SSE budget by holding open many
   // streams. Counter is decremented when the stream closes.
-  const concurrentKey = `stream:${userId}`
-  const count = await concurrentInc(c.env.KV, concurrentKey, STREAM_TTL_SEC)
+  const count = incStreamCount(userId)
   if (count > STREAM_MAX_PER_USER) {
-    await concurrentDec(c.env.KV, concurrentKey, STREAM_TTL_SEC)
+    decStreamCount(userId)
     createLogger({ env: c.env }).warn('stream_concurrent_throttle', {
       userId,
       count,
@@ -179,10 +194,10 @@ streamRouter.get('/', async (c) => {
 
       controller.enqueue(encoder.encode(`event: bye\ndata: reconnect\n\n`))
       controller.close()
-      await concurrentDec(c.env.KV, concurrentKey, STREAM_TTL_SEC)
+      decStreamCount(userId)
     },
     async cancel() {
-      await concurrentDec(c.env.KV, concurrentKey, STREAM_TTL_SEC)
+      decStreamCount(userId)
     },
   })
 

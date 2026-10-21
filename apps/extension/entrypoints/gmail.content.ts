@@ -5,6 +5,7 @@ import {
   patchEmailIds,
   rememberTrackedThread,
   reportReply,
+  getMe,
 } from '../src/api'
 import { getSession } from '../src/auth-store'
 import { config } from '../src/config'
@@ -203,6 +204,10 @@ export default defineContentScript({
           mint: mintEmail,
         })
 
+        const me = await getMe().catch(() => null)
+        const isFree = !me || me.tier === 'free'
+        const brandingHtml = ''
+
         if (result.mode === 'merge') {
           // Cancel the original and dispatch one tracked send per
           // recipient with that recipient's tracking pre-baked into
@@ -224,7 +229,7 @@ export default defineContentScript({
                 cc: [],
                 bcc: [],
                 subject: variantSubject,
-                bodyHtml: variant.html,
+                bodyHtml: variant.html + brandingHtml,
               })
             } catch (err) {
               console.error(
@@ -241,7 +246,7 @@ export default defineContentScript({
           return
         }
 
-        event.setHtmlBody(result.html)
+        event.setHtmlBody(result.html + brandingHtml)
         // Sync substituted subject back into Gmail's compose so the
         // actual outbound subject matches what the dashboard stores.
         if (subject && subject !== subjectStr) {

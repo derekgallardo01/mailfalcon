@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { asKv, MockKV } from '../test-utils/mock-kv'
-import { concurrentDec, concurrentInc, rateLimit } from './rate-limit'
+import {
+  _resetMemoryBucketsForTest,
+  concurrentDec,
+  concurrentInc,
+  rateLimit,
+  rateLimitMemory,
+} from './rate-limit'
 
 describe('rateLimit', () => {
   it('allows requests up to the limit', async () => {
@@ -73,3 +79,29 @@ describe('concurrent inc/dec', () => {
     expect(kv._size()).toBe(0)
   })
 })
+
+describe('rateLimitMemory', () => {
+  beforeEach(() => {
+    _resetMemoryBucketsForTest()
+  })
+
+  it('allows requests up to the limit and then throttles', () => {
+    for (let i = 0; i < 5; i++) {
+      const res = rateLimitMemory('test-ip', 5, 60)
+      expect(res.allowed).toBe(true)
+      expect(res.remaining).toBe(4 - i)
+    }
+    const blocked = rateLimitMemory('test-ip', 5, 60)
+    expect(blocked.allowed).toBe(false)
+    expect(blocked.remaining).toBe(0)
+  })
+
+  it('tracks keys independently', () => {
+    for (let i = 0; i < 3; i++) {
+      rateLimitMemory('ip-1', 3, 60)
+    }
+    expect(rateLimitMemory('ip-1', 3, 60).allowed).toBe(false)
+    expect(rateLimitMemory('ip-2', 3, 60).allowed).toBe(true)
+  })
+})
+

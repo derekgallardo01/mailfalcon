@@ -15,7 +15,7 @@ import { getDb } from '../lib/db'
 import { getClientIp } from '../lib/ip'
 import { createLogger, errorMeta } from '../lib/logger'
 import { getHmacSecret } from '../lib/secrets'
-import { checkAndIncrementUsage } from '../lib/usage'
+import { checkDbUsage } from '../lib/usage'
 
 const recipientInput = z.object({
   // SHA-256 hex of lowercased email — extension hashes client-side so
@@ -118,7 +118,7 @@ emailsRouter.post('/', async (c) => {
     .get()
   const tier = user?.tier ?? 'free'
 
-  const usage = await checkAndIncrementUsage(c.env.KV, userId, tier)
+  const usage = await checkDbUsage(db, userId, tier)
   if (!usage.allowed) {
     return c.json(
       {
@@ -244,9 +244,9 @@ emailsRouter.get('/', async (c) => {
   const db = getDb(c.env.DB)
 
   // Aggregate expressions reused for both SELECT and ORDER BY.
-  const opensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`
-  const humanOpensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`
-  const clicksExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`
+  const opensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`
+  const humanOpensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`
+  const clicksExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`
 
   // For team scope, swap `userId = ?` for `userId IN (... members ...)`.
   const filters =
@@ -372,9 +372,9 @@ emailsRouter.post('/lookup', async (c) => {
     .select({
       id: trackedEmails.id,
       threadId: trackedEmails.threadId,
-      humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`,
-      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
-      replies: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'reply' THEN 1 ELSE 0 END), 0)`,
+      humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
+      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
+      replies: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'reply' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
     })
     .from(trackedEmails)
     .leftJoin(events, eq(events.emailId, trackedEmails.id))
@@ -471,7 +471,7 @@ emailsRouter.get('/:id', async (c) => {
     db
       .select()
       .from(events)
-      .where(eq(events.emailId, id))
+      .where(and(eq(events.emailId, id), eq(events.notificationSuppressed, 0)))
       .orderBy(desc(events.ts))
       .limit(500)
       .all(),
@@ -488,12 +488,12 @@ emailsRouter.get('/:id', async (c) => {
       .all(),
     db
       .select({
-        opens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' THEN 1 ELSE 0 END), 0)`,
-        clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
-        humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`,
+        opens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
+        clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
+        humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
       })
       .from(events)
-      .where(eq(events.emailId, id))
+      .where(and(eq(events.emailId, id), eq(events.notificationSuppressed, 0)))
       .get(),
   ])
 

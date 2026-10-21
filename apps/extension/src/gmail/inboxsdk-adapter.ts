@@ -1,5 +1,5 @@
 import * as InboxSDK from '@inboxsdk/core'
-import { listTemplates, type Template } from '../api'
+import { listTemplates, getMe, type Template } from '../api'
 import { hasSeenFirstSendTour, markFirstSendTourSeen } from '../auth-store'
 import { config } from '../config'
 import type {
@@ -115,6 +115,12 @@ function buildStatusBarHtml(): string {
               <option value="in-3h">in 3 hours</option>
               <option value="tomorrow-9am">tomorrow 9am</option>
             </select>
+          </label>
+
+          <label class="mf-branding-container" style="display:none;align-items:center;gap:8px;user-select:none;margin-top:4px;padding-top:10px;border-top:1px solid #e3e9f2;">
+            <input type="checkbox" class="mf-branding" style="margin:0;" checked disabled>
+            <span><strong>Mail Falcon branding</strong></span>
+            <a href="https://mailfalcon.app/dashboard/settings/billing" target="_blank" style="margin-left:auto;font-size:10px;color:#6366f1;text-decoration:none;font-weight:600;">Upgrade to Pro to remove</a>
           </label>
         </div>
       </div>
@@ -241,22 +247,32 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
       let scheduledAt: number | null = null
       let consumedWithoutSend = false
       let templates: Template[] = []
+      let userTier = 'free'
       // Pre-fetch the threadID once (replaces deprecated sync getThreadID).
       let cachedThreadId: string | null = null
-      void (async () => {
-        try {
-          if (view.getThreadIDAsync) {
-            cachedThreadId = await view.getThreadIDAsync()
-          } else if (view.getThreadID) {
-            cachedThreadId = view.getThreadID()
-          }
-        } catch {
-          cachedThreadId = null
-        }
-      })()
-
       try {
         const bar = view.addStatusBar?.({ height: 32, orderHint: 0 })
+
+        void (async () => {
+          try {
+            const me = await getMe()
+            if (me) userTier = me.tier
+            
+            if (userTier === 'free' && bar?.el) {
+              const brandingContainer = bar.el.querySelector('.mf-branding-container') as HTMLElement | null
+              if (brandingContainer) brandingContainer.style.display = 'flex'
+            }
+
+            if (view.getThreadIDAsync) {
+              cachedThreadId = await view.getThreadIDAsync()
+            } else if (view.getThreadID) {
+              cachedThreadId = view.getThreadID()
+            }
+          } catch {
+            cachedThreadId = null
+          }
+        })()
+
         if (bar?.el) {
           bar.el.style.cssText =
             'background:#f5f7fa;border-top:1px solid #e3e9f2;display:flex;align-items:center;padding:0 12px;font:12px ui-sans-serif,system-ui,sans-serif;color:#264168;box-sizing:border-box;overflow:visible;'
@@ -289,31 +305,61 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
             /* compose toolbar button is best-effort — status bar still works */
           }
 
-          // First-send tour: spotlight the Mail Falcon button once for
-          // brand-new users to surface what we do without forcing them
-          // through a modal.
+          // First-send tour: spotlight the Mail Falcon toggle for brand-new
+          // users so they clearly see tracking is active in their compose window.
           void (async () => {
             try {
               const seen = await hasSeenFirstSendTour()
-              if (seen || !optionsBtn) return
+              if (seen) return
+
+              // Inject CSS animation for the pulse effect if not already added
+              if (!document.getElementById('mf-pulse-style')) {
+                const style = document.createElement('style')
+                style.id = 'mf-pulse-style'
+                style.textContent = `
+                  @keyframes mf-glow-pulse {
+                    0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.7); }
+                    70% { box-shadow: 0 0 0 10px rgba(34, 211, 238, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
+                  }
+                  .mf-pulsing-tip {
+                    animation: mf-glow-pulse 2s infinite;
+                  }
+                `
+                document.head.appendChild(style)
+              }
+
+              const target = optionsBtn || bar.el
+              if (!target) return
+
               const tip = document.createElement('div')
+              tip.className = 'mf-pulsing-tip'
               tip.style.cssText =
-                'position:absolute;bottom:calc(100% + 8px);left:0;background:#0f1a2e;color:#fff;padding:8px 12px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:9999;pointer-events:auto;'
-              tip.innerHTML = `<span>First time? Hit Send — we'll track opens + clicks.</span> <button type="button" style="background:none;border:none;color:#9bc6ff;cursor:pointer;font:inherit;margin-left:6px;padding:0;">Got it</button>`
-              optionsBtn.style.boxShadow =
-                '0 0 0 3px rgba(59,108,183,0.25)'
-              const wrap = optionsBtn.parentElement
+                'position:absolute;bottom:calc(100% + 10px);left:0;background:#030712;color:#f3f4f6;padding:10px 14px;border:1px solid #22d3ee;border-radius:8px;font-size:12px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;gap:12px;pointer-events:auto;min-width:260px;'
+              tip.innerHTML = `
+                <div style="flex:1;">
+                  <div style="font-weight:700;color:#22d3ee;display:flex;align-items:center;gap:4px;">
+                    <span>⚡ Mail Falcon Active</span>
+                  </div>
+                  <div style="margin-top:2px;font-size:11px;color:#9ca3af;line-height:1.3;">
+                    Send a test email to yourself right now to see the double blue checkmarks (✓✓) in action.
+                  </div>
+                </div>
+                <button type="button" style="background:#22d3ee;border:none;color:#030712;font-weight:700;padding:5px 9px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap;">
+                  Got it
+                </button>
+              `
+              const wrap = target.parentElement || bar.el
               if (wrap && getComputedStyle(wrap).position === 'static') {
                 wrap.style.position = 'relative'
               }
-              ;(wrap ?? optionsBtn).appendChild(tip)
+              ;(wrap ?? target).appendChild(tip)
+
               const dismiss = (): void => {
                 tip.remove()
-                optionsBtn.style.boxShadow = ''
                 void markFirstSendTourSeen()
               }
               tip.querySelector('button')?.addEventListener('click', dismiss)
-              // Also dismiss on first send.
               view.on('sent', () => dismiss())
             } catch {
               /* tour is best-effort */
@@ -465,7 +511,13 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
         })
 
         const wrapper: ComposeEvent = {
-          getHtmlBody: () => view.getHTMLContent?.() ?? '',
+          getHtmlBody: () => {
+            let html = view.getHTMLContent?.() ?? ''
+            if (userTier === 'free' && !privacyMode) {
+              html += `<div class="mf-signature" style="margin-top: 16px; font-size: 11px; color: #94a3b8; font-family: sans-serif;">Sent with <a href="https://mailfalcon.app" target="_blank" style="color: #6366f1; text-decoration: none;">Mail Falcon</a> — Free Email Tracking</div>`
+            }
+            return html
+          },
           setHtmlBody: (html) => {
             view.setBodyHTML?.(html)
           },
@@ -545,7 +597,13 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
         //   - close/cancel → no-ops, we don't want to kill the picker
         //   - onSent → no-op, we don't get a `sent` event for this path
         const wrapper: ComposeEvent = {
-          getHtmlBody: () => view.getHTMLContent?.() ?? '',
+          getHtmlBody: () => {
+            let html = view.getHTMLContent?.() ?? ''
+            if (userTier === 'free' && !privacyMode) {
+              html += `<div class="mf-signature" style="margin-top: 16px; font-size: 11px; color: #94a3b8; font-family: sans-serif;">Sent with <a href="https://mailfalcon.app" target="_blank" style="color: #6366f1; text-decoration: none;">Mail Falcon</a> — Free Email Tracking</div>`
+            }
+            return html
+          },
           setHtmlBody: (html) => {
             view.setBodyHTML?.(html)
           },
@@ -898,6 +956,90 @@ export class InboxSdkGmailAdapter implements GmailAdapter {
         if (!view) return
         processMessage(view, 'messageAdded')
       })
+
+      // Gmail Thread Intelligence Sidebar
+      const sidebarEl = document.createElement('div')
+      sidebarEl.style.cssText =
+        'padding: 16px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b;'
+      sidebarEl.innerHTML = `
+        <h3 style="font-size: 13px; font-weight: 700; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px; color: #0f172a;">
+          <img src="${typeof chrome !== 'undefined' && chrome.runtime?.getURL ? chrome.runtime.getURL('icon/32.png') : ''}" width="16" height="16" alt="" style="border-radius: 4px;">
+          Mail Falcon Intelligence
+        </h3>
+        <div class="mf-sidebar-body" style="font-size: 12px; line-height: 1.5; color: #64748b; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <div style="display: flex; align-items: center; gap: 6px; color: #64748b;">
+            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #94a3b8;"></span>
+            <span>Checking tracking status...</span>
+          </div>
+        </div>
+      `
+
+      void (async () => {
+        const threadId = await threadIdPromise
+        if (!threadId) return
+        const bodyEl = sidebarEl.querySelector('.mf-sidebar-body') as HTMLElement | null
+        if (!bodyEl) return
+
+        try {
+          const summaries = await lookupTrackingByThreads([threadId])
+          const summary = summaries[threadId]
+          if (!summary) {
+            bodyEl.innerHTML = `
+              <p style="margin: 0; color: #94a3b8; font-size: 12px;">This thread is not tracked with Mail Falcon.</p>
+            `
+            return
+          }
+
+          const hasOpens = (summary.humanOpens ?? 0) > 0
+          const emailDetailUrl = `${config.webUrl}/dashboard/email?id=${encodeURIComponent(summary.id)}`
+          const sequencesUrl = `${config.webUrl}/sequences`
+
+          bodyEl.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+                <span style="font-weight: 600; color: ${hasOpens ? '#059669' : '#64748b'};">
+                  ${hasOpens ? '✓✓ Opened' : '✓ Sent (Unopened)'}
+                </span>
+                <span style="font-size: 10px; background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Tracked</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+                <div style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; text-align: center;">
+                  <div style="font-size: 18px; font-weight: 700; color: #0f172a;">${summary.humanOpens ?? 0}</div>
+                  <div style="font-size: 11px; color: #64748b;">Human Opens</div>
+                </div>
+                <div style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; text-align: center;">
+                  <div style="font-size: 18px; font-weight: 700; color: #2563eb;">${summary.clicks ?? 0}</div>
+                  <div style="font-size: 11px; color: #64748b;">Link Clicks</div>
+                </div>
+              </div>
+              ${(summary.replies ?? 0) > 0 ? '<div style="font-size: 11px; color: #059669; font-weight: 600;">💬 Prospect Replied</div>' : ''}
+              <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                <a href="${emailDetailUrl}" target="_blank" style="display: block; text-align: center; padding: 7px 12px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 11px;">
+                  View Live Map & Devices →
+                </a>
+                <a href="${sequencesUrl}" target="_blank" style="display: block; text-align: center; padding: 6px 12px; background: #ffffff; color: #334155; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid #cbd5e1;">
+                  Enroll in Sequence
+                </a>
+              </div>
+            </div>
+          `
+        } catch {
+          bodyEl.innerHTML = `
+            <p style="margin: 0; color: #94a3b8; font-size: 11px;">Could not load thread analytics.</p>
+          `
+        }
+      })()
+
+      if (typeof (threadView as any).addSidebarContentPanel === 'function') {
+        (threadView as any).addSidebarContentPanel({
+          title: 'Mail Falcon Intelligence',
+          iconUrl:
+            typeof chrome !== 'undefined' && chrome.runtime?.getURL
+              ? chrome.runtime.getURL('icon/32.png')
+              : '',
+          el: sidebarEl,
+        })
+      }
     })
   }
 }

@@ -60,9 +60,9 @@ contactsRouter.get('/', async (c) => {
   // recipients → events left-join) lets a hash with sends but zero
   // events still appear in results.
   const sendsExpr = sql<number>`COUNT(DISTINCT ${trackedEmails.id})`
-  const humanOpensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`
-  const clicksExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`
-  const repliesExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'reply' THEN 1 ELSE 0 END), 0)`
+  const humanOpensExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`
+  const clicksExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`
+  const repliesExpr = sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'reply' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`
   const lastEventAtExpr = sql<number | null>`MAX(${events.ts})`
   const firstSeenAtExpr = sql<number>`MIN(${trackedEmails.sentAt})`
   // Most recent non-null displayLabel for this hash — picks the label
@@ -186,9 +186,9 @@ contactsRouter.get('/:hashedAddr', async (c) => {
   const agg = await db
     .select({
       sends: sql<number>`COUNT(DISTINCT ${trackedEmails.id})`,
-      humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`,
-      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
-      replies: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'reply' THEN 1 ELSE 0 END), 0)`,
+      humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
+      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
+      replies: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'reply' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
       lastEventAt: sql<number | null>`MAX(${events.ts})`,
       firstSeenAt: sql<number | null>`MIN(${trackedEmails.sentAt})`,
       displayLabel: sql<string | null>`(
@@ -252,9 +252,9 @@ contactsRouter.get('/:hashedAddr', async (c) => {
       id: trackedEmails.id,
       subject: trackedEmails.subject,
       sentAt: trackedEmails.sentAt,
-      humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' THEN 1 ELSE 0 END), 0)`,
-      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' THEN 1 ELSE 0 END), 0)`,
-      hasReply: sql<number>`COALESCE(MAX(CASE WHEN ${events.type} = 'reply' THEN 1 ELSE 0 END), 0)`,
+      humanOpens: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'open' AND ${events.uaClass} != 'bot' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
+      clicks: sql<number>`COALESCE(SUM(CASE WHEN ${events.type} = 'click' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
+      hasReply: sql<number>`COALESCE(MAX(CASE WHEN ${events.type} = 'reply' AND ${events.notificationSuppressed} = 0 THEN 1 ELSE 0 END), 0)`,
     })
     .from(trackedEmails)
     .innerJoin(recipients, eq(recipients.emailId, trackedEmails.id))
@@ -290,6 +290,7 @@ contactsRouter.get('/:hashedAddr', async (c) => {
       and(
         eq(trackedEmails.userId, userId),
         eq(recipients.hashedAddr, hashedAddr),
+        eq(events.notificationSuppressed, 0),
       ),
     )
     .orderBy(desc(events.ts))

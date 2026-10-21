@@ -6,9 +6,9 @@ import { getDb } from '../lib/db'
 import { getClientIp } from '../lib/ip'
 import { createLogger, errorMeta } from '../lib/logger'
 import { fanoutPush } from '../lib/push-fanout'
-import { rateLimit } from '../lib/rate-limit'
+import { rateLimitMemory } from '../lib/rate-limit'
 import { getHmacSecret } from '../lib/secrets'
-import { extractCfGeo, parseUa, truncateIpV4 } from '../lib/ua'
+import { classifyProxyType, extractCfGeo, parseUa, truncateIpV4 } from '../lib/ua'
 import { buildDeviceLabel, buildLocationLabel, buildOpenedAfter, detectVpnLikely } from './pixel'
 
 type Bindings = {
@@ -77,7 +77,7 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
   // redirect (so the user doesn't see a broken link), but skip the DB
   // write so a bot can't amplify event volume.
   const ip = getClientIp(c)
-  const ipLimit = await rateLimit(c.env.KV, `clk:${ip}`, 60, 60)
+  const ipLimit = rateLimitMemory(`clk:${ip}`, 60, 60)
   if (!ipLimit.allowed) {
     createLogger({ env: c.env }).warn('click_ip_throttle', { ip, id })
     return c.redirect(link.originalUrl, 302)
@@ -90,8 +90,33 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
   const geo = extractCfGeo(c.req.raw)
   const country = geo.country ?? c.req.header('CF-IPCountry') ?? null
   const cf = (c.req.raw as Request & { cf?: Record<string, unknown> }).cf ?? {}
+  const asn = typeof cf.asn === 'number' ? (cf.asn as number) : null
   const asOrg =
-    typeof cf.asOrganization === 'string' ? (cf.asOrganization as string) : ''
+    typeof cf.asOrganization === 'string'
+      ? (cf.asOrganization as string).toLowerCase()
+      : ''
+  const proxyType = classifyProxyType(ua, asOrg, asn)
+  const isDatacenterFetch =
+    proxyType === 'datacenter' ||
+    proxyType === 'google_proxy' ||
+    asn === 15169 || // Google
+    asn === 8075 || // Microsoft
+    asn === 32934 || // Facebook
+    asn === 14618 || // Amazon EC2
+    asn === 16509 || // Amazon
+    asn === 13335 || // Cloudflare
+    asOrg.includes('google') ||
+    asOrg.includes('microsoft') ||
+    asOrg.includes('amazon') ||
+    asOrg.includes('facebook') ||
+    asOrg.includes('mimecast') ||
+    asOrg.includes('proofpoint') ||
+    asOrg.includes('barracuda')
+
+  const effectiveProxyType = proxyType || (isDatacenterFetch ? 'datacenter' : null)
+  const humanLike =
+    (uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile') &&
+    !isDatacenterFetch
 
   c.executionCtx.waitUntil(
     (async () => {
@@ -103,7 +128,7 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
           type: 'click',
           linkId,
           ts: Date.now(),
-          uaClass: uaDetails.uaClass,
+          uaClass: isDatacenterFetch ? 'bot' : uaDetails.uaClass,
           ipPrefix,
           ipFull,
           country,
@@ -122,10 +147,10 @@ clickRouter.get('/:id/:linkIdx', async (c) => {
           deviceVendor: uaDetails.deviceVendor,
           deviceModel: uaDetails.deviceModel,
           isFirstOpen: 0,
+          proxyType: effectiveProxyType,
+          notificationSuppressed: !humanLike || isSelfClickWindow || muted ? 1 : 0,
         })
         .run()
-      const humanLike =
-        uaDetails.uaClass === 'desktop' || uaDetails.uaClass === 'mobile'
       if (humanLike && !isSelfClickWindow && !muted) {
         let recipientLabel: string | undefined
         if (recipientId) {

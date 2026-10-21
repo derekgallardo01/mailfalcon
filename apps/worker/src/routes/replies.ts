@@ -7,7 +7,7 @@ import { getDb } from '../lib/db'
 import { getClientIp } from '../lib/ip'
 import { createLogger, errorMeta } from '../lib/logger'
 import { fanoutPush } from '../lib/push-fanout'
-import { rateLimit } from '../lib/rate-limit'
+import { rateLimitMemory } from '../lib/rate-limit'
 
 const reportSchema = z.object({
   threadId: z.string().min(1).max(200),
@@ -43,7 +43,7 @@ repliesRouter.post('/', async (c) => {
   }
 
   const ip = getClientIp(c)
-  const ipLimit = await rateLimit(c.env.KV, `replies:${ip}`, 60, 60)
+  const ipLimit = rateLimitMemory(`replies:${ip}`, 60, 60)
   if (!ipLimit.allowed) {
     return c.json({ error: 'rate_limited' }, 429, { 'Retry-After': '60' })
   }
@@ -52,7 +52,13 @@ repliesRouter.post('/', async (c) => {
   const db = getDb(c.env.DB)
 
   const nonceKey = `reply-seen:${userId}:${parsed.data.gmailMessageId}`
-  if (await c.env.KV.get(nonceKey)) {
+  let alreadySeen = false
+  try {
+    alreadySeen = !!(await c.env.KV.get(nonceKey))
+  } catch {
+    alreadySeen = false
+  }
+  if (alreadySeen) {
     return c.json({ ok: true, deduped: true })
   }
 
@@ -110,7 +116,7 @@ repliesRouter.post('/', async (c) => {
     .run()
 
   c.executionCtx.waitUntil(
-    c.env.KV.put(nonceKey, '1', { expirationTtl: 86_400 }),
+    c.env.KV.put(nonceKey, '1', { expirationTtl: 86_400 }).catch(() => {}),
   )
 
   if (!muted) {

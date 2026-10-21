@@ -69,6 +69,7 @@ export async function evaluateFollowups(
             eq(events.emailId, f.emailId),
             eq(events.type, 'open'),
             sql`${events.uaClass} != 'bot'`,
+            eq(events.notificationSuppressed, 0),
           ),
         )
         .get()

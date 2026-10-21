@@ -172,7 +172,7 @@ export default function SequencesPage() {
     <div className="mx-auto max-w-6xl px-6 py-6 font-sans">
       <AppHeader />
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mt-6">
         {/* Page Header */}
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>

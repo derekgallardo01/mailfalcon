@@ -7,10 +7,12 @@ const root = 'I:/Projects/mailfalcon'
 const storeDir = resolve(root, 'apps/extension/store-assets')
 const extIconDir = resolve(root, 'apps/extension/public/icon')
 const webAppDir = resolve(root, 'apps/web/app')
+const webPublicDir = resolve(root, 'apps/web/public')
 
 await mkdir(storeDir, { recursive: true })
 await mkdir(extIconDir, { recursive: true })
 await mkdir(webAppDir, { recursive: true })
+await mkdir(webPublicDir, { recursive: true })
 
 // 1. Extract the high-res 700x700 squircle tile from the original generation
 // The squircle in concept2 is located from left: 162, top: 162, width: 700, height: 700
@@ -39,6 +41,21 @@ const noAlphaStoreIcon128 = await sharp(rawTile)
 await writeFile(resolve(storeDir, 'store-icon-128x128.png'), noAlphaStoreIcon128)
 console.log('✔ store-icon-128x128.png')
 
+// Google OAuth Consent Screen App Logo (120x120 PNG required by Google Cloud Console)
+const googleOAuthLogo120 = await sharp(roundedTile)
+  .resize(120, 120)
+  .png({ compressionLevel: 9 })
+  .toBuffer()
+await writeFile(resolve(storeDir, 'google-oauth-app-logo-120x120.png'), googleOAuthLogo120)
+console.log('✔ google-oauth-app-logo-120x120.png')
+
+const googleOAuthLogo512 = await sharp(roundedTile)
+  .resize(512, 512)
+  .png({ compressionLevel: 9 })
+  .toBuffer()
+await writeFile(resolve(storeDir, 'google-oauth-app-logo-512x512.png'), googleOAuthLogo512)
+console.log('✔ google-oauth-app-logo-512x512.png')
+
 // Write extension icons (16, 32, 48, 128)
 for (const size of [16, 32, 48, 128]) {
   const buf = await sharp(roundedTile).resize(size, size).png({ compressionLevel: 9 }).toBuffer()
@@ -52,6 +69,12 @@ await writeFile(resolve(webAppDir, 'icon.png'), webIcon192)
 
 const appleIcon180 = await sharp(rawTile).resize(180, 180).flatten({ background: '#0a0f1d' }).png({ compressionLevel: 9 }).toBuffer()
 await writeFile(resolve(webAppDir, 'apple-icon.png'), appleIcon180)
+
+// Update web public icons (replace old placeholder falcon.png)
+const falconPng = await sharp(roundedTile).resize(512, 512).png({ compressionLevel: 9 }).toBuffer()
+await writeFile(resolve(webPublicDir, 'falcon.png'), falconPng)
+await writeFile(resolve(webPublicDir, 'logo.png'), falconPng)
+console.log('✔ web public icons (falcon.png & logo.png)')
 console.log('✔ web app icons')
 
 // 3. Composite into Small Promo Tile 440x280

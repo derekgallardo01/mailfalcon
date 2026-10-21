@@ -216,14 +216,18 @@ function DashboardInner() {
       <AppHeader liveCount={liveCount} />
 
       {isFree && me && (
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-falcon-200 bg-falcon-50 px-4 py-2.5 text-xs text-falcon-700">
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-falcon-200 bg-falcon-100 px-4 py-2.5 text-xs text-falcon-400">
           <span>
-            Free plan · <strong>{me.usage.used}</strong> / {me.usage.limit} tracked emails today
+            {stats.sent > 100 || stats.clicks > 50 ? (
+              <>You're a power sender! Upgrade to Pro to unlock white-label tracking and remove Mail Falcon branding.</>
+            ) : (
+              <>Free plan · <strong className="text-white">{me.usage.used}</strong> / {me.usage.limit} tracked emails today</>
+            )}
           </span>
           <button
             type="button"
             onClick={handleUpgrade}
-            className="font-medium text-falcon-500 hover:text-falcon-700"
+            className="font-semibold text-electric-cyan hover:text-electric-sky transition-colors"
           >
             Upgrade to Pro →
           </button>
@@ -239,14 +243,14 @@ function DashboardInner() {
 
       {/* View Mode Switcher */}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-xl border border-falcon-200 bg-white p-1 shadow-sm">
+        <div className="inline-flex rounded-xl border border-falcon-200 bg-falcon-100 p-1 shadow-sm">
           <button
             type="button"
             onClick={() => setViewTab('emails')}
             className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
               viewTab === 'emails'
-                ? 'bg-falcon-700 text-white shadow-sm'
-                : 'text-falcon-600 hover:bg-falcon-50'
+                ? 'bg-falcon-200 text-white shadow-sm border border-falcon-300'
+                : 'text-falcon-400 hover:text-white hover:bg-falcon-50'
             }`}
           >
             <span>📋</span> Emails Feed
@@ -256,8 +260,8 @@ function DashboardInner() {
             onClick={() => setViewTab('map')}
             className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
               viewTab === 'map'
-                ? 'bg-falcon-700 text-white shadow-sm'
-                : 'text-falcon-600 hover:bg-falcon-50'
+                ? 'bg-falcon-200 text-white shadow-sm border border-falcon-300'
+                : 'text-falcon-400 hover:text-white hover:bg-falcon-50'
             }`}
           >
             <span>🌍</span> Live World Map
@@ -267,8 +271,8 @@ function DashboardInner() {
             onClick={() => setViewTab('heatmap')}
             className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
               viewTab === 'heatmap'
-                ? 'bg-falcon-700 text-white shadow-sm'
-                : 'text-falcon-600 hover:bg-falcon-50'
+                ? 'bg-falcon-200 text-white shadow-sm border border-falcon-300'
+                : 'text-falcon-400 hover:text-white hover:bg-falcon-50'
             }`}
           >
             <span>📊</span> Send-Time Heatmap
@@ -290,7 +294,7 @@ function DashboardInner() {
 
       {viewTab === 'emails' && (
         <>
-          <div className="mt-6 flex flex-wrap items-center gap-2 rounded-lg border border-falcon-200 bg-white px-3 py-2">
+          <div className="mt-6 flex flex-wrap items-center gap-2 rounded-xl border border-falcon-200 bg-falcon-100 px-3 py-2 shadow-sm">
         <div className="relative min-w-[220px] flex-1">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -311,13 +315,13 @@ function DashboardInner() {
             value={qInput}
             onChange={(e) => setQInput(e.target.value)}
             placeholder="Search subject + notes…"
-            className="w-full rounded border border-falcon-200 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-falcon-500 focus:outline-none"
+            className="w-full rounded-lg border border-falcon-200 bg-falcon-50 py-1.5 pl-8 pr-3 text-sm text-white placeholder-falcon-400 focus:border-electric-cyan focus:outline-none transition-colors"
           />
         </div>
         <select
           value={urlSort}
           onChange={(e) => updateParams({ sort: e.target.value === 'sentAt-desc' ? '' : e.target.value })}
-          className="rounded border border-falcon-200 bg-white px-3 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
+          className="rounded-lg border border-falcon-200 bg-falcon-50 px-3 py-1.5 text-sm text-falcon-600 focus:border-electric-cyan focus:outline-none transition-colors"
         >
           {SORT_OPTIONS.map((o) => (
             <option key={o.key} value={o.key}>
@@ -325,16 +329,16 @@ function DashboardInner() {
             </option>
           ))}
         </select>
-        <div className="inline-flex overflow-hidden rounded border border-falcon-200 bg-white text-xs">
+        <div className="inline-flex overflow-hidden rounded-lg border border-falcon-200 bg-falcon-50 text-xs">
           {DATE_PRESETS.map((p, i) => (
             <button
               key={p.key}
               type="button"
               onClick={() => updateParams({ date: p.key === 'all' ? '' : p.key })}
-              className={`px-3 py-1.5 ${i > 0 ? 'border-l border-falcon-200' : ''} ${
+              className={`px-3 py-1.5 transition-colors ${i > 0 ? 'border-l border-falcon-200' : ''} ${
                 urlDate === p.key
-                  ? 'bg-falcon-100 font-medium text-falcon-700'
-                  : 'text-falcon-500 hover:bg-falcon-50'
+                  ? 'bg-falcon-200 font-semibold text-electric-cyan'
+                  : 'text-falcon-400 hover:text-white hover:bg-falcon-100'
               }`}
             >
               {p.label}
@@ -342,18 +346,18 @@ function DashboardInner() {
           ))}
         </div>
         {me && me.workspaces.some((w) => !w.isPersonal && w.id === me.activeWorkspaceId) && (
-          <div className="inline-flex overflow-hidden rounded border border-falcon-200 bg-white text-xs">
+          <div className="inline-flex overflow-hidden rounded-lg border border-falcon-200 bg-falcon-50 text-xs">
             <button
               type="button"
               onClick={() => updateParams({ scope: '' })}
-              className={`px-3 py-1.5 ${urlScope === 'personal' ? 'bg-falcon-100 font-medium text-falcon-700' : 'text-falcon-500 hover:bg-falcon-50'}`}
+              className={`px-3 py-1.5 transition-colors ${urlScope === 'personal' ? 'bg-falcon-200 font-semibold text-electric-cyan' : 'text-falcon-400 hover:text-white hover:bg-falcon-100'}`}
             >
               Personal
             </button>
             <button
               type="button"
               onClick={() => updateParams({ scope: 'workspace' })}
-              className={`border-l border-falcon-200 px-3 py-1.5 ${urlScope === 'workspace' ? 'bg-falcon-100 font-medium text-falcon-700' : 'text-falcon-500 hover:bg-falcon-50'}`}
+              className={`border-l border-falcon-200 px-3 py-1.5 transition-colors ${urlScope === 'workspace' ? 'bg-falcon-200 font-semibold text-electric-cyan' : 'text-falcon-400 hover:text-white hover:bg-falcon-100'}`}
             >
               Team
             </button>
@@ -363,7 +367,7 @@ function DashboardInner() {
           <select
             value={urlTag}
             onChange={(e) => updateParams({ tag: e.target.value })}
-            className="rounded border border-falcon-200 bg-white px-3 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
+            className="rounded-lg border border-falcon-200 bg-falcon-50 px-3 py-1.5 text-sm text-falcon-600 focus:border-electric-cyan focus:outline-none transition-colors"
           >
             <option value="">All tags</option>
             {tagOptions.map((t) => (
@@ -380,7 +384,7 @@ function DashboardInner() {
               setQInput('')
               router.replace('/dashboard', { scroll: false })
             }}
-            className="ml-auto rounded border border-falcon-200 px-2 py-1 text-xs text-falcon-500 hover:bg-falcon-50 hover:text-falcon-700"
+            className="ml-auto rounded-lg border border-falcon-200 bg-falcon-50 px-2.5 py-1 text-xs text-falcon-400 hover:text-white hover:bg-falcon-200 transition-colors"
           >
             Clear
           </button>
@@ -388,48 +392,48 @@ function DashboardInner() {
       </div>
 
       <main className="mt-6">
-        {loading && <p className="text-sm text-falcon-500">Loading…</p>}
-        {error && <p className="text-sm text-red-700">{error}</p>}
+        {loading && <p className="text-sm text-falcon-400">Loading…</p>}
+        {error && <p className="text-sm text-rose-400">{error}</p>}
         {!loading && !error && emails.length === 0 && !hasFilters && (
-          <div className="rounded border border-dashed border-falcon-200 bg-white p-10 text-center">
-            <p className="text-base font-semibold text-falcon-700">
+          <div className="rounded-xl border border-dashed border-falcon-200 bg-falcon-100 p-10 text-center">
+            <p className="text-base font-semibold text-white">
               No tracked emails yet
             </p>
-            <p className="mt-1 text-sm text-falcon-500">
+            <p className="mt-1 text-sm text-falcon-400">
               Three steps to your first tracked send:
             </p>
             <ol className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-4 text-left text-sm md:grid-cols-3">
-              <li className="rounded border border-falcon-100 bg-falcon-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-falcon-400">
+              <li className="rounded-lg border border-falcon-200 bg-falcon-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-electric-cyan">
                   Step 1
                 </p>
-                <p className="mt-2 text-falcon-700">
+                <p className="mt-2 text-falcon-600">
                   Compose a message in{' '}
                   <a
                     href="https://mail.google.com/"
                     target="_blank"
                     rel="noopener"
-                    className="text-falcon-500 underline hover:text-falcon-700"
+                    className="text-electric-cyan underline hover:text-electric-sky"
                   >
                     Gmail
                   </a>
                   .
                 </p>
               </li>
-              <li className="rounded border border-falcon-100 bg-falcon-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-falcon-400">
+              <li className="rounded-lg border border-falcon-200 bg-falcon-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-electric-cyan">
                   Step 2
                 </p>
-                <p className="mt-2 text-falcon-700">
-                  Leave the <strong>Privacy mode</strong> checkbox above the
+                <p className="mt-2 text-falcon-600">
+                  Leave the <strong className="text-white">Privacy mode</strong> checkbox above the
                   body unchecked.
                 </p>
               </li>
-              <li className="rounded border border-falcon-100 bg-falcon-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-falcon-400">
+              <li className="rounded-lg border border-falcon-200 bg-falcon-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-electric-cyan">
                   Step 3
                 </p>
-                <p className="mt-2 text-falcon-700">
+                <p className="mt-2 text-falcon-600">
                   Hit Send. Opens + clicks land here within ~5 seconds of the
                   recipient interacting.
                 </p>
@@ -438,39 +442,39 @@ function DashboardInner() {
             <p className="mt-6 text-xs text-falcon-400">
               The first open often comes from Gmail's image proxy in a Google
               data center — we filter those out of your notifications and
-              they show as <code className="font-mono">bot</code> opens.
+              they show as <code className="font-mono text-falcon-300">bot</code> opens.
             </p>
           </div>
         )}
         {!loading && !error && emails.length === 0 && hasFilters && (
-          <div className="rounded border border-dashed border-falcon-200 bg-white p-8 text-center">
-            <p className="text-sm text-falcon-700">No emails match these filters.</p>
+          <div className="rounded-xl border border-dashed border-falcon-200 bg-falcon-100 p-8 text-center">
+            <p className="text-sm text-falcon-400">No emails match these filters.</p>
             <button
               type="button"
               onClick={() => {
                 setQInput('')
                 router.replace('/dashboard', { scroll: false })
               }}
-              className="mt-2 text-xs text-falcon-500 hover:text-falcon-700"
+              className="mt-2 text-xs text-electric-cyan hover:underline"
             >
               Clear filters
             </button>
           </div>
         )}
         {!loading && !error && emails.length > 0 && (
-          <div className="overflow-hidden rounded-lg border border-falcon-200 bg-white">
+          <div className="overflow-hidden rounded-xl border border-falcon-200 bg-falcon-100 shadow-xl">
             <table className="w-full text-sm">
-              <thead className="bg-falcon-50 text-[11px] uppercase tracking-wide text-falcon-500">
+              <thead className="bg-falcon-50/70 border-b border-falcon-200 text-[11px] uppercase tracking-wider text-falcon-400">
                 <tr>
-                  <th className="px-4 py-2.5 text-left font-medium">Subject</th>
-                  <th className="px-3 py-2.5 text-right font-medium">To</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Opens</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Clicks</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Sent</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Last event</th>
+                  <th className="px-4 py-3 text-left font-semibold">Subject</th>
+                  <th className="px-3 py-3 text-right font-semibold">To</th>
+                  <th className="px-3 py-3 text-right font-semibold">Opens</th>
+                  <th className="px-3 py-3 text-right font-semibold">Clicks</th>
+                  <th className="px-3 py-3 text-right font-semibold">Sent</th>
+                  <th className="px-4 py-3 text-right font-semibold">Last event</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-falcon-100">
+              <tbody className="divide-y divide-falcon-200">
                 {emails.map((e) => {
                   const opened = e.humanOpenCount > 0
                   const clicked = e.clickCount > 0
@@ -478,41 +482,41 @@ function DashboardInner() {
                   return (
                     <tr
                       key={e.id}
-                      className="group cursor-pointer transition-colors hover:bg-falcon-50"
+                      className="group cursor-pointer transition-colors hover:bg-falcon-50/60"
                       onClick={() => router.push(`/dashboard/email?id=${e.id}`)}
                     >
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-3">
                         <Link
                           href={`/dashboard/email?id=${e.id}`}
-                          className="flex max-w-md items-center gap-2 truncate text-falcon-700 group-hover:text-falcon-900"
+                          className="flex max-w-md items-center gap-2 truncate text-white group-hover:text-electric-cyan transition-colors"
                         >
                           <span
-                            className={`inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                            className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${
                               clicked
-                                ? 'bg-blue-500'
+                                ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]'
                                 : opened
-                                ? 'bg-emerald-500'
-                                : 'bg-falcon-200'
+                                ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                                : 'bg-falcon-300'
                             }`}
                             aria-hidden="true"
                           />
-                          <span className="truncate">
+                          <span className="truncate font-medium">
                             {e.subject || (
                               <span className="italic text-falcon-400">(no subject)</span>
                             )}
                           </span>
                           {e.privacyMode && (
-                            <span className="rounded bg-falcon-100 px-1.5 py-0.5 text-[10px] font-medium text-falcon-500">
+                            <span className="rounded bg-falcon-200 px-1.5 py-0.5 text-[10px] font-medium text-falcon-400 border border-falcon-300">
                               privacy
                             </span>
                           )}
                         </Link>
                       </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-falcon-500">
+                      <td className="px-3 py-3 text-right tabular-nums text-falcon-400">
                         {e.recipientCount}
                       </td>
                       <td
-                        className="px-3 py-2.5 text-right tabular-nums"
+                        className="px-3 py-3 text-right tabular-nums"
                         title={
                           botOpens > 0
                             ? `${e.humanOpenCount} human, ${botOpens} bot (Gmail prefetch)`
@@ -522,48 +526,48 @@ function DashboardInner() {
                         <span
                           className={
                             opened
-                              ? 'font-semibold text-emerald-700'
-                              : 'text-falcon-300'
+                              ? 'font-semibold text-emerald-400'
+                              : 'text-falcon-400'
                           }
                         >
                           {e.humanOpenCount}
                         </span>
                         {botOpens > 0 && !opened && (
                           <span
-                            className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-600"
+                            className="ml-1.5 rounded bg-falcon-200 border border-falcon-300 px-1 py-0.5 text-[10px] font-medium text-falcon-400"
                             title="Detected Apple Privacy Protection or proxy pre-fetch"
                           >
                              Cached
                           </span>
                         )}
                         {botOpens > 0 && opened && (
-                          <span className="ml-1 text-[10px] text-falcon-300">
+                          <span className="ml-1 text-[10px] text-falcon-400">
                             +{botOpens} bot
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">
+                      <td className="px-3 py-3 text-right tabular-nums">
                         <span
                           className={
                             clicked
-                              ? 'font-semibold text-blue-700'
-                              : 'text-falcon-300'
+                              ? 'font-semibold text-cyan-400'
+                              : 'text-falcon-400'
                           }
                         >
                           {e.clickCount}
                         </span>
                       </td>
                       <td
-                        className="px-3 py-2.5 text-right text-falcon-500 tabular-nums"
+                        className="px-3 py-3 text-right text-falcon-400 tabular-nums"
                         title={new Date(e.sentAt).toLocaleString()}
                       >
-                        <div className="text-falcon-700">{formatLocalShort(e.sentAt)}</div>
+                        <div className="text-falcon-600 font-medium">{formatLocalShort(e.sentAt)}</div>
                         <div className="text-[11px] text-falcon-400">{formatSent(e.sentAt)}</div>
                       </td>
-                      <td className="px-4 py-2.5 text-right text-falcon-500 tabular-nums">
+                      <td className="px-4 py-3 text-right text-falcon-400 tabular-nums">
                         {e.lastEventAt ? (
                           <>
-                            <div className="text-falcon-700">{formatLocalShort(e.lastEventAt)}</div>
+                            <div className="text-falcon-600 font-medium">{formatLocalShort(e.lastEventAt)}</div>
                             <div className="text-[11px] text-falcon-400">{formatRelative(e.lastEventAt)}</div>
                           </>
                         ) : (
@@ -596,13 +600,13 @@ function StatCard({
   accent?: boolean
 }) {
   return (
-    <div className="rounded-lg border border-falcon-200 bg-white px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-falcon-500">
+    <div className="rounded-xl border border-falcon-200 bg-falcon-100 px-4 py-3.5 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-falcon-400">
         {label}
       </p>
       <p
-        className={`mt-1 text-2xl font-semibold tabular-nums ${
-          accent ? 'text-blue-700' : 'text-falcon-700'
+        className={`mt-1 text-2xl font-bold tabular-nums ${
+          accent ? 'text-cyan-400' : 'text-white'
         }`}
       >
         {value}

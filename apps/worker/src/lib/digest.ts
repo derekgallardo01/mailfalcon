@@ -111,13 +111,11 @@ export async function computeStatsForUser(
   }
 }
 
-function escape(s: string): string {
-  return s
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-}
+import {
+  escapeHtml as escape,
+  renderButton,
+  renderEmailShell,
+} from './email-theme'
 
 export function renderDigestHtml(args: {
   email: string
@@ -127,76 +125,77 @@ export function renderDigestHtml(args: {
   const { stats, webUrl } = args
   const rows =
     stats.topEmails.length === 0
-      ? `<tr><td style="padding:12px;color:#9aaecd;font-size:13px;">No tracked emails today.</td></tr>`
+      ? `<tr><td style="padding: 16px 12px; color: #64748b; font-size: 13px; text-align: center;">No tracked emails with activity today.</td></tr>`
       : stats.topEmails
           .map((e) => {
-            const subj = e.subject ? escape(e.subject) : '<em style="color:#9aaecd;">(no subject)</em>'
+            const subj = e.subject
+              ? escape(e.subject)
+              : '<em style="color: #64748b;">(no subject)</em>'
             return `<tr>
-              <td style="padding:8px 12px;border-top:1px solid #e3e9f2;font-size:14px;color:#0f1a2e;">
-                <a href="${webUrl}/dashboard/email/?id=${encodeURIComponent(e.id)}" style="color:#0f1a2e;text-decoration:none;">${subj}</a>
+              <td style="padding: 10px 12px; border-top: 1px solid #1e293b; font-size: 14px; color: #ffffff; line-height: 1.4;">
+                <a href="${webUrl}/dashboard/email/?id=${encodeURIComponent(e.id)}" style="color: #ffffff; text-decoration: none; font-weight: 500;">${subj}</a>
               </td>
-              <td style="padding:8px 12px;border-top:1px solid #e3e9f2;font-size:13px;color:#264168;text-align:right;white-space:nowrap;">
-                ${e.opens} open${e.opens === 1 ? '' : 's'} · ${e.clicks} click${e.clicks === 1 ? '' : 's'}
+              <td style="padding: 10px 12px; border-top: 1px solid #1e293b; font-size: 12px; text-align: right; white-space: nowrap;">
+                <span style="display: inline-block; background: #082f49; color: #38bdf8; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-right: 4px; border: 1px solid #0369a1;">${e.opens} opens</span>
+                <span style="display: inline-block; background: #3b0764; color: #c084fc; font-weight: 600; padding: 2px 8px; border-radius: 10px; border: 1px solid #6b21a8;">${e.clicks} clicks</span>
               </td>
             </tr>`
           })
           .join('')
 
-  return `<!doctype html>
-<html lang="en">
-<body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f7fa;padding:32px 16px;">
-    <tr><td align="center">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
-        <tr><td style="padding:28px 28px 8px;">
-          <p style="margin:0;font-size:14px;font-weight:600;color:#3b6cb7;letter-spacing:0.02em;">Mail Falcon</p>
-        </td></tr>
-        <tr><td style="padding:0 28px;">
-          <h1 style="margin:8px 0 4px;font-size:20px;font-weight:600;color:#0f1a2e;">Your daily summary</h1>
-          <p style="margin:0 0 16px;font-size:13px;color:#6b7280;">${new Date().toUTCString().slice(0, 16)}</p>
-        </td></tr>
-        <tr><td style="padding:0 28px 8px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            <tr>
-              <td style="padding:12px 8px;background:#f5f7fa;border-radius:8px;text-align:center;width:25%;">
-                <div style="font-size:22px;font-weight:700;color:#0f1a2e;">${stats.emailsSent}</div>
-                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">sent</div>
-              </td>
-              <td style="width:6px;"></td>
-              <td style="padding:12px 8px;background:#f5f7fa;border-radius:8px;text-align:center;width:25%;">
-                <div style="font-size:22px;font-weight:700;color:#0f1a2e;">${stats.humanOpens}</div>
-                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">opens</div>
-              </td>
-              <td style="width:6px;"></td>
-              <td style="padding:12px 8px;background:#f5f7fa;border-radius:8px;text-align:center;width:25%;">
-                <div style="font-size:22px;font-weight:700;color:#0f1a2e;">${stats.clicks}</div>
-                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">clicks</div>
-              </td>
-              <td style="width:6px;"></td>
-              <td style="padding:12px 8px;background:#f5f7fa;border-radius:8px;text-align:center;width:25%;">
-                <div style="font-size:22px;font-weight:700;color:#9aaecd;">${stats.opens - stats.humanOpens}</div>
-                <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">bot opens</div>
-              </td>
-            </tr>
-          </table>
-        </td></tr>
-        <tr><td style="padding:24px 28px 8px;">
-          <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Top emails today</p>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            ${rows}
-          </table>
-        </td></tr>
-        <tr><td style="padding:24px 28px 28px;">
-          <a href="${webUrl}/dashboard/" style="display:inline-block;background:#3b6cb7;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:500;">Open dashboard →</a>
-        </td></tr>
+  const todayStr = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  return renderEmailShell({
+    webUrl,
+    preheader: `Daily summary: ${stats.humanOpens} opens, ${stats.clicks} clicks across ${stats.emailsSent} sent emails.`,
+    badge: {
+      text: 'Daily Summary',
+      bg: '#082f49',
+      fg: '#38bdf8',
+    },
+    title: 'Your daily summary',
+    subtitle: `Activity report for ${todayStr}`,
+    bodyHtml: `
+      <!-- Stats 4-Grid -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 16px 0 24px;">
+        <tr>
+          <td style="padding: 14px 10px; background: #060a14; border: 1px solid #1e293b; border-radius: 10px; text-align: center; width: 23%;">
+            <div style="font-size: 24px; font-weight: 800; color: #ffffff; line-height: 1.1;">${stats.emailsSent}</div>
+            <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;">Sent</div>
+          </td>
+          <td style="width: 2%;"></td>
+          <td style="padding: 14px 10px; background: #052e16; border: 1px solid #166534; border-radius: 10px; text-align: center; width: 23%;">
+            <div style="font-size: 24px; font-weight: 800; color: #4ade80; line-height: 1.1;">${stats.humanOpens}</div>
+            <div style="font-size: 11px; font-weight: 700; color: #4ade80; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;">Opens</div>
+          </td>
+          <td style="width: 2%;"></td>
+          <td style="padding: 14px 10px; background: #3b0764; border: 1px solid #6b21a8; border-radius: 10px; text-align: center; width: 23%;">
+            <div style="font-size: 24px; font-weight: 800; color: #c084fc; line-height: 1.1;">${stats.clicks}</div>
+            <div style="font-size: 11px; font-weight: 700; color: #c084fc; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;">Clicks</div>
+          </td>
+          <td style="width: 2%;"></td>
+          <td style="padding: 14px 10px; background: #060a14; border: 1px solid #1e293b; border-radius: 10px; text-align: center; width: 23%;">
+            <div style="font-size: 24px; font-weight: 800; color: #64748b; line-height: 1.1;">${stats.opens - stats.humanOpens}</div>
+            <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;">Bot Filtered</div>
+          </td>
+        </tr>
       </table>
-      <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;">
-        Don't want these? <a href="${webUrl}/settings/" style="color:#9ca3af;text-decoration:underline;">Settings → Daily digest</a>
-      </p>
-    </td></tr>
-  </table>
-</body>
-</html>`
+
+      <!-- Top Emails Section -->
+      <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">Top performing emails today</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background: #060a14; border: 1px solid #1e293b; border-radius: 12px; overflow: hidden; margin-bottom: 20px;">
+        ${rows}
+      </table>
+
+      ${renderButton('Open Full Dashboard', `${webUrl}/dashboard`)}
+    `,
+    footerNote: `Manage daily summary frequency or unsubscribe in <a href="${webUrl}/settings" style="color: #94a3b8; text-decoration: underline;">Settings &rarr; Daily digest</a>.`,
+  })
 }
 
 export function renderDigestText(stats: DigestStats, webUrl: string): string {

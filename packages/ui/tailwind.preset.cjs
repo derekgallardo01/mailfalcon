@@ -4,20 +4,20 @@ module.exports = {
     extend: {
       colors: {
         falcon: {
-          50: '#f5f7fa',
-          100: '#e3e9f2',
-          200: '#c4d0e3',
-          300: '#9aaecd',
-          400: '#6886b1',
-          500: '#3b6cb7',
-          600: '#2f558f',
-          700: '#264168',
-          800: '#1a2e4a',
-          900: '#0f1a2e',
+          50: '#070c18', // Deep canvas background
+          100: '#0d172e', // Card / Header / Elevated surface
+          200: '#1e293b', // Slate border
+          300: '#334155', // Active border / Divider
+          400: '#94a3b8', // Muted text / helper (high-contrast slate-400)
+          500: '#cbd5e1', // Secondary text (crisp slate-300)
+          600: '#e2e8f0', // Primary body text (bright slate-200)
+          700: '#f8fafc', // High contrast text / headings (slate-50)
+          800: '#ffffff', // Pure white heading
+          900: '#ffffff', // Pure white
         },
         electric: {
           cyan: '#00d4ff',
-          blue: '#2563eb',
+          blue: '#0284c7',
           sky: '#38bdf8',
           teal: '#14b8a6',
         },
@@ -29,3 +29,4 @@ module.exports = {
   },
   plugins: [],
 }
+

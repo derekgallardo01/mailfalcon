@@ -157,32 +157,35 @@ export default function SettingsPage() {
 
   if (loading || !me) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-6">
+      <div className="mx-auto max-w-6xl px-6 py-6">
         <AppHeader />
-        <p className="mt-6 text-sm text-falcon-500">Loading…</p>
-      </main>
+        <main className="mt-6 max-w-3xl">
+          <p className="text-sm text-falcon-500">Loading…</p>
+        </main>
+      </div>
     )
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-6">
+    <div className="mx-auto max-w-6xl px-6 py-6">
       <AppHeader />
 
-      <div className="mt-6">
-        <h1 className="text-xl font-semibold text-falcon-700">Settings</h1>
-        <p className="mt-0.5 text-xs text-falcon-500">{me.email}</p>
-      </div>
+      <main className="mt-6 max-w-3xl">
+        <div>
+          <h1 className="text-xl font-semibold text-falcon-700">Settings</h1>
+          <p className="mt-0.5 text-xs text-falcon-500">{me.email}</p>
+        </div>
 
       <section className="mt-8">
         <h2 className="text-base font-semibold text-falcon-700">
           Email notifications
         </h2>
-        <div className="mt-4 rounded-lg border border-falcon-200 bg-white p-4">
+        <div className="mt-4 rounded-lg border border-falcon-200 bg-falcon-100 p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <p className="font-medium text-falcon-700">Daily digest</p>
-                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-800">
+                <span className="rounded-full bg-emerald-950/80 border border-emerald-700/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
                   Pro
                 </span>
               </div>
@@ -234,7 +237,7 @@ export default function SettingsPage() {
 
       <section className="mt-8">
         <h2 className="text-base font-semibold text-falcon-700">Account</h2>
-        <div className="mt-4 rounded-lg border border-falcon-200 bg-white p-4">
+        <div className="mt-4 rounded-lg border border-falcon-200 bg-falcon-100 p-4">
           <dl className="space-y-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-falcon-500">Email</dt>
@@ -272,15 +275,15 @@ export default function SettingsPage() {
 
       <ReportsPanel />
 
-      <div className="mt-6 text-xs text-falcon-500">
-        {saving && 'Saving…'}
-        {saved && <span className="text-emerald-700">Saved ✓</span>}
-        {error && <span className="text-red-700">{error}</span>}
+      <div className="mt-6 text-xs font-medium">
+        {saving && <span className="text-falcon-400">Saving…</span>}
+        {saved && <span className="text-emerald-400">Saved ✓</span>}
+        {error && <span className="text-rose-400">{error}</span>}
       </div>
 
       <section className="mt-12">
-        <h2 className="text-base font-semibold text-red-700">Danger zone</h2>
-        <div className="mt-4 space-y-4 rounded-lg border border-red-200 bg-red-50/30 p-4">
+        <h2 className="text-base font-semibold text-rose-400">Danger zone</h2>
+        <div className="mt-4 space-y-4 rounded-lg border border-rose-900/60 bg-rose-950/20 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-medium text-falcon-700">Download your data</p>
@@ -294,23 +297,23 @@ export default function SettingsPage() {
               type="button"
               onClick={() => void handleExport()}
               disabled={exporting}
-              className="shrink-0 rounded border border-falcon-300 bg-white px-3 py-1.5 text-sm font-medium text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+              className="shrink-0 rounded-lg border border-falcon-300 bg-falcon-100 px-3 py-1.5 text-sm font-medium text-falcon-600 hover:bg-falcon-200 hover:text-white transition-colors disabled:opacity-50"
             >
               {exporting ? 'Preparing…' : 'Download'}
             </button>
           </div>
 
-          <div className="border-t border-red-200/60 pt-4">
+          <div className="border-t border-rose-900/40 pt-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="font-medium text-red-700">Delete account</p>
+                <p className="font-medium text-rose-400">Delete account</p>
                 <p className="mt-1 text-sm text-falcon-500">
                   Permanently removes every tracked email, event, push
                   subscription, template, and your user record. We'll email
                   a 6-digit code to {me.email} to confirm. Cannot be undone.
                 </p>
                 {me.hasStripeCustomer && (
-                  <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                  <p className="mt-2 rounded bg-amber-950/80 border border-amber-700/60 px-2.5 py-1 text-xs font-medium text-amber-300">
                     Heads up: cancel your Pro subscription in Stripe before
                     deleting, or contact us. We don't auto-cancel.
                   </p>
@@ -328,7 +331,7 @@ export default function SettingsPage() {
             </div>
 
             {deleteStage !== 'idle' && (
-              <div className="mt-4 space-y-3 rounded-lg border border-red-200 bg-white p-3">
+              <div className="mt-4 space-y-3 rounded-lg border border-rose-900/60 bg-falcon-100 p-3">
                 <p className="text-sm text-falcon-700">
                   Check {me.email} for a 6-digit code and paste it below.
                 </p>
@@ -341,7 +344,7 @@ export default function SettingsPage() {
                   onChange={(e) => setDeleteCode(e.target.value.trim())}
                   placeholder="123456"
                   disabled={deleteStage === 'deleting'}
-                  className="w-full rounded border border-falcon-200 px-3 py-2 text-lg tracking-widest focus:border-red-500 focus:outline-none"
+                  className="w-full rounded border border-falcon-200 px-3 py-2 text-lg tracking-widest focus:border-rose-500 focus:outline-none"
                   autoFocus
                 />
                 <div className="flex gap-2">
@@ -353,7 +356,7 @@ export default function SettingsPage() {
                       setDeleteError(null)
                     }}
                     disabled={deleteStage === 'deleting'}
-                    className="rounded px-3 py-1.5 text-sm text-falcon-500 hover:bg-falcon-50"
+                    className="rounded px-3 py-1.5 text-sm text-falcon-400 hover:text-white transition-colors"
                   >
                     Cancel
                   </button>
@@ -369,14 +372,15 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 {deleteError && (
-                  <p className="text-xs text-red-700">{deleteError}</p>
+                  <p className="text-xs text-rose-400">{deleteError}</p>
                 )}
               </div>
             )}
           </div>
         </div>
       </section>
-    </main>
+      </main>
+    </div>
   )
 }
 
@@ -494,7 +498,7 @@ function QuietHoursSection({
   return (
     <section className="mt-8">
       <h2 className="text-base font-semibold text-falcon-700">Quiet hours</h2>
-      <div className="mt-4 rounded-lg border border-falcon-200 bg-white p-4">
+      <div className="mt-4 rounded-lg border border-falcon-200 bg-falcon-100 p-4">
         <p className="text-sm text-falcon-500">
           Skip push notifications during these hours. Events still record on
           your dashboard — we just won't ping you.
@@ -529,7 +533,7 @@ function QuietHoursSection({
             <select
               value={tz}
               onChange={(e) => setTz(e.target.value)}
-              className="mt-1 w-full rounded border border-falcon-200 bg-white px-2 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
+              className="mt-1 w-full rounded border border-falcon-200 bg-falcon-100 px-2 py-1.5 text-sm focus:border-falcon-500 focus:outline-none"
             >
               {tzOptions.map((t) => (
                 <option key={t} value={t}>
@@ -598,7 +602,7 @@ function SubscriptionPanel() {
 
   if (!sub) {
     return (
-      <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+      <section className="mt-8 rounded-lg border border-falcon-200 bg-falcon-100 p-5">
         <h2 className="text-base font-semibold text-falcon-700">Subscription</h2>
         <p className="mt-1 text-sm text-falcon-500">
           You're on the free plan — 10 tracked emails per day, no digest, no
@@ -617,7 +621,7 @@ function SubscriptionPanel() {
             type="button"
             onClick={() => upgrade('team')}
             disabled={busy}
-            className="rounded border border-falcon-300 bg-white px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+            className="rounded border border-falcon-300 bg-falcon-100 px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
           >
             Team ($25/mo)
           </button>
@@ -633,7 +637,7 @@ function SubscriptionPanel() {
   })
 
   return (
-    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-falcon-100 p-5">
       <h2 className="text-base font-semibold text-falcon-700">Subscription</h2>
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
         <div>
@@ -655,7 +659,7 @@ function SubscriptionPanel() {
         type="button"
         onClick={manage}
         disabled={busy}
-        className="mt-4 rounded border border-falcon-300 bg-white px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+        className="mt-4 rounded border border-falcon-300 bg-falcon-100 px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
       >
         Manage billing in Stripe
       </button>
@@ -690,7 +694,7 @@ function NotificationsPanel() {
   }
   if (!me) return null
   return (
-    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-falcon-100 p-5">
       <h2 className="text-base font-semibold text-falcon-700">Notifications</h2>
       <p className="mt-1 text-xs text-falcon-500">
         Smart alerts on top of the existing real-time opens / clicks / replies push.
@@ -844,7 +848,7 @@ function CustomDomainPanel({ meTier }: { meTier: string }) {
 
   if (!isPaid) {
     return (
-      <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+      <section className="mt-8 rounded-lg border border-falcon-200 bg-falcon-100 p-5">
         <h2 className="text-base font-semibold text-falcon-700">
           Custom tracking domain
         </h2>
@@ -868,7 +872,7 @@ function CustomDomainPanel({ meTier }: { meTier: string }) {
   }
 
   return (
-    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-falcon-100 p-5">
       <h2 className="text-base font-semibold text-falcon-700">
         Custom tracking domain
       </h2>
@@ -891,7 +895,7 @@ function CustomDomainPanel({ meTier }: { meTier: string }) {
             placeholder="t.acmecorp.com"
             value={hostInput}
             onChange={(e) => setHostInput(e.target.value)}
-            className="flex-1 rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm"
+            className="flex-1 rounded-md border border-falcon-200 bg-falcon-100 px-3 py-2 text-sm"
           />
           <button
             type="submit"
@@ -947,7 +951,7 @@ TXT   ${state.instructions.txt.name}  →  ${state.instructions.txt.value}`}
               type="button"
               onClick={disconnect}
               disabled={busy}
-              className="text-xs text-red-600 hover:text-red-800"
+              className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
             >
               Disconnect
             </button>
@@ -955,8 +959,8 @@ TXT   ${state.instructions.txt.name}  →  ${state.instructions.txt.value}`}
         </div>
       )}
 
-      {info && <p className="mt-3 text-xs text-emerald-700">{info}</p>}
-      {error && <p className="mt-3 text-xs text-red-700">{error}</p>}
+      {info && <p className="mt-3 text-xs text-emerald-400">{info}</p>}
+      {error && <p className="mt-3 text-xs text-rose-400">{error}</p>}
     </section>
   )
 }
@@ -1005,7 +1009,7 @@ function BrandingPanel() {
 
   if (!me) return null
   return (
-    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-falcon-100 p-5">
       <h2 className="text-base font-semibold text-falcon-700">Branding</h2>
       <p className="mt-1 text-xs text-falcon-500">
         Shown on HTML/PDF reports. Leave blank to fall back to the Mail Falcon
@@ -1022,7 +1026,7 @@ function BrandingPanel() {
             onChange={(e) => setName(e.target.value)}
             placeholder="Acme Co."
             maxLength={80}
-            className="rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm"
+            className="rounded-md border border-falcon-200 bg-falcon-100 px-3 py-2 text-sm"
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -1034,7 +1038,7 @@ function BrandingPanel() {
             value={logo}
             onChange={(e) => setLogo(e.target.value)}
             placeholder="https://acmecorp.com/logo.png"
-            className="rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm"
+            className="rounded-md border border-falcon-200 bg-falcon-100 px-3 py-2 text-sm"
           />
         </label>
         <div className="flex items-center gap-3">
@@ -1109,7 +1113,7 @@ function ReportsPanel() {
   }
 
   return (
-    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-falcon-100 p-5">
       <h2 className="text-base font-semibold text-falcon-700">Reports</h2>
       <p className="mt-1 text-xs text-falcon-500">
         Downloadable agency-friendly reports. The HTML version uses your
@@ -1122,7 +1126,7 @@ function ReportsPanel() {
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="rounded-md border border-falcon-200 bg-white px-2 py-1.5 text-sm"
+            className="rounded-md border border-falcon-200 bg-falcon-100 px-2 py-1.5 text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-falcon-500">
@@ -1131,7 +1135,7 @@ function ReportsPanel() {
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="rounded-md border border-falcon-200 bg-white px-2 py-1.5 text-sm"
+            className="rounded-md border border-falcon-200 bg-falcon-100 px-2 py-1.5 text-sm"
           />
         </label>
         <button
@@ -1144,7 +1148,7 @@ function ReportsPanel() {
         <button
           type="button"
           onClick={() => void download('csv')}
-          className="rounded-md border border-falcon-300 bg-white px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50"
+          className="rounded-md border border-falcon-300 bg-falcon-100 px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50"
         >
           Download CSV
         </button>
@@ -1214,7 +1218,7 @@ function GmailComposePanel() {
   const connected = status.connected
 
   return (
-    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-falcon-100 p-5">
       <h2 className="text-base font-semibold text-falcon-700">Mobile compose</h2>
       <p className="mt-1 text-xs text-falcon-500">
         Connect your Gmail account so Mail Falcon can send tracked emails from
@@ -1238,7 +1242,7 @@ function GmailComposePanel() {
             <div className="flex gap-2">
               <a
                 href="/compose/"
-                className="rounded-md bg-falcon-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-falcon-600"
+                className="rounded-lg bg-electric-cyan px-3 py-1.5 text-xs font-bold text-falcon-50 hover:bg-electric-sky transition-colors"
               >
                 Open compose
               </a>
@@ -1246,14 +1250,14 @@ function GmailComposePanel() {
                 type="button"
                 onClick={disconnect}
                 disabled={busy}
-                className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                className="rounded-lg border border-rose-800/60 bg-rose-950/40 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-900/60 disabled:opacity-50 transition-colors"
               >
                 Disconnect
               </button>
             </div>
           </div>
           {status.scopesUpToDate === false && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            <div className="rounded-md border border-amber-700/60 bg-amber-950/80 p-3 text-xs text-amber-300">
               Mail Falcon needs additional Gmail permissions. Disconnect and reconnect to grant them.
             </div>
           )}
@@ -1263,13 +1267,13 @@ function GmailComposePanel() {
           type="button"
           onClick={connect}
           disabled={busy}
-          className="mt-4 rounded-md bg-falcon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:opacity-50"
+          className="mt-4 rounded-lg bg-electric-cyan px-4 py-2 text-sm font-bold text-falcon-50 hover:bg-electric-sky disabled:opacity-50 transition-colors"
         >
           {busy ? 'Redirecting…' : 'Connect Gmail'}
         </button>
       )}
       {error && (
-        <p className="mt-3 text-xs text-red-600">
+        <p className="mt-3 text-xs text-rose-400">
           {error}
         </p>
       )}
@@ -1343,7 +1347,7 @@ function IntegrationsPanel() {
   }
 
   return (
-    <section className="mt-8 rounded-lg border border-falcon-200 bg-white p-5">
+    <section className="mt-8 rounded-lg border border-falcon-200 bg-falcon-100 p-5">
       <h2 className="text-base font-semibold text-falcon-700">Integrations</h2>
       <p className="mt-1 text-xs text-falcon-500">
         Slack and Discord webhooks — events fire to your channel in real time.
@@ -1355,7 +1359,7 @@ function IntegrationsPanel() {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://hooks.slack.com/services/..."
-          className="flex-1 rounded-md border border-falcon-200 bg-white px-3 py-2 text-sm"
+          className="flex-1 rounded-md border border-falcon-200 bg-falcon-100 px-3 py-2 text-sm"
         />
         <button
           type="submit"
@@ -1365,7 +1369,7 @@ function IntegrationsPanel() {
           {busy ? 'Adding…' : 'Add webhook'}
         </button>
       </form>
-      {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+      {error && <p className="mt-2 text-xs text-rose-400">{error}</p>}
       <p className="mt-2 text-[11px] text-falcon-500">
         Get a Slack incoming-webhook URL from your workspace's <em>Apps</em> page; Discord URLs come from a channel's Edit → Integrations → Webhooks.
       </p>
@@ -1381,14 +1385,14 @@ function IntegrationsPanel() {
                   <button
                     type="button"
                     onClick={() => test(h.id)}
-                    className="text-xs text-falcon-500 hover:text-falcon-700"
+                    className="text-xs text-falcon-400 hover:text-white transition-colors"
                   >
                     Test
                   </button>
                   <button
                     type="button"
                     onClick={() => remove(h.id)}
-                    className="text-xs text-red-600 hover:text-red-800"
+                    className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
                   >
                     Delete
                   </button>

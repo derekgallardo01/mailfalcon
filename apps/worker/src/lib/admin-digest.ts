@@ -599,10 +599,15 @@ function renderAdminHtml(args: { stats: AdminStats; webUrl: string }): string {
     <tr><td align="center">
 
       <!-- Brand pill -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 14px;">
-        <tr><td style="padding:6px 14px;background:#264168;border-radius:999px;font-size:11px;font-weight:700;color:#ffffff;letter-spacing:0.08em;text-transform:uppercase;">
-          Mail Falcon · admin
-        </td></tr>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;">
+        <tr>
+          <td style="vertical-align: middle; text-align: center;">
+            <img src="${webUrl}/falcon.png" alt="Mail Falcon" width="28" height="28" style="width:28px;height:28px;border-radius:6px;vertical-align:middle;display:inline-block;margin-right:8px;" />
+            <span style="display:inline-block;padding:5px 12px;background:#0f172a;border-radius:999px;font-size:11px;font-weight:700;color:#00d4ff;letter-spacing:0.08em;text-transform:uppercase;vertical-align:middle;">
+              Mail Falcon &middot; Admin Intelligence
+            </span>
+          </td>
+        </tr>
       </table>
 
       <!-- Main card -->

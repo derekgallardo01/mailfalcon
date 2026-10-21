@@ -556,3 +556,25 @@ export const sequenceEnrollments = sqliteTable(
   }),
 )
 
+
+/** Anonymous uninstall survey responses, collected via the
+ *  chrome.runtime.setUninstallURL goodbye page. No auth — the user has
+ *  already uninstalled, so there is no session. install_id (when
+ *  present) lets us join against users.extension_install_id to tell
+ *  real signed-in churn apart from drive-by/bot installs. */
+export const uninstallFeedback = sqliteTable(
+  'uninstall_feedback',
+  {
+    id: text('id').primaryKey(),
+    /** Extension install id passed on the uninstall URL; null when the
+     *  page was opened without params (old versions, bots). */
+    installId: text('install_id'),
+    extensionVersion: text('extension_version'),
+    reason: text('reason').notNull(),
+    comment: text('comment'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => ({
+    createdIdx: index('uninstall_feedback_created_idx').on(table.createdAt),
+  }),
+)

@@ -389,7 +389,7 @@ export default function ComposePage() {
           <button
             type="button"
             onClick={reset}
-            className="rounded-md border border-falcon-300 bg-white px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50"
+            className="rounded-md border border-falcon-300 bg-falcon-100 px-4 py-2 text-sm font-semibold text-falcon-700 hover:bg-falcon-50"
           >
             New email
           </button>
@@ -410,22 +410,22 @@ export default function ComposePage() {
       </header>
 
       {replyLoading && (
-        <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+        <div className="mb-3 rounded-md border border-cyan-700/60 bg-cyan-950/80 px-3 py-2 text-xs text-cyan-300">
           Loading reply context…
         </div>
       )}
 
       {replyError && (
-        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mb-3 rounded-md border border-rose-800/60 bg-rose-950/40 px-3 py-2 text-xs text-rose-300">
           Couldn&rsquo;t load the source message: {replyError}. Starting a fresh compose instead.
         </div>
       )}
 
       {replyContext && !replyLoading && (
-        <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+        <div className="mb-3 rounded-md border border-cyan-700/60 bg-cyan-950/80 px-3 py-2 text-xs text-cyan-300">
           <span className="font-semibold">Replying in thread</span>
           {replyContext.originalSnippet && (
-            <span className="ml-2 text-blue-800/80">
+            <span className="ml-2 text-cyan-200/80">
               &mdash; &ldquo;{replyContext.originalSnippet.slice(0, 80)}
               {replyContext.originalSnippet.length > 80 ? '…' : ''}&rdquo;
             </span>
@@ -455,7 +455,7 @@ export default function ComposePage() {
             <button
               type="button"
               onClick={dismissPendingDraft}
-              className="rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+              className="rounded-md border border-amber-300 bg-falcon-100 px-3 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
             >
               Discard
             </button>
@@ -464,7 +464,7 @@ export default function ComposePage() {
       )}
 
       <form
-        className="flex flex-1 flex-col rounded-lg border border-falcon-200 bg-white shadow-sm"
+        className="flex flex-1 flex-col rounded-lg border border-falcon-200 bg-falcon-100 shadow-sm"
         onSubmit={(e) => {
           e.preventDefault()
           void onSend()
@@ -570,19 +570,19 @@ export default function ComposePage() {
         )}
 
         {attachError && (
-          <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-[11px] text-amber-800">
+          <div className="border-t border-amber-700/60 bg-amber-950/80 px-4 py-2 text-[11px] text-amber-300">
             {attachError}
           </div>
         )}
 
         {(parsedTo.invalid.length > 0 || parsedCc.invalid.length > 0 || parsedBcc.invalid.length > 0) && (
-          <div className="border-t border-red-200 bg-red-50 px-4 py-2 text-[11px] text-red-700">
+          <div className="border-t border-rose-800/60 bg-rose-950/40 px-4 py-2 text-[11px] text-rose-300">
             Invalid addresses: {[...parsedTo.invalid, ...parsedCc.invalid, ...parsedBcc.invalid].join(', ')}
           </div>
         )}
 
         {sendState.kind === 'error' && (
-          <div className="border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+          <div className="border-t border-rose-800/60 bg-rose-950/40 px-4 py-2 text-xs text-rose-300">
             Send failed: {sendState.message}
           </div>
         )}
@@ -609,7 +609,7 @@ export default function ComposePage() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={attachBusy}
-              className="rounded-md border border-falcon-300 bg-white px-3 py-2 text-xs font-semibold text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
+              className="rounded-md border border-falcon-300 bg-falcon-100 px-3 py-2 text-xs font-semibold text-falcon-700 hover:bg-falcon-50 disabled:opacity-50"
               title="Attach files (up to 18 MB combined)"
             >
               {attachBusy ? 'Reading…' : '📎 Attach'}
@@ -618,7 +618,7 @@ export default function ComposePage() {
               <button
                 type="button"
                 onClick={discardDraft}
-                className="rounded-md border border-falcon-300 bg-white px-3 py-2 text-xs font-semibold text-falcon-700 hover:bg-falcon-50"
+                className="rounded-md border border-falcon-300 bg-falcon-100 px-3 py-2 text-xs font-semibold text-falcon-700 hover:bg-falcon-50"
               >
                 Discard
               </button>

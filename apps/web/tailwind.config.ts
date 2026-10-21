@@ -4,7 +4,7 @@ const preset = require('@mailfalcon/ui/tailwind.preset')
 
 const config: Config = {
   presets: [preset],
-  content: ['./app/**/*.{ts,tsx}'],
+  content: ['./app/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
 }
 
 export default config

@@ -20,11 +20,11 @@ const STATUS_LABEL: Record<ScheduledSend['status'], string> = {
 }
 
 const STATUS_STYLE: Record<ScheduledSend['status'], string> = {
-  queued: 'bg-blue-100 text-blue-700',
-  snoozed: 'bg-amber-100 text-amber-700',
-  fired: 'bg-emerald-100 text-emerald-700',
-  failed: 'bg-red-100 text-red-700',
-  cancelled: 'bg-slate-100 text-slate-500',
+  queued: 'bg-cyan-950/80 text-cyan-300 border border-cyan-700/60',
+  snoozed: 'bg-amber-950/80 text-amber-300 border border-amber-700/60',
+  fired: 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60',
+  failed: 'bg-rose-950/80 text-rose-300 border border-rose-700/60',
+  cancelled: 'bg-slate-800/80 text-slate-300 border border-slate-700/60',
 }
 
 function bucketFor(s: ScheduledSend['status']): StatusBucket {
@@ -106,9 +106,9 @@ export default function ScheduledPage() {
   history.sort((a, b) => b.scheduledAt - a.scheduledAt)
 
   return (
-    <div className="min-h-screen bg-falcon-50">
+    <div className="mx-auto max-w-6xl px-6 py-6">
       <AppHeader />
-      <main className="mx-auto max-w-5xl px-4 py-6">
+      <main className="mt-6">
         <header className="mb-6">
           <h1 className="text-2xl font-semibold text-falcon-700">Scheduled sends</h1>
           <p className="mt-1 text-sm text-falcon-500">
@@ -119,7 +119,7 @@ export default function ScheduledPage() {
         </header>
 
         {error && (
-          <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="mb-4 rounded-md border border-rose-800/60 bg-rose-950/40 p-3 text-sm text-rose-300">
             {error}
           </div>
         )}
@@ -169,20 +169,20 @@ function Table({
 }) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-falcon-200 bg-white p-6 text-center text-sm text-falcon-500">
+      <div className="rounded-lg border border-falcon-200 bg-falcon-100 p-6 text-center text-sm text-falcon-500">
         Loading…
       </div>
     )
   }
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-falcon-200 bg-white p-6 text-center text-sm text-falcon-500">
+      <div className="rounded-lg border border-dashed border-falcon-200 bg-falcon-100 p-6 text-center text-sm text-falcon-500">
         {empty}
       </div>
     )
   }
   return (
-    <div className="overflow-hidden rounded-lg border border-falcon-200 bg-white">
+    <div className="overflow-hidden rounded-lg border border-falcon-200 bg-falcon-100">
       <table className="w-full text-sm">
         <thead className="bg-falcon-50 text-[10px] uppercase tracking-wider text-falcon-500">
           <tr>

@@ -8,7 +8,7 @@ import { getClientIp } from '../lib/ip'
 import { getJwtSecret, signJwt, verifyJwt } from '../lib/jwt'
 import { createLogger, errorMeta } from '../lib/logger'
 import { sendCode } from '../lib/mailer'
-import { rateLimit } from '../lib/rate-limit'
+import { rateLimitMemory } from '../lib/rate-limit'
 import { ensurePersonalWorkspace } from '../lib/workspace'
 
 const requestSchema = z.object({
@@ -50,7 +50,7 @@ authRouter.post('/request', async (c) => {
   // IP cap: 5 sign-in requests per 10 min from one IP. Stops mass abuse
   // before the per-email throttle even sees the request.
   const ip = getClientIp(c)
-  const ipLimit = await rateLimit(c.env.KV, `auth-req-ip:${ip}`, 5, 600)
+  const ipLimit = rateLimitMemory(`auth-req-ip:${ip}`, 5, 600)
   if (!ipLimit.allowed) {
     createLogger({ env: c.env }).warn('auth_request_ip_throttle', { ip })
     return c.json({ error: 'rate_limited' }, 429, { 'Retry-After': '600' })

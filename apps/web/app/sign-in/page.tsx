@@ -60,93 +60,111 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="mx-auto max-w-md px-6 py-16">
-      <h1 className="text-2xl font-semibold text-falcon-700">Sign in</h1>
-      <p className="mt-1 text-sm text-falcon-500">
-        We'll email you a 6-digit code.
-      </p>
+    <main className="mx-auto max-w-md px-6 py-20">
+      <div className="rounded-2xl border border-falcon-200 bg-falcon-100 p-8 shadow-2xl backdrop-blur-md">
+        <div className="flex items-center gap-3 mb-6">
+          <img
+            src="/icon.png"
+            alt="Mail Falcon"
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-xl shadow-sm"
+          />
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-white">Sign in</h1>
+            <p className="text-xs text-falcon-400">
+              Real-time email tracking for Gmail
+            </p>
+          </div>
+        </div>
 
-      {stage === 'request' ? (
-        <form onSubmit={onRequest} className="mt-8 flex flex-col gap-3">
-          <label htmlFor="email" className="text-xs uppercase tracking-wide text-falcon-500">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="rounded border border-falcon-200 bg-white px-3 py-2 text-sm focus:border-falcon-500 focus:outline-none"
-            autoComplete="email"
-          />
-          <button
-            type="submit"
-            disabled={submitting || !email}
-            className="rounded bg-falcon-500 px-3 py-2 text-sm font-medium text-white hover:bg-falcon-600 disabled:opacity-50"
-          >
-            Send code
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={onVerify} className="mt-8 flex flex-col gap-3">
-          <p className="text-sm text-falcon-700">
-            We sent a 6-digit code to <strong>{email}</strong>
-          </p>
-          <label htmlFor="code" className="text-xs uppercase tracking-wide text-falcon-500">
-            Code
-          </label>
-          <input
-            id="code"
-            type="text"
-            inputMode="numeric"
-            pattern="\d{6}"
-            maxLength={6}
-            required
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="123456"
-            className="rounded border border-falcon-200 bg-white px-3 py-2 text-lg tracking-widest focus:border-falcon-500 focus:outline-none"
-            autoComplete="one-time-code"
-            autoFocus
-          />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setStage('request')
-                setCode('')
-                setMsg({ kind: 'neutral', text: '' })
-              }}
-              className="rounded px-3 py-2 text-sm text-falcon-500 hover:bg-falcon-50"
-            >
-              Back
-            </button>
+        {stage === 'request' ? (
+          <form onSubmit={onRequest} className="flex flex-col gap-4">
+            <div>
+              <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wider text-falcon-400 mb-1.5">
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-lg border border-falcon-200 bg-falcon-50 px-3.5 py-2.5 text-sm text-white placeholder-falcon-400 focus:border-electric-cyan focus:outline-none transition-colors"
+                autoComplete="email"
+                autoFocus
+              />
+            </div>
             <button
               type="submit"
-              disabled={submitting || code.length !== 6}
-              className="flex-1 rounded bg-falcon-500 px-3 py-2 text-sm font-medium text-white hover:bg-falcon-600 disabled:opacity-50"
+              disabled={submitting || !email}
+              className="mt-2 w-full rounded-lg bg-electric-cyan px-4 py-2.5 text-sm font-bold text-falcon-50 shadow-md hover:bg-electric-sky disabled:opacity-50 transition-all"
             >
-              Verify
+              {submitting ? 'Sending code…' : 'Send verification code →'}
             </button>
-          </div>
-        </form>
-      )}
+          </form>
+        ) : (
+          <form onSubmit={onVerify} className="flex flex-col gap-4">
+            <div className="rounded-lg border border-falcon-200 bg-falcon-50 p-3 text-xs text-falcon-400">
+              We sent a 6-digit code to <strong className="text-white font-medium">{email}</strong>
+            </div>
+            <div>
+              <label htmlFor="code" className="block text-xs font-semibold uppercase tracking-wider text-falcon-400 mb-1.5">
+                6-Digit Code
+              </label>
+              <input
+                id="code"
+                type="text"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="123456"
+                className="w-full rounded-lg border border-falcon-200 bg-falcon-50 px-3.5 py-2.5 text-center font-mono text-2xl font-bold tracking-[0.25em] text-cyan-400 focus:border-electric-cyan focus:outline-none transition-colors"
+                autoComplete="one-time-code"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setStage('request')
+                  setCode('')
+                  setMsg({ kind: 'neutral', text: '' })
+                }}
+                className="rounded-lg border border-falcon-200 bg-falcon-50 px-4 py-2.5 text-xs font-medium text-falcon-400 hover:text-white hover:bg-falcon-200 transition-colors"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || code.length !== 6}
+                className="flex-1 rounded-lg bg-electric-cyan px-4 py-2.5 text-sm font-bold text-falcon-50 shadow-md hover:bg-electric-sky disabled:opacity-50 transition-all"
+              >
+                {submitting ? 'Verifying…' : 'Verify & Sign in →'}
+              </button>
+            </div>
+          </form>
+        )}
 
-      {msg.text && (
-        <p
-          className={`mt-4 text-sm ${
-            msg.kind === 'err'
-              ? 'text-red-700'
-              : msg.kind === 'ok'
-                ? 'text-emerald-700'
-                : 'text-falcon-500'
-          }`}
-        >
-          {msg.text}
-        </p>
-      )}
+        {msg.text && (
+          <div
+            className={`mt-4 rounded-lg p-2.5 text-center text-xs font-medium ${
+              msg.kind === 'err'
+                ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60'
+                : msg.kind === 'ok'
+                  ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
+                  : 'bg-falcon-50 text-falcon-400 border border-falcon-200'
+            }`}
+          >
+            {msg.text}
+          </div>
+        )}
+      </div>
     </main>
   )
 }

@@ -3,6 +3,58 @@ interface Bucket {
   windowStart: number
 }
 
+interface MemoryBucket {
+  count: number
+  resetAt: number
+}
+
+const memoryBuckets = new Map<string, MemoryBucket>()
+let lastCleanup = Date.now()
+
+function cleanupMemoryBuckets(now: number) {
+  if (now - lastCleanup < 60_000 && memoryBuckets.size < 5000) {
+    return
+  }
+  lastCleanup = now
+  for (const [k, b] of memoryBuckets.entries()) {
+    if (now >= b.resetAt) {
+      memoryBuckets.delete(k)
+    }
+  }
+}
+
+/**
+ * In-memory fixed-window counter for high-volume edge routes (pixel, click, replies).
+ * Operates purely within the Worker isolate memory — zero KV reads and zero KV writes!
+ * Stops rapid abuse bursts per edge node without burning Cloudflare KV write quotas.
+ */
+export function rateLimitMemory(
+  key: string,
+  limit: number,
+  windowSec: number,
+): { allowed: boolean; remaining: number } {
+  const now = Date.now()
+  cleanupMemoryBuckets(now)
+
+  const existing = memoryBuckets.get(key)
+  if (!existing || now >= existing.resetAt) {
+    memoryBuckets.set(key, { count: 1, resetAt: now + windowSec * 1000 })
+    return { allowed: true, remaining: limit - 1 }
+  }
+
+  if (existing.count >= limit) {
+    return { allowed: false, remaining: 0 }
+  }
+
+  existing.count++
+  return { allowed: true, remaining: limit - existing.count }
+}
+
+export function _resetMemoryBucketsForTest(): void {
+  memoryBuckets.clear()
+  lastCleanup = Date.now()
+}
+
 /**
  * KV-backed fixed-window counter. Returns `{ allowed, remaining }` and
  * commits the new count if `allowed`. Eventually consistent: KV reads

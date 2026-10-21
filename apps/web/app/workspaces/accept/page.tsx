@@ -59,7 +59,7 @@ function AcceptInner() {
 
   return (
     <main className="mx-auto mt-24 max-w-md px-6">
-      <div className="rounded-lg border border-falcon-200 bg-white p-6">
+      <div className="rounded-lg border border-falcon-200 bg-falcon-100 p-6">
         <div className="flex items-center gap-2">
           <img src="/falcon.png" alt="" width={28} height={28} className="h-7 w-7 rounded" />
           <span className="text-lg font-semibold text-falcon-700">Mail Falcon</span>
@@ -69,7 +69,7 @@ function AcceptInner() {
 
         {error && !preview && (
           <div className="mt-6">
-            <p className="text-sm font-semibold text-red-700">Invite invalid</p>
+            <p className="text-sm font-semibold text-rose-400">Invite invalid</p>
             <p className="mt-1 text-sm text-falcon-500">
               {error === 'expired'
                 ? 'This invite has expired. Ask for a fresh one.'
@@ -81,7 +81,7 @@ function AcceptInner() {
             </p>
             <Link
               href="/dashboard"
-              className="mt-4 inline-block text-sm text-falcon-500 hover:text-falcon-700"
+              className="mt-4 inline-block text-sm text-falcon-400 hover:text-white transition-colors"
             >
               ← Back to dashboard
             </Link>
@@ -103,13 +103,13 @@ function AcceptInner() {
               You'll see workspace-shared templates appear in your compose template picker right away.
             </p>
             {error && (
-              <p className="mt-3 text-sm text-red-700">{error}</p>
+              <p className="mt-3 text-sm text-rose-400">{error}</p>
             )}
             <button
               type="button"
               onClick={handleAccept}
               disabled={busy}
-              className="mt-5 w-full rounded-md bg-falcon-500 px-4 py-2 text-sm font-semibold text-white hover:bg-falcon-600 disabled:opacity-50"
+              className="mt-5 w-full rounded-lg bg-electric-cyan px-4 py-2.5 text-sm font-bold text-falcon-50 hover:bg-electric-sky disabled:opacity-50 transition-colors shadow-md"
             >
               {busy ? 'Accepting…' : 'Accept invite'}
             </button>
